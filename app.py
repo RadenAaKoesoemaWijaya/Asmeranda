@@ -21,6 +21,8 @@ import os
 from PIL import Image
 import io
 import time
+from fpdf import FPDF
+
 
 # Try to import XGBoost, but don't fail if it's not installed
 try:
@@ -1127,124 +1129,7 @@ with tab4:
 
             # Tambahkan bagian untuk prediksi data baru
             if st.session_state.model is not None:
-                st.subheader("Prediksi Data Baru")
-                
-                # Import library untuk PDF
-                from fpdf import FPDF
-                from datetime import datetime
-                import json
-
-                # Fungsi untuk membuat laporan PDF
-                def create_prediction_report(input_data, predictions, model_info, problem_type):
-                    pdf = FPDF()
-                    pdf.add_page()
-                    
-                    # Header
-                    pdf.set_font('Arial', 'B', 16)
-                    pdf.cell(0, 10, 'Laporan Hasil Prediksi', 0, 1, 'C')
-                    pdf.ln(10)
-                    
-                    # Informasi Umum
-                    pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Informasi Umum:', 0, 1)
-                    pdf.set_font('Arial', '', 12)
-                    pdf.cell(0, 10, f'Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1)
-                    pdf.cell(0, 10, f'Jenis Model: {type(st.session_state.model).__name__}', 0, 1)
-                    pdf.cell(0, 10, f'Metode: {problem_type}', 0, 1)
-                    
-                    # Parameter Model
-                    pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Parameter Model:', 0, 1)
-                    pdf.set_font('Arial', '', 10)
-                    try:
-                        for param, value in st.session_state.model.get_params().items():
-                            # Konversi value ke string dan batasi panjangnya
-                            value_str = str(value)
-                            if len(value_str) > 50:  # Batasi panjang nilai
-                                value_str = value_str[:47] + '...'
-                            pdf.multi_cell(0, 10, f'{param}: {value_str}')
-                    except Exception as e:
-                        pdf.cell(0, 10, 'Parameter model tidak tersedia', 0, 1)
-                    
-                    # Metrik Evaluasi
-                    pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Metrik Evaluasi Model:', 0, 1)
-                    pdf.set_font('Arial', '', 12)
-                    
-                    # Tambahkan perhitungan metrik evaluasi
-                    if problem_type == "Regression" and hasattr(st.session_state, 'y_test'):
-                        y_pred = st.session_state.model.predict(st.session_state.X_test)
-                        mse = mean_squared_error(st.session_state.y_test, y_pred)
-                        rmse = np.sqrt(mse)
-                        r2 = r2_score(st.session_state.y_test, y_pred)
-                        
-                        pdf.cell(0, 10, f'Mean Squared Error (MSE): {mse:.4f}', 0, 1)
-                        pdf.cell(0, 10, f'Root Mean Squared Error (RMSE): {rmse:.4f}', 0, 1)
-                        pdf.cell(0, 10, f'R² Score: {r2:.4f}', 0, 1)
-                    else:
-                        pdf.cell(0, 10, 'Metrik evaluasi tidak tersedia', 0, 1)
-                    
-                    # Hasil Prediksi
-                    pdf.add_page()
-                    pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Hasil Prediksi:', 0, 1)
-                    pdf.set_font('Arial', '', 10)
-                    
-                    # Tabel hasil prediksi
-                    # Hitung lebar kolom yang sesuai
-                    n_columns = len(input_data.columns) + 1  # +1 untuk kolom prediksi
-                    col_width = min(pdf.w / n_columns - 2, 35)  # Maksimal 35 pt per kolom
-                    row_height = 8
-                    
-                    # Header tabel
-                    pdf.set_font('Arial', 'B', 10)
-                    for col in input_data.columns:
-                        pdf.cell(col_width, row_height, str(col)[:15], 1)
-                    pdf.cell(col_width, row_height, 'Prediksi', 1)
-                    pdf.ln()
-                    
-                    # Isi tabel
-                    pdf.set_font('Arial', '', 10)
-                    for i in range(len(input_data)):
-                        if i > 0 and i % 40 == 0:  # Tambah halaman baru setiap 40 baris
-                            pdf.add_page()
-                            # Cetak header lagi
-                            pdf.set_font('Arial', 'B', 10)
-                            for col in input_data.columns:
-                                pdf.cell(col_width, row_height, str(col)[:15], 1)
-                            pdf.cell(col_width, row_height, 'Prediksi', 1)
-                            pdf.ln()
-                            pdf.set_font('Arial', '', 10)
-                        
-                        for col in input_data.columns:
-                            value = input_data.iloc[i][col]
-                            if isinstance(value, (int, float)):
-                                value_str = f"{value:.2f}" if isinstance(value, float) else str(value)
-                            else:
-                                value_str = str(value)
-                            pdf.cell(col_width, row_height, value_str[:15], 1)
-                        
-                        pred_value = predictions[i] if isinstance(predictions, (list, np.ndarray)) else predictions
-                        if isinstance(pred_value, (int, float)):
-                            pred_str = f"{pred_value:.2f}" if isinstance(pred_value, float) else str(pred_value)
-                        else:
-                            pred_str = str(pred_value)
-                        pdf.cell(col_width, row_height, pred_str[:15], 1)
-                        pdf.ln()
-                    
-                    # Penanggung Jawab
-                    pdf.add_page()
-                    pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Penanggung Jawab:', 0, 1)
-                    pdf.set_font('Arial', '', 12)
-                    pdf.cell(0, 10, 'Nama: ____________________', 0, 1)
-                    pdf.cell(0, 10, 'Jabatan: ____________________', 0, 1)
-                    pdf.cell(0, 10, 'Tanggal: ____________________', 0, 1)
-                    pdf.cell(0, 20, 'Tanda Tangan:', 0, 1)
-                    pdf.cell(0, 20, '_____________________', 0, 1)
-                    
-                    return pdf
-                
+                st.subheader("Prediksi Data Baru")          
                 # Pilih metode input data
                 input_method = st.radio("Pilih metode input data:", ["Input Manual", "Upload CSV"])
                 
@@ -1300,19 +1185,6 @@ with tab4:
                             else:
                                 st.write(f"Nilai yang diprediksi: {prediction[0]:.4f}")
                             
-                            # Buat laporan PDF
-                            try:
-                                pdf = create_prediction_report(input_df, prediction, st.session_state.model, problem_type)
-                                pdf_output = pdf.output(dest='S').encode('latin1')
-                                st.download_button(
-                                    label="Download Laporan PDF",
-                                    data=pdf_output,
-                                    file_name=f"prediction_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                    mime="application/pdf"
-                                )
-                            except Exception as e:
-                                st.error(f"Error saat membuat laporan PDF: {str(e)}")
-                            
                         except Exception as e:
                             st.error(f"Error saat melakukan prediksi: {str(e)}")
                 
@@ -1360,20 +1232,7 @@ with tab4:
                                     # Tampilkan hasil
                                     st.subheader("Hasil Prediksi")
                                     st.dataframe(result_df)
-                                    
-                                    # Buat laporan PDF
-                                try:
-                                    pdf = create_prediction_report(pred_data, predictions, st.session_state.model, problem_type)
-                                    pdf_output = pdf.output(dest='S').encode('latin1')
-                                    st.download_button(
-                                        label="Download Laporan PDF",
-                                        data=pdf_output,
-                                        file_name=f"prediction_report_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                        mime="application/pdf"
-                                    )
-                                except Exception as e:
-                                    st.error(f"Error saat membuat laporan PDF: {str(e)}")
-                                    
+                                                                        
                                     # Opsi untuk mengunduh hasil CSV
                                     csv = result_df.to_csv(index=False)
                                     st.download_button(
