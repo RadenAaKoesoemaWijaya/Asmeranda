@@ -47,20 +47,12 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - Neural Network (MLP)
 - Decision Tree
 - Naive Bayes
-- XGBoost (jika terinstal)
 
 ### Regresi
 - Random Forest
 - Gradient Boosting
 - Linear Regression
 - Support Vector Regression (SVR)
-- XGBoost (jika terinstal)
-
-## Dataset Contoh
-Aplikasi ini dilengkapi dengan beberapa dataset contoh yang dapat digunakan:
-
-- Dataset risiko serangan jantung
-- Dataset analisis sperma (DFI)
 
 ## Cara Menjalankan Aplikasi
 1. Pastikan semua persyaratan telah terpenuhi dengan menjalankan:
