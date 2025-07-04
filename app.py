@@ -22,14 +22,6 @@ from PIL import Image
 import io
 import time
 
-# Try to import XGBoost, but don't fail if it's not installed
-try:
-    import xgboost as xgb
-    from xgboost import XGBClassifier, XGBRegressor
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
-
 # Try to import LIME, but don't fail if it's not installed
 try:
     import lime
@@ -736,11 +728,7 @@ with tab4:
             if problem_type == "Classification":
                 # Define available classification models
                 classification_models = ["Random Forest", "Logistic Regression", "SVM", "KNN", "Decision Tree", "Naive Bayes", "Gradient Boosting", "MLP (Neural Network)"]
-                
-                # Add XGBoost if available
-                if XGBOOST_AVAILABLE:
-                    classification_models.append("XGBoost")
-                    
+                                   
                 model_type = st.selectbox("Select a classification model:", classification_models)
                 
                 if model_type == "Random Forest":
@@ -918,16 +906,7 @@ with tab4:
                             max_iter=max_iter,
                             random_state=42
                         )
-                        
-                elif model_type == "XGBoost" and XGBOOST_AVAILABLE:
-                    n_estimators = st.slider("Number of trees:", 10, 500, 100)
-                    max_depth = st.slider("Maximum depth:", 1, 15, 6)
-                    learning_rate = st.slider("Learning rate:", 0.01, 0.3, 0.1)
-                    subsample = st.slider("Subsample ratio:", 0.5, 1.0, 0.8)
-                    colsample_bytree = st.slider("Column sample by tree:", 0.5, 1.0, 0.8)
-                    
-                    base_model = XGBClassifier(random_state=42)
-                    
+                                           
                     if use_grid_search:
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
@@ -937,19 +916,7 @@ with tab4:
                             'colsample_bytree': [0.6, 0.8, 1.0]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
-                    else:
-                        model = XGBClassifier(
-                            n_estimators=n_estimators,
-                            max_depth=max_depth,
-                            learning_rate=learning_rate,
-                            subsample=subsample,
-                            colsample_bytree=colsample_bytree,
-                            random_state=42
-                        )
-                else:
-                    st.error("Please select a valid classification model.")
-                    model = None
-                    
+
             else:  # Regression
                 # Regular regression models (non-time series)
                 model_type = st.selectbox("Pilih model regresi:", 
@@ -1491,13 +1458,16 @@ with tab5:
                         else:
                             # Convert X_sample to numpy array if it's not already
                             X_sample_values = X_sample.values if hasattr(X_sample, 'values') else np.array(X_sample)
+                            # Ensure all values are numeric
+                            X_sample_values = pd.get_dummies(pd.DataFrame(X_sample_values)).values
                             X_sample_values = np.asarray(X_sample_values).astype(np.float64)
                             
-                            # Create a wrapper function for the model's predict method
                             def model_predict(X):
                                 # Ensure X is in the right format for the model
                                 if isinstance(X, list):
                                     X = np.array(X)
+                                # Apply the same preprocessing as training data
+                                X = pd.get_dummies(pd.DataFrame(X)).values
                                 X = np.asarray(X).astype(np.float64)
                                 return st.session_state.model.predict(X)
                             
