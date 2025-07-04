@@ -1491,14 +1491,14 @@ with tab5:
                         else:
                             # Convert X_sample to numpy array if it's not already
                             X_sample_values = X_sample.values if hasattr(X_sample, 'values') else np.array(X_sample)
-                            X_sample_values = np.asarray(X_sample_values).astype(float)
+                            X_sample_values = np.asarray(X_sample_values).astype(np.float64)
                             
                             # Create a wrapper function for the model's predict method
                             def model_predict(X):
                                 # Ensure X is in the right format for the model
                                 if isinstance(X, list):
                                     X = np.array(X)
-                                X = np.asarray(X).astype(float)
+                                X = np.asarray(X).astype(np.float64)
                                 return st.session_state.model.predict(X)
                             
                             # Create the explainer with the wrapper function
