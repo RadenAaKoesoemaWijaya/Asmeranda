@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, LabelEncoder, PolynomialFeatures, RobustScaler, MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, GradientBoostingClassifier, BaggingRegressor, VotingRegressor, StackingRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.svm import SVR, SVC
 from sklearn.neighbors import KNeighborsClassifier
@@ -920,7 +920,7 @@ with tab4:
             else:  # Regression
                 # Regular regression models (non-time series)
                 model_type = st.selectbox("Pilih model regresi:", 
-                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR"])
+                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor"])
                 
                 if model_type == "Random Forest":
                     n_estimators = st.slider("Jumlah trees:", 10, 500, 100)
@@ -1004,6 +1004,58 @@ with tab4:
                             kernel=kernel,
                             gamma=gamma,
                             epsilon=epsilon
+                        )
+                elif model_type == "Bagging Regressor":
+                    n_estimators = st.slider("Jumlah estimator:", 10, 200, 50)
+                    max_samples = st.slider("Persentase sampel per estimator:", 10, 100, 100)
+                    base_estimator = st.selectbox("Base estimator:", ["Decision Tree", "Linear Regression"])
+                    if base_estimator == "Decision Tree":
+                        from sklearn.tree import DecisionTreeRegressor
+                        base = DecisionTreeRegressor()
+                    else:
+                        base = LinearRegression()
+                    model = BaggingRegressor(
+                        base_estimator=base,
+                        n_estimators=n_estimators,
+                        max_samples=max_samples/100,
+                        random_state=42
+                    )
+                elif model_type == "Voting Regressor":
+                    # Simple voting regressor with 2-3 base models
+                    estimators = []
+                    if st.checkbox("Gunakan Random Forest", value=True):
+                        estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
+                    if st.checkbox("Gunakan Linear Regression", value=True):
+                        estimators.append(('lr', LinearRegression()))
+                    if st.checkbox("Gunakan Gradient Boosting", value=False):
+                        estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
+                    if len(estimators) < 2:
+                        st.warning("Pilih minimal dua estimator untuk Voting Regressor.")
+                        model = None
+                    else:
+                        model = VotingRegressor(estimators=estimators)
+                elif model_type == "Stacking Regressor":
+                    # Simple stacking with 2-3 base models and a final regressor
+                    base_estimators = []
+                    if st.checkbox("Gunakan Random Forest (Stacking)", value=True, key="stack_rf"):
+                        base_estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
+                    if st.checkbox("Gunakan Linear Regression (Stacking)", value=True, key="stack_lr"):
+                        base_estimators.append(('lr', LinearRegression()))
+                    if st.checkbox("Gunakan Gradient Boosting (Stacking)", value=False, key="stack_gb"):
+                        base_estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
+                    final_estimator = st.selectbox("Final estimator:", ["Linear Regression", "Random Forest"], key="stack_final")
+                    if final_estimator == "Linear Regression":
+                        final = LinearRegression()
+                    else:
+                        final = RandomForestRegressor(n_estimators=20, random_state=42)
+                    if len(base_estimators) < 2:
+                        st.warning("Pilih minimal dua base estimator untuk Stacking Regressor.")
+                        model = None
+                    else:
+                        model = StackingRegressor(
+                            estimators=base_estimators,
+                            final_estimator=final,
+                            passthrough=True
                         )
                 else:
                     st.error("Please select a valid regression model.")
