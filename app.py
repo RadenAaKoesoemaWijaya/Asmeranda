@@ -1502,7 +1502,8 @@ with tab5:
                                 return st.session_state.model.predict(X)
                             
                             # Create the explainer with the wrapper function
-                            explainer = shap.KernelExplainer(model_predict, X_sample_values)
+                            # Tambahkan parameter data untuk menggantikan background data
+                            explainer = shap.KernelExplainer(model_predict, data=X_sample_values)
                         
                         # Calculate SHAP values
                         shap_values = explainer.shap_values(X_sample)
