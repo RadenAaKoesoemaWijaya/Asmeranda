@@ -1014,12 +1014,23 @@ with tab4:
                         base = DecisionTreeRegressor()
                     else:
                         base = LinearRegression()
-                    model = BaggingRegressor(
-                        base_estimator=base,
-                        n_estimators=n_estimators,
-                        max_samples=max_samples/100,
-                        random_state=42
-                    )
+                    # Fix for scikit-learn >= 1.2: use 'estimator' instead of 'base_estimator'
+                    import sklearn
+                    skl_version = tuple(map(int, sklearn.__version__.split('.')[:2]))
+                    if skl_version >= (1, 2):
+                        model = BaggingRegressor(
+                            estimator=base,
+                            n_estimators=n_estimators,
+                            max_samples=max_samples/100,
+                            random_state=42
+                        )
+                    else:
+                        model = BaggingRegressor(
+                            base_estimator=base,
+                            n_estimators=n_estimators,
+                            max_samples=max_samples/100,
+                            random_state=42
+                        )
                 elif model_type == "Voting Regressor":
                     # Simple voting regressor with 2-3 base models
                     estimators = []
@@ -1068,14 +1079,14 @@ with tab4:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
                         training_time = time.time() - start_time
-                        
+
                         # Jika menggunakan GridSearchCV, tampilkan parameter terbaik
-                        if use_grid_search:
+                        if use_grid_search and hasattr(model, "best_params_"):
                             st.success(f"Model training completed in {training_time:.2f} seconds with GridSearchCV!")
                             st.subheader("Best Parameters:")
                             st.write(model.best_params_)
                             st.write(f"Best Score (CV): {model.best_score_:.4f}")
-                            
+
                             # Gunakan model terbaik untuk prediksi
                             y_pred = model.best_estimator_.predict(st.session_state.X_test)
                             st.session_state.model = model.best_estimator_
