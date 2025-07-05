@@ -1449,7 +1449,12 @@ with tab4:
 with tab5:
     st.header("Model Interpretation with SHAP")
     
-    if st.session_state.model is not None:
+    # Only allow SHAP for regression (prediction) models, not for classification or forecasting
+    if (
+        st.session_state.model is not None
+        and st.session_state.problem_type == "Regression"
+        and not ('is_timeseries' in locals() and is_timeseries)
+    ):
         st.write("""
         SHAP (SHapley Additive exPlanations) is a game theoretic approach to explain the output of any machine learning model. 
         It connects optimal credit allocation with local explanations using the classic Shapley values from game theory and their related extensions.
@@ -1578,10 +1583,25 @@ with tab5:
                         feature_idx = feature_options.index(selected_feature)
                         
                         fig, ax = plt.subplots(figsize=(10, 6))
+                        # --- FIX: Ensure correct shape for classification (multi-class) ---
                         if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
-                            shap.dependence_plot(feature_idx, shap_values[class_to_show], X_sample, show=False)
+                            # For multi-class classification, use the first class
+                            shap.dependence_plot(
+                                feature_idx,
+                                shap_values[class_to_show],  # Use only one class's SHAP values
+                                X_sample,
+                                show=False,
+                                ax=ax
+                            )
                         else:
-                            shap.dependence_plot(feature_idx, shap_values, X_sample, show=False)
+                            # For regression or binary classification
+                            shap.dependence_plot(
+                                feature_idx,
+                                shap_values,
+                                X_sample,
+                                show=False,
+                                ax=ax
+                            )
                         st.pyplot(fig)
                         plt.clf()
                         
@@ -1683,17 +1703,24 @@ with tab5:
                         plt.clf()
                         
                         st.success("SHAP analysis completed!")
+    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
+        st.warning("SHAP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
     else:
-        st.info("Please train a model in the 'Model Training' tab first.")
+        st.info("Please train a regression model in the 'Model Training' tab first.")
 
 
 # Tab6: Model Interpretation (LIME)
 with tab6:
     st.header("Model Interpretation with LIME")
     
+    # Only allow LIME for regression (prediction) models, not for classification or forecasting
     if not LIME_AVAILABLE:
         st.error("LIME tidak terinstal. Silakan instal dengan 'pip install lime'.")
-    elif st.session_state.model is not None:
+    elif (
+        st.session_state.model is not None
+        and st.session_state.problem_type == "Regression"
+        and not ('is_timeseries' in locals() and is_timeseries)
+    ):
         st.write("""
         LIME (Local Interpretable Model-agnostic Explanations) adalah teknik untuk menjelaskan prediksi model machine learning.
         Tidak seperti SHAP yang memberikan nilai kontribusi global, LIME fokus pada penjelasan prediksi individual dengan membuat model lokal yang dapat diinterpretasi.
@@ -1852,5 +1879,7 @@ with tab6:
                     st.dataframe(feature_values)
                     
                     st.success("Analisis LIME selesai!")
+    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
+        st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
     else:
-        st.info("Silakan latih model terlebih dahulu di tab 'Model Training'.")
+        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'.")
