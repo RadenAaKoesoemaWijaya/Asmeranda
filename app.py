@@ -15,12 +15,14 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, classification_report, confusion_matrix
 from sklearn.feature_selection import SelectKBest, f_regression, f_classif, mutual_info_regression, mutual_info_classif
 from sklearn.decomposition import PCA
+from sklearn.inspection import partial_dependence, PartialDependenceDisplay
 import shap
 import pickle
 import os
 from PIL import Image
 import io
 import time
+
 
 # Try to import LIME, but don't fail if it's not installed
 try:
@@ -93,7 +95,15 @@ if 'scaler' not in st.session_state:
     st.session_state.scaler = None
 
 # Create tabs for different functionalities
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤 Data Upload", "📊 Exploratory Data Analytic", "🔄 Preprocessing", "🛠️ Feature Engineering & Model Training", "🔍 SHAP Model Interpretation", "🔎 LIME Model Interpretation"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📤 Data Upload", 
+    "📊 Exploratory Data Analytic", 
+    "🔄 Preprocessing", 
+    "🛠️ Feature Engineering & Model Training", 
+    "🔍 SHAP Model Interpretation", 
+    "🔎 LIME Model Interpretation",
+    "📈 Partial Dependence Plot"
+])
 
 # Tab 1: Data Upload
 with tab1:
@@ -973,8 +983,8 @@ with tab4:
                     
                     if use_grid_search:
                         param_grid = {
-                            'fit_intercept': [True, False],
-                            'normalize': [True, False]
+                            'fit_intercept': [True, False]
+                            # 'normalize' parameter removed to avoid error
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     else:
@@ -1881,5 +1891,49 @@ with tab6:
                     st.success("Analisis LIME selesai!")
     elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
         st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
+    else:
+        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'.")
+
+# Tab7: Model Interpretation (Partial Dependence Plot)
+with tab7:
+    st.header("Partial Dependence Plot (PDP) Analysis")
+
+    if (
+        st.session_state.model is not None
+        and st.session_state.problem_type == "Regression"
+        and not ('is_timeseries' in locals() and is_timeseries)
+    ):
+        st.write("""
+        Partial Dependence Plot (PDP) membantu memvisualisasikan hubungan antara satu atau dua fitur dan prediksi model, 
+        dengan mengisolasi efek fitur tersebut dari fitur lainnya.
+        """)
+        # Pilih fitur untuk PDP
+        features = st.multiselect(
+            "Pilih satu atau dua fitur untuk PDP:",
+            options=st.session_state.X_train.columns.tolist(),
+            default=st.session_state.X_train.columns[:1].tolist(),
+            max_selections=2
+        )
+        if len(features) == 0:
+            st.info("Pilih minimal satu fitur.")
+        elif len(features) > 2:
+            st.warning("Pilih maksimal dua fitur untuk PDP.")
+        else:
+            if st.button("Generate PDP"):
+                with st.spinner("Menghitung Partial Dependence..."):
+                    try:
+                        fig, ax = plt.subplots(figsize=(8, 6))
+                        display = PartialDependenceDisplay.from_estimator(
+                            st.session_state.model,
+                            st.session_state.X_train,
+                            features=features,
+                            ax=ax
+                        )
+                        st.pyplot(fig)
+                        st.success("PDP berhasil dibuat!")
+                    except Exception as e:
+                        st.error(f"Error saat membuat PDP: {str(e)}")
+    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
+        st.warning("PDP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
     else:
         st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'.")
