@@ -22,6 +22,9 @@ import os
 from PIL import Image
 import io
 import time
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
+from statsmodels.stats.diagnostic import het_breuschpagan
 
 
 # Try to import LIME, but don't fail if it's not installed
@@ -104,6 +107,25 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔎 LIME Model Interpretation",
     "📈 Partial Dependence Plot"
 ])
+
+def adjusted_r2_score(r2, n, k):
+    """Calculate Adjusted R²."""
+    return 1 - (1 - r2) * (n - 1) / (n - k - 1)
+
+def calculate_vif(X):
+    """Calculate VIF for each feature."""
+    vif_data = pd.DataFrame()
+    vif_data["Feature"] = X.columns
+    vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+    return vif_data
+
+def breusch_pagan_test(y_true, y_pred, X):
+    """Perform Breusch-Pagan test for heteroskedasticity."""
+    residuals = y_true - y_pred
+    X_const = sm.add_constant(X)
+    bp_test = het_breuschpagan(residuals, X_const)
+    labels = ['Lagrange multiplier statistic', 'p-value', 'f-value', 'f p-value']
+    return dict(zip(labels, bp_test))
 
 # Tab 1: Data Upload
 with tab1:
@@ -715,15 +737,35 @@ with tab4:
                                     st.write(f"- R²: {eval_results['R2']:.4f}")
                                     
                                     # Generate forecast
-                                    forecast_data = forecast_future(st.session_state.model, periods=forecast_periods)
-                                    
+                                    try:
+                                        forecast_data = forecast_future(st.session_state.model, periods=forecast_periods)
+                                        # Perbaikan: Konversi kolom tanggal ke string jika tipe datetime64[ns] dan out of bounds
+                                        if 'date' in forecast_data.columns:
+                                            # Cek dan konversi semua nilai tanggal yang out of bounds ke string
+                                            def safe_to_datetime(val):
+                                                try:
+                                                    return pd.to_datetime(val)
+                                                except (pd.errors.OutOfBoundsDatetime, ValueError, OverflowError):
+                                                    return str(val)
+                                            forecast_data['date'] = forecast_data['date'].apply(safe_to_datetime)
+                                    except Exception as e:
+                                        st.error(f"Error saat membuat forecast: {str(e)}")
+                                        forecast_data = None
+
                                     # Plot results
-                                    fig = plot_forecast_results(train_data, test_data, forecast_data, target_column)
-                                    st.pyplot(fig)
-                                    
+                                    if forecast_data is not None:
+                                        try:
+                                            fig = plot_forecast_results(train_data, test_data, forecast_data, target_column)
+                                            st.pyplot(fig)
+                                        except Exception as e:
+                                            st.error(f"Error saat plotting hasil forecast: {str(e)}")
+
                                     # Show forecast data
-                                    st.write("Data Hasil Forecasting:")
-                                    st.dataframe(forecast_data)
+                                    if forecast_data is not None:
+                                        st.write("Data Hasil Forecasting:")
+                                        st.dataframe(forecast_data)
+
+                                # Download forecast data
                                 except Exception as e:
                                     st.error(f"Error saat evaluasi model: {str(e)}")
 
@@ -1136,10 +1178,27 @@ with tab4:
                             mse = mean_squared_error(st.session_state.y_test, y_pred)
                             rmse = np.sqrt(mse)
                             r2 = r2_score(st.session_state.y_test, y_pred)
-                            
+                            # Tambahan: Adjusted R²
+                            n = st.session_state.X_test.shape[0]
+                            k = st.session_state.X_test.shape[1]
+                            adj_r2 = adjusted_r2_score(r2, n, k)
                             st.write(f"Mean Squared Error: {mse:.4f}")
                             st.write(f"Root Mean Squared Error: {rmse:.4f}")
                             st.write(f"R² Score: {r2:.4f}")
+                            st.write(f"Adjusted R² Score: {adj_r2:.4f}")
+
+                            # Tambahan: Uji Multikolinearitas (VIF)
+                            st.subheader("Uji Multikolinearitas (VIF)")
+                            vif_df = calculate_vif(st.session_state.X_train)
+                            st.dataframe(vif_df)
+
+                            # Tambahan: Uji Heteroskedastisitas (Breusch-Pagan)
+                            st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)")
+                            bp_result = breusch_pagan_test(st.session_state.y_test, y_pred, st.session_state.X_test)
+                            st.write(f"Lagrange multiplier statistic: {bp_result['Lagrange multiplier statistic']:.4f}")
+                            st.write(f"p-value: {bp_result['p-value']:.4f}")
+                            st.write(f"f-value: {bp_result['f-value']:.4f}")
+                            st.write(f"f p-value: {bp_result['f p-value']:.4f}")
                             
                             # Plot actual vs predicted
                             fig, ax = plt.subplots(figsize=(10, 6))
@@ -1520,9 +1579,7 @@ with tab5:
                 if not selected_features:
                     st.error("Please select at least one feature for SHAP analysis.")
                 else:
-                    with st.spinner("Calculating SHAP values..."):
-                        # Create a smaller sample with only selected features
-                        sample_size = min(50, len(st.session_state.X_train))
+                        sample_size = min(100, len(st.session_state.X_train[selected_features]))
                         X_sample = st.session_state.X_train[selected_features].sample(sample_size, random_state=42)
                         
                         # Create explainer
