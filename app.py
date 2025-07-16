@@ -1363,7 +1363,7 @@ with tab4:
                     st.error("Please select a valid regression model.")
                     model = None
             
-            model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):", value=f"{model_type}_{time.strftime('%Y%m%d_%H%M%S')}")
+            model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):", value=f"")
 
             # Train model button
             if model is not None and st.button("Train Model"):
