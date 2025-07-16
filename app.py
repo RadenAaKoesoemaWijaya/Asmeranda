@@ -1164,7 +1164,7 @@ with tab4:
             else:  # Regression
                 # Regular regression models (non-time series)
                 model_type = st.selectbox("Pilih model regresi:", 
-                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor"])
+                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor", "MLP Regressor"])
                 
                 if model_type == "Random Forest":
                     n_estimators = st.slider("Jumlah trees:", 10, 500, 100)
@@ -1331,6 +1331,33 @@ with tab4:
                             n_neighbors=n_neighbors,
                             weights=weights,
                             algorithm=algorithm
+                        )
+                elif model_type == "MLP Regressor":
+                    from sklearn.neural_network import MLPRegressor
+                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):", "100,50")
+                    hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
+                    activation = st.selectbox("Activation function:", ["relu", "tanh", "logistic"])
+                    solver = st.selectbox("Solver:", ["adam", "sgd", "lbfgs"])
+                    alpha = st.slider("Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
+                    max_iter = st.slider("Maximum iterations:", 100, 1000, 200)
+                    base_model = MLPRegressor(random_state=42)
+                    if use_grid_search:
+                        param_grid = {
+                            'hidden_layer_sizes': [(100,), (100,50), (50,50,50)],
+                            'activation': ['relu', 'tanh', 'logistic'],
+                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'alpha': [0.0001, 0.001, 0.01],
+                            'max_iter': [200, 500, 1000]
+                        }
+                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    else:
+                        model = MLPRegressor(
+                            hidden_layer_sizes=hidden_layer_sizes,
+                            activation=activation,
+                            solver=solver,
+                            alpha=alpha,
+                            max_iter=max_iter,
+                            random_state=42
                         )
                 else:
                     st.error("Please select a valid regression model.")
