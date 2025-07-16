@@ -1164,7 +1164,7 @@ with tab4:
             else:  # Regression
                 # Regular regression models (non-time series)
                 model_type = st.selectbox("Pilih model regresi:", 
-                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor"])
+                                         ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor"])
                 
                 if model_type == "Random Forest":
                     n_estimators = st.slider("Jumlah trees:", 10, 500, 100)
@@ -1311,6 +1311,26 @@ with tab4:
                             estimators=base_estimators,
                             final_estimator=final,
                             passthrough=True
+                        )
+                elif model_type == "KNN Regressor":
+                    from sklearn.neighbors import KNeighborsRegressor
+                    n_neighbors = st.slider("Number of neighbors (K):", 1, 20, 5)
+                    weights = st.selectbox("Weight function:", ["uniform", "distance"])
+                    algorithm = st.selectbox("Algorithm:", ["auto", "ball_tree", "kd_tree", "brute"])
+                    base_model = KNeighborsRegressor()
+                    if use_grid_search:
+                        param_grid = {
+                            'n_neighbors': [3, 5, 7] if n_neighbors == 5 else [max(1, n_neighbors-2), n_neighbors, min(20, n_neighbors+2)],
+                            'weights': ['uniform', 'distance'],
+                            'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                            'p': [1, 2]  # Manhattan or Euclidean distance
+                        }
+                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    else:
+                        model = KNeighborsRegressor(
+                            n_neighbors=n_neighbors,
+                            weights=weights,
+                            algorithm=algorithm
                         )
                 else:
                     st.error("Please select a valid regression model.")
