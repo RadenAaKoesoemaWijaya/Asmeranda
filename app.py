@@ -1363,6 +1363,8 @@ with tab4:
                     st.error("Please select a valid regression model.")
                     model = None
             
+            model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):", value=f"{model_type}_{time.strftime('%Y%m%d_%H%M%S')}")
+
             # Train model button
             if model is not None and st.button("Train Model"):
                 with st.spinner(f"Training {model_type} model..."):
@@ -1386,9 +1388,11 @@ with tab4:
                             y_pred = model.predict(st.session_state.X_test)
                             st.session_state.model = model
                         
-                        # Save model
+                        # Save model dengan nama custom
                         os.makedirs("models", exist_ok=True)
-                        model_filename = f"models/{model_type.lower().replace(' ', '_')}_{time.strftime('%Y%m%d_%H%M%S')}.pkl"
+                        # Bersihkan nama agar hanya huruf/angka/underscore
+                        safe_name = "".join([c if c.isalnum() or c == "_" else "_" for c in model_custom_name])
+                        model_filename = f"models/{safe_name}.pkl"
                         with open(model_filename, 'wb') as f:
                             pickle.dump(st.session_state.model, f)
                         st.success(f"Model saved as '{model_filename}'")
