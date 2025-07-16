@@ -691,7 +691,7 @@ with tab3:
             # Train-test split
             st.subheader("Train-Test Split")
             
-            test_size = st.slider("Test set size (%):", 10, 20, 30) / 100
+            test_size = st.slider("Test set size (%):", 10, 20, 30, 40, 50) / 100
             random_state = st.number_input("Random state:", 0, 100, 42)
             
             X_train, X_test, y_train, y_test = train_test_split(
