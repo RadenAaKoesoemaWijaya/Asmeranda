@@ -461,7 +461,8 @@ with tab3:
                 "Recursive Feature Elimination (RFE)",
                 "LASSO",
                 "Gradient Boosting Importance",
-                "Random Forest Importance"
+                "Random Forest Importance",
+                "Ensemble Feature Selection"
             ]
         )
 
@@ -542,6 +543,104 @@ with tab3:
             top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
             selected_features = rf_df.head(top_n)["Feature"].tolist()
 
+        elif feature_selection_method == "Ensemble Feature Selection":
+            st.info("Pilih dua metode seleksi fitur untuk digabungkan.")
+            method1 = st.selectbox("Metode pertama:", [
+                "Mutual Information",
+                "Pearson Correlation",
+                "Recursive Feature Elimination (RFE)",
+                "LASSO",
+                "Gradient Boosting Importance",
+                "Random Forest Importance"
+            ], key="ensemble_method1")
+            method2 = st.selectbox("Metode kedua:", [
+                "Mutual Information",
+                "Pearson Correlation",
+                "Recursive Feature Elimination (RFE)",
+                "LASSO",
+                "Gradient Boosting Importance",
+                "Random Forest Importance"
+            ], key="ensemble_method2")
+
+            combine_type = st.radio("Gabungkan hasil dengan:", ["Intersection", "Union"], index=0)
+
+            def get_features_by_method(method):
+                if method == "Mutual Information":
+                    if problem_type == "Regression":
+                        mi = mutual_info_regression(data[all_columns], data[target_column])
+                    else:
+                        mi = mutual_info_classif(data[all_columns], data[target_column])
+                    mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
+                    mi_df = mi_df.sort_values("Mutual Information", ascending=False)
+                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
+                    return set(mi_df.head(top_n)["Feature"].tolist())
+                elif method == "Pearson Correlation":
+                    corr = data[all_columns].corrwith(data[target_column]).abs()
+                    corr_df = pd.DataFrame({"Feature": all_columns, "Correlation": corr})
+                    corr_df = corr_df.sort_values("Correlation", ascending=False)
+                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
+                    return set(corr_df.head(top_n)["Feature"].tolist())
+                elif method == "Recursive Feature Elimination (RFE)":
+                    from sklearn.feature_selection import RFE
+                    if problem_type == "Regression":
+                        estimator = LinearRegression()
+                    else:
+                        estimator = LogisticRegression(max_iter=500)
+                    rfe = RFE(estimator, n_features_to_select=min(10, len(all_columns)))
+                    rfe.fit(data[all_columns], data[target_column])
+                    rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
+                    return set(rfe_df[rfe_df["Selected"]]["Feature"].tolist())
+                elif method == "LASSO":
+                    from sklearn.linear_model import Lasso, LogisticRegression
+                    if problem_type == "Regression":
+                        lasso = Lasso(alpha=0.01, max_iter=1000)
+                    else:
+                        lasso = LogisticRegression(penalty='l1', solver='liblinear', max_iter=500)
+                    lasso.fit(data[all_columns], data[target_column])
+                    coef = lasso.coef_ if hasattr(lasso, "coef_") else lasso.coef_
+                    if coef.ndim > 1:
+                        coef = coef[0]
+                    lasso_df = pd.DataFrame({"Feature": all_columns, "Coefficient": coef})
+                    lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
+                    return set(lasso_df["Feature"].tolist())
+                elif method == "Gradient Boosting Importance":
+                    from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+                    if problem_type == "Regression":
+                        model = GradientBoostingRegressor(random_state=42)
+                    else:
+                        model = GradientBoostingClassifier(random_state=42)
+                    model.fit(data[all_columns], data[target_column])
+                    importances = model.feature_importances_
+                    gb_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
+                    gb_df = gb_df.sort_values("Importance", ascending=False)
+                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
+                    return set(gb_df.head(top_n)["Feature"].tolist())
+                elif method == "Random Forest Importance":
+                    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                    if problem_type == "Regression":
+                        model = RandomForestRegressor(random_state=42)
+                    else:
+                        model = RandomForestClassifier(random_state=42)
+                    model.fit(data[all_columns], data[target_column])
+                    importances = model.feature_importances_
+                    rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
+                    rf_df = rf_df.sort_values("Importance", ascending=False)
+                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
+                    return set(rf_df.head(top_n)["Feature"].tolist())
+                else:
+                    return set(all_columns)
+
+            features1 = get_features_by_method(method1)
+            features2 = get_features_by_method(method2)
+
+            if combine_type == "Intersection":
+                selected_features = list(features1 & features2)
+            else:
+                selected_features = list(features1 | features2)
+
+            st.write(f"Fitur hasil gabungan: {selected_features}")
+
+
         if not selected_features:
             st.warning("Please select at least one feature.")
         else:
@@ -582,6 +681,12 @@ with tab3:
                     X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
                     st.session_state.scaler = scaler
                     st.success("Standard scaling applied to numerical features.")
+
+                else:
+                    scaler = MinMaxScaler()
+                    X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
+                    st.session_state.scaler = scaler
+                    st.success("MinMax scaling applied to numerical features.")
             
             # Train-test split
             st.subheader("Train-Test Split")
