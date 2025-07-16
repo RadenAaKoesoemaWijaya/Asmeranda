@@ -24,7 +24,16 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - Penentuan tipe masalah (klasifikasi atau regresi)
 - Penanganan nilai yang hilang
 - Encoding fitur kategorikal
-- Penskalaan fitur numerik
+- Penskalaan fitur numerik (pilihan Standard Scaler atau MinMax Scaler)
+- **Seleksi fitur dengan berbagai metode:**  
+  - Manual  
+  - Mutual Information  
+  - Pearson Correlation  
+  - Recursive Feature Elimination (RFE)  
+  - LASSO  
+  - Gradient Boosting Importance  
+  - Random Forest Importance  
+  - Ensemble Feature Selection (gabungan dua metode dengan union/intersection)
 
 ### 4. 🛠️ Feature Engineering & Pelatihan Model
 - Pemilihan fitur dengan berbagai metode
@@ -36,6 +45,12 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 ### 5. 🔍 Interpretasi Model dengan SHAP
 - Visualisasi nilai SHAP untuk memahami kontribusi fitur
 - Analisis pengaruh fitur terhadap prediksi model
+
+### 6. 📈 Analisis Data Baru & Prediksi
+- Input data baru secara manual atau upload file CSV untuk prediksi batch
+- Preprocessing otomatis pada data baru (encoding & scaling sesuai model)
+- Hasil prediksi dapat diunduh dalam format CSV atau PDF laporan prediksi
+- Fitur untuk memuat model yang sudah disimpan dan melakukan prediksi ulang
 
 ## Model yang Didukung
 ### Klasifikasi
@@ -68,6 +83,7 @@ streamlit run app.py
 ## Alur Kerja Penggunaan
 1. Unggah dataset Anda di tab "Data Upload"
 2. Lakukan eksplorasi data di tab "Exploratory Data Analytic"
-3. Lakukan preprocessing data di tab "Preprocessing"
+3. Lakukan preprocessing data di tab "Preprocessing" (termasuk seleksi fitur dan scaling)
 4. Latih dan evaluasi model di tab "Feature Engineering & Model Training"
 5. Interpretasikan hasil model dengan SHAP di tab "SHAP Model Interpretation"
+6. Lakukan prediksi data baru dan unduh hasilnya di tab "Feature Engineering & Model Training"
