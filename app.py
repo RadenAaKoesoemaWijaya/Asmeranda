@@ -2031,11 +2031,12 @@ with tab6:
         and st.session_state.problem_type == "Regression"
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
-        st.write("""LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining machine learning model predictions.
-        Unlike SHAP, which provides global contribution values, LIME focuses on individual prediction explanations by creating a local interpretable model.
-        It approximates the model locally around the prediction to provide insights into how each feature contributes to the prediction.""" if st.session_state.language == 'id' else """
+        st.write("""
         LIME (Local Interpretable Model-agnostic Explanations) adalah teknik untuk menjelaskan prediksi model machine learning.
         Tidak seperti SHAP yang memberikan nilai kontribusi global, LIME fokus pada penjelasan prediksi individual dengan membuat model lokal yang dapat diinterpretasi.
+        """  if st.session_state.language == 'id' else """
+        LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining machine learning model predictions.
+        Unlike SHAP which provides global contribution values, LIME focuses on individual prediction explanations by creating a local interpretable model.
         """)
         
         # Feature selection for LIME analysis
