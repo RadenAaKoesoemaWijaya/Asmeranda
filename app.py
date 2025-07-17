@@ -108,18 +108,18 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 ])
 
 def adjusted_r2_score(r2, n, k):
-    """Calculate Adjusted R²."""
+    """Hitung Adjusted R².""" if st.session_state.language == 'id' else """Calculate Adjusted R²."""
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
 
 def calculate_vif(X):
-    """Calculate VIF for each feature."""
+    """Hitung Variance Inflation Factor (VIF) untuk setiap fitur. """ if st.session_state.language == 'id' else """Calculate VIF for each feature."""
     vif_data = pd.DataFrame()
     vif_data["Feature"] = X.columns
     vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
     return vif_data
 
 def breusch_pagan_test(y_true, y_pred, X):
-    """Perform Breusch-Pagan test for heteroskedasticity."""
+    """ Tampilkan Uji Heteroskedastisitas (Breusch-Pagan)""" if st.session_state.language == 'id' else """Perform Breusch-Pagan test for heteroskedasticity."""
     residuals = y_true - y_pred
     X_const = sm.add_constant(X)
     bp_test = het_breuschpagan(residuals, X_const)
@@ -248,10 +248,10 @@ with tab2:
         col1, col2 = st.columns(2)
         
         with col1:
-            x_axis = st.selectbox("Select X-axis feature:", data.columns)
+            x_axis = st.selectbox("Pilih X-axis feature:" if st.session_state.language == 'id' else "Select X-axis feature:", data.columns)
         
         with col2:
-            y_axis = st.selectbox("Select Y-axis feature:", [col for col in data.columns if col != x_axis])
+            y_axis = st.selectbox("Pilih Y-axis feature:" if st.session_state.language == 'id' else "Select Y-axis feature:", [col for col in data.columns if col != x_axis])
         
         # Determine the plot type based on the data types
         x_is_numeric = data[x_axis].dtype in ['int64', 'float64']
@@ -279,37 +279,37 @@ with tab2:
         plt.tight_layout()
         st.pyplot(fig)
     else:
-        st.info("Please upload a dataset in the 'Data Upload' tab first.")
+        st.info("Silakan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
 
 # Tab 3: Preprocessing
 with tab3:
-    st.header("Data Preprocessing")
+    st.header("Pemrosesan Data Awal" if st.session_state.language == 'id' else "Data Preprocessing")
     
     if st.session_state.data is not None:
         data = st.session_state.data.copy()
         
-        st.subheader("Select Target Variable")
-        target_column = st.selectbox("Choose the target column for prediction:", data.columns)
+        st.subheader("Pilih Variabel Target" if st.session_state.language == 'id' else "Select Target Variable")
+        target_column = st.selectbox("Pilih kolom target untuk diprediksi:" if st.session_state.language == 'id' else "Choose the target column for prediction:", data.columns)
         st.session_state.target_column = target_column
         
         # Determine problem type
         if data[target_column].dtype in ['int64', 'float64']:
             if len(data[target_column].unique()) <= 10:
-                problem_type = st.radio("Select problem type:", ["Classification", "Regression"], index=0)
+                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", ["Classification", "Regression"], index=0)
             else:
-                problem_type = st.radio("Select problem type:", ["Classification", "Regression"], index=1)
+                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", ["Classification", "Regression"], index=1)
         else:
             problem_type = "Classification"
         
         st.session_state.problem_type = problem_type
         
-        st.subheader("Handle Missing Values")
+        st.subheader("Atasi Nilai Hilang" if st.session_state.language == 'id' else "Handle Missing Values")
         
         # Display columns with missing values
         missing_cols = data.columns[data.isnull().any()].tolist()
         
         if missing_cols:
-            st.write("Columns with missing values:", ", ".join(missing_cols))
+            st.write("Kolom yang memiliki nilai hilang:" if st.session_state.language == 'id' else "Columns with missing values:", ", ".join(missing_cols))
             
             for col in missing_cols:
                 col_type = "numerical" if data[col].dtype in ['int64', 'float64'] else "categorical"
@@ -341,10 +341,10 @@ with tab3:
                     elif method == "New category":
                         data[col] = data[col].fillna("Unknown")
         else:
-            st.success("No missing values found in the dataset.")
+            st.success("Tidak ditemukan nilai yang hilang dalam dataset." if st.session_state.language == 'id' else "No missing values found in the dataset.")
         
         # Handle Outliers
-        st.subheader("Handle Outliers" if st.session_state.language == 'id' else "Handle Outliers")
+        st.subheader("Atasi Data Outlier" if st.session_state.language == 'id' else "Handle Outliers")
         
         # Only for numerical columns
         numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
@@ -447,13 +447,13 @@ with tab3:
                 st.success("Penanganan outlier selesai" if st.session_state.language == 'id' else "Outlier handling completed")
         
         # Feature selection
-        st.subheader("Feature Selection")
+        st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
 
         all_columns = [col for col in data.columns if col != target_column]
 
         # Pilih algoritma seleksi fitur
         feature_selection_method = st.selectbox(
-            "Metode seleksi fitur:",
+            "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
             [
                 "Manual",
                 "Mutual Information",
@@ -470,7 +470,7 @@ with tab3:
 
         if feature_selection_method == "Manual":
             selected_features = st.multiselect(
-                "Select features to include in the model:",
+                "Pilih fitur untuk model:" if st.session_state.language == 'id' else "Select features to include in the model:",
                 all_columns,
                 default=all_columns
             )
@@ -544,8 +544,8 @@ with tab3:
             selected_features = rf_df.head(top_n)["Feature"].tolist()
 
         elif feature_selection_method == "Ensemble Feature Selection":
-            st.info("Pilih dua metode seleksi fitur untuk digabungkan.")
-            method1 = st.selectbox("Metode pertama:", [
+            st.info("Pilih dua metode seleksi fitur untuk digabungkan." if st.session_state.language == 'id' else "Select two feature selection methods to combine.")
+            method1 = st.selectbox("Metode pertama:" if st.session_state.language == 'id' else "First method:", [
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
@@ -553,7 +553,7 @@ with tab3:
                 "Gradient Boosting Importance",
                 "Random Forest Importance"
             ], key="ensemble_method1")
-            method2 = st.selectbox("Metode kedua:", [
+            method2 = st.selectbox("Metode kedua:" if st.session_state.language == 'id' else "Second method:", [
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
@@ -562,7 +562,7 @@ with tab3:
                 "Random Forest Importance"
             ], key="ensemble_method2")
 
-            combine_type = st.radio("Gabungkan hasil dengan:", ["Intersection", "Union"], index=0)
+            combine_type = st.radio("Gabungkan hasil dengan:" if st.session_state.language == 'id' else "Combine results with:", ["Intersection", "Union"], index=0)
 
             def get_features_by_method(method):
                 if method == "Mutual Information":
@@ -638,11 +638,11 @@ with tab3:
             else:
                 selected_features = list(features1 | features2)
 
-            st.write(f"Fitur hasil gabungan: {selected_features}")
+            st.write(f"Fitur hasil gabungan: {selected_features}" if st.session_state.language == 'id' else f"Combined features: {selected_features}")
 
 
         if not selected_features:
-            st.warning("Please select at least one feature.")
+            st.warning("Silahkan pilih fitur terlebih dahulu." if st.session_state.language == 'id' else "Please select at least one feature.")
         else:
             # Prepare data for modeling
             X = data[selected_features]
@@ -652,7 +652,7 @@ with tab3:
             categorical_cols = X.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
             
             if categorical_cols:
-                st.subheader("Encode Categorical Features")
+                st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
                 
                 encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
                 
@@ -663,36 +663,36 @@ with tab3:
                         X[col] = le.fit_transform(X[col].astype(str))
                         encoders[col] = le
                     st.session_state.encoders = encoders
-                    st.success("Label encoding applied to categorical features.")
+                    st.success("Encoding label diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "Label encoding applied to categorical features.")
                 else:
                     X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
-                    st.success("One-hot encoding applied to categorical features.")
+                    st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
             
             # Scale numerical features
             numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
             
             if numerical_cols:
-                st.subheader("Scale Numerical Features")
+                st.subheader("Lakukan Scaling" if st.session_state.language == 'id' else "Scale Numerical Features")
                 
-                scaling = st.checkbox("Apply standard scaling to numerical features", value=True)
+                scaling = st.checkbox("Menerapkan scaling pada fitur numerik" if st.session_state.language == 'id' else "Apply standard scaling to numerical features", value=True)
                 
                 if scaling:
                     scaler = StandardScaler()
                     X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
                     st.session_state.scaler = scaler
-                    st.success("Standard scaling applied to numerical features.")
+                    st.success("Standard scaling diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else "Standard scaling applied to numerical features.")
 
                 else:
                     scaler = MinMaxScaler()
                     X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
                     st.session_state.scaler = scaler
-                    st.success("MinMax scaling applied to numerical features.")
+                    st.success("Minmax scaling diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else "MinMax scaling applied to numerical features.")
             
             # Train-test split
-            st.subheader("Train-Test Split")
+            st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
             
-            test_size = st.slider("Test set size (%):", 10, 20, 50) / 100
-            random_state = st.number_input("Random state:", 0, 100, 42)
+            test_size = st.slider("Ukuran set pengujian (persen):", 10, 20, 50) if st.session_state.language == 'id' else st.slider("Test set size (%):", 10, 20, 50) / 100
+            random_state = st.number_input("Status acak:", 0, 100, 42) if st.session_state.language == 'id' else st.number_input("Random state:", 0, 100, 42)
             
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state
@@ -704,17 +704,17 @@ with tab3:
             st.session_state.y_test = y_test
             st.session_state.processed_data = data
             
-            st.success(f"Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
+            st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else "Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
             
             # Display processed data
-            st.subheader("Processed Data Preview")
+            st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
             st.dataframe(X.head())
     else:
-        st.info("Please upload a dataset in the 'Data Upload' tab first.")
+        st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
 
 # Tab 4: Feature Engineering and Model Training
 with tab4:
-    st.header("Model Training and Evaluation")
+    st.header("Pelatihan dan Evaluasi Model" if st.session_state.language == 'id' else "Model Training and Evaluation")
     
     if (st.session_state.X_train is not None and 
         st.session_state.y_train is not None and 
@@ -743,12 +743,12 @@ with tab4:
             is_timeseries = st.checkbox("Data ini adalah data deret waktu (time series)", value=False)
         
         # Add K-Fold Cross Validation option
-        use_kfold = st.checkbox("Gunakan K-Fold Cross Validation", value=False)
+        use_kfold = st.checkbox("Gunakan K-Fold Cross Validation" if st.session_state.language == 'id' else "Use K-Fold Cross Validation", value=False)
         
         if use_kfold:
             from sklearn.model_selection import KFold, cross_val_score, cross_val_predict
             
-            st.subheader("K-Fold Cross Validation")
+            st.subheader("Lakukan K-Fold Cross Validation" if st.session_state.language == 'id' else "Perform K-Fold Cross Validation")
             
             n_splits = st.slider("Jumlah fold (K):", 2, 10, 5)
             cv_scoring = None
@@ -765,26 +765,26 @@ with tab4:
                 )
         
         if is_timeseries:
-            st.subheader("Pelatihan Model Forecasting")
+            st.subheader("Pelatihan Model Forecasting" if st.session_state.language == 'id' else "Forecasting Model Training")
             
             # Select date column
-            date_column = st.selectbox("Pilih kolom tanggal/waktu:", date_columns)
+            date_column = st.selectbox("Pilih kolom tanggal/waktu:" if st.session_state.language == 'id' else "Select date column:", date_columns)
             
             # Select target column
-            target_column = st.selectbox("Pilih kolom target untuk diprediksi:", 
+            target_column = st.selectbox("Pilih kolom target untuk diprediksi:" if st.session_state.language == 'id' else "Select target column for prediction:", 
                                         [col for col in st.session_state.data.columns 
                                          if col != date_column and col in st.session_state.numerical_columns])
             
             # Select frequency
-            freq = st.selectbox("Frekuensi data:", ["Harian (D)", "Mingguan (W)", "Bulanan (M)", "Tahunan (Y)", "Lainnya"])
-            freq_map = {"Harian (D)": "D", "Mingguan (W)": "W", "Bulanan (M)": "M", "Tahunan (Y)": "Y", "Lainnya": None}
+            freq = st.selectbox("Frekuensi data:", ["Harian (D)", "Mingguan (W)", "Bulanan (M)", "Tahunan (Y)", "Lainnya"] if st.session_state.language == 'id' else ["Daily (D)", "Weekly (W)", "Monthly (M)", "Yearly (Y)", "Other"])
+            freq_map = {"Harian (D)": "D", "Mingguan (W)": "W", "Bulanan (M)": "M", "Tahunan (Y)": "Y", "Lainnya": None if st.session_state.language == 'id' else "Other"}
             selected_freq = freq_map[freq]
             
             # Number of periods to forecast
-            forecast_periods = st.slider("Jumlah periode untuk prediksi ke depan:", 1, 100, 10)
+            forecast_periods = st.slider("Jumlah periode untuk prediksi ke depan:" if st.session_state.language == 'id' else "Number of periods to forecast:", 1, 100, 10)
             
             # Select forecasting model
-            model_type = st.selectbox("Pilih model forecasting:", 
+            model_type = st.selectbox("Pilih model forecasting:" if st.session_state.language == 'id' else "Select forecasting model:", 
                                      ["ARIMA", "Exponential Smoothing", "Prophet", "Random Forest", "Gradient Boosting"])
             
             # Import required modules
@@ -798,7 +798,7 @@ with tab4:
                 
                 FORECASTING_MODULES_AVAILABLE = True
             except ImportError:
-                st.error("Modul forecasting tidak tersedia. Pastikan file utils.py dan forecasting_utils.py ada di direktori yang sama.")
+                st.error("Modul forecasting tidak tersedia. Pastikan file utils.py dan forecasting_utils.py ada di direktori yang sama." if st.session_state.language == 'id' else "Forecasting modules not available. Ensure utils.py and forecasting_utils.py are in the same directory.")
                 FORECASTING_MODULES_AVAILABLE = False
             
             if FORECASTING_MODULES_AVAILABLE:
@@ -811,7 +811,7 @@ with tab4:
                 except ImportError:
                     STATSMODELS_AVAILABLE = False
                     if model_type in ["ARIMA", "Exponential Smoothing"]:
-                        st.warning("Statsmodels tidak terinstal. Silakan instal dengan 'pip install statsmodels'.")
+                        st.warning("Statsmodels tidak terinstal. Silakan instal dengan 'pip install statsmodels'." if st.session_state.language == 'id' else "Statsmodels not installed. Please install with 'pip install statsmodels'.")
                 
                 # Import Prophet conditionally
                 try:
@@ -820,11 +820,11 @@ with tab4:
                 except ImportError:
                     PROPHET_AVAILABLE = False
                     if model_type == "Prophet":
-                        st.warning("Prophet tidak terinstal. Silakan instal dengan 'pip install prophet'.")
+                        st.warning("Prophet tidak terinstal. Silakan instal dengan 'pip install prophet'." if st.session_state.language == 'id' else "Prophet not installed. Please install with 'pip install prophet'.")
                 
                 # Prepare time series data
-                if st.button("Proses Data Time Series"):
-                    with st.spinner("Memproses data time series..."):
+                if st.button("Proses Data Time Series" if st.session_state.language == 'id' else "Process Time Series Data"):
+                    with st.spinner("Memproses data time series..." if st.session_state.language == 'id' else "Processing time series data..."):
                         # Prepare data
                         ts_data = prepare_timeseries_data(
                             st.session_state.data, 
@@ -835,13 +835,13 @@ with tab4:
                         
                         # Check stationarity
                         stationarity_result = check_stationarity(ts_data[target_column])
-                        st.write("Hasil Uji Stasioneritas:")
+                        st.write("Hasil Uji Stasioneritas:" if st.session_state.language == 'id' else "Stationarity Test Results:")
                         st.write(f"- Test Statistic: {stationarity_result['Test Statistic']:.4f}")
                         st.write(f"- p-value: {stationarity_result['p-value']:.4f}")
                         st.write(f"- Data {'stasioner' if stationarity_result['Stationary'] else 'tidak stasioner'}")
                         
                         # Plot time series analysis
-                        st.write("Analisis Time Series:")
+                        st.write("Analisis Time Series:" if st.session_state.language == 'id' else "Time Series Analysis:")
                         fig = plot_timeseries_analysis(ts_data[target_column])
                         st.pyplot(fig)
                         
@@ -850,7 +850,7 @@ with tab4:
                         train_data = ts_data.iloc[:train_size]
                         test_data = ts_data.iloc[train_size:]
                         
-                        st.write(f"Data dibagi menjadi {len(train_data)} sampel training dan {len(test_data)} sampel testing")
+                        st.write(f"Data dibagi menjadi {len(train_data)} sampel training dan {len(test_data)} sampel testing" if st.session_state.language == 'id' else f"Data split into {len(train_data)} training samples and {len(test_data)} testing samples.")
                         
                         # Train model based on selection
                         if model_type == "ARIMA" and STATSMODELS_AVAILABLE:
@@ -858,17 +858,17 @@ with tab4:
                             d = st.slider("Parameter d (differencing):", 0, 2, 1)
                             q = st.slider("Parameter q (MA):", 0, 5, 1)
                             
-                            with st.spinner("Melatih model ARIMA..."):
+                            with st.spinner("Melatih model ARIMA..." if st.session_state.language == 'id' else "Training ARIMA model..."):
                                 model = train_arima_model(train_data, target_column, order=(p, d, q))
                                 st.session_state.model = model
-                                st.success("Model ARIMA berhasil dilatih!")
+                                st.success("Model ARIMA berhasil dilatih!" if st.session_state.language == 'id' else "ARIMA model trained successfully!")
                         
                         elif model_type == "Exponential Smoothing" and STATSMODELS_AVAILABLE:
                             trend = st.selectbox("Tipe trend:", ["add", "mul", None])
                             seasonal = st.selectbox("Tipe seasonal:", ["add", "mul", None])
                             seasonal_periods = st.slider("Periode seasonal:", 0, 52, 12)
                             
-                            with st.spinner("Melatih model Exponential Smoothing..."):
+                            with st.spinner("Melatih model Exponential Smoothing..." if st.session_state.language == 'id' else "Training Exponential Smoothing model..."):
                                 model = train_exponential_smoothing(
                                     train_data, 
                                     target_column, 
@@ -877,19 +877,19 @@ with tab4:
                                     seasonal_periods=seasonal_periods
                                 )
                                 st.session_state.model = model
-                                st.success("Model Exponential Smoothing berhasil dilatih!")
+                                st.success("Model Exponential Smoothing berhasil dilatih!" if st.session_state.language == 'id' else "Exponential Smoothing model trained successfully!")
                         
                         elif model_type == "Prophet" and PROPHET_AVAILABLE:
-                            yearly_seasonality = st.selectbox("Seasonality tahunan:", ["auto", True, False])
-                            weekly_seasonality = st.selectbox("Seasonality mingguan:", ["auto", True, False])
-                            daily_seasonality = st.selectbox("Seasonality harian:", ["auto", True, False])
+                            yearly_seasonality = st.selectbox("Seasonality tahunan:" if st.session_state.language == 'id' else "Yearly seasonality:", ["auto", True, False])
+                            weekly_seasonality = st.selectbox("Seasonality mingguan:" if st.session_state.language == 'id' else "Weekly seasonality:", ["auto", True, False])
+                            daily_seasonality = st.selectbox("Seasonality harian:" if st.session_state.language == 'id' else "Daily seasonality:", ["auto", True, False])
                             
                             # Implementasi Prophet akan dilakukan di forecasting_utils.py
-                            st.info("Implementasi Prophet akan menggunakan forecasting_utils.py")
+                            st.info("Implementasi Prophet akan menggunakan forecasting_utils.py" if st.session_state.language == 'id' else "Prophet implementation will use forecasting_utils.py")
                         
                         elif model_type in ["Random Forest", "Gradient Boosting"]:
-                            n_estimators = st.slider("Jumlah trees:", 10, 500, 100)
-                            max_depth = st.slider("Kedalaman maksimum:", 1, 50, 10)
+                            n_estimators = st.slider("Jumlah trees:" if st.session_state.language == 'id' else "Number of trees:", 10, 500, 100)
+                            max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
                             
                             if model_type == "Random Forest":
                                 model_params = {
@@ -906,7 +906,7 @@ with tab4:
                                     'random_state': 42
                                 }
                             
-                            with st.spinner(f"Melatih model {model_type}..."):
+                            with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
                                 model_info = train_ml_forecaster(
                                     st.session_state.data,
                                     date_column,
@@ -915,15 +915,15 @@ with tab4:
                                     **model_params
                                 )
                                 st.session_state.model = model_info
-                                st.success(f"Model {model_type} berhasil dilatih!")
+                                st.success(f"Model {model_type} berhasil dilatih!" if st.session_state.language == 'id' else f"{model_type} model trained successfully!")
                         
                         # Evaluate model if available
                         if st.session_state.model is not None:
-                            with st.spinner("Mengevaluasi model..."):
+                            with st.spinner("Mengevaluasi model..." if st.session_state.language == 'id' else "Evaluating model..."):
                                 try:
                                     eval_results = evaluate_forecast_model(st.session_state.model, test_data, target_column)
                                     
-                                    st.write("Hasil Evaluasi Model:")
+                                    st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
                                     st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
                                     st.write(f"- MAE: {eval_results['MAE']:.4f}")
                                     st.write(f"- R²: {eval_results['R2']:.4f}")
@@ -941,7 +941,7 @@ with tab4:
                                                     return str(val)
                                             forecast_data['date'] = forecast_data['date'].apply(safe_to_datetime)
                                     except Exception as e:
-                                        st.error(f"Error saat membuat forecast: {str(e)}")
+                                        st.error(f"Error saat membuat forecast: {str(e)}" if st.session_state.language == 'id' else f"Error generating forecast: {str(e)}")
                                         forecast_data = None
 
                                     # Plot results
@@ -950,34 +950,34 @@ with tab4:
                                             fig = plot_forecast_results(train_data, test_data, forecast_data, target_column)
                                             st.pyplot(fig)
                                         except Exception as e:
-                                            st.error(f"Error saat plotting hasil forecast: {str(e)}")
+                                            st.error(f"Error saat plotting hasil forecast: {str(e)}" if st.session_state.language == 'id' else f"Error plotting forecast results: {str(e)}")
 
                                     # Show forecast data
                                     if forecast_data is not None:
-                                        st.write("Data Hasil Forecasting:")
+                                        st.write("Data Hasil Forecasting:" if st.session_state.language == 'id' else "Forecast Data:")
                                         st.dataframe(forecast_data)
 
                                 # Download forecast data
                                 except Exception as e:
-                                    st.error(f"Error saat evaluasi model: {str(e)}")
+                                    st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error evaluating model: {str(e)}")
 
         else:
             # Non-time series data - Classification or Regression
-            st.subheader(f"Training a {problem_type} Model")
+            st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
             # Tambahkan opsi untuk menggunakan GridSearchCV
-            use_grid_search = st.checkbox("Gunakan GridSearchCV untuk hyperparameter tuning", value=False)
+            use_grid_search = st.checkbox("Gunakan GridSearchCV untuk hyperparameter tuning" if st.session_state.language == 'id' else "Use GridSearchCV for hyperparameter tuning", value=False)
             
             # Model selection
             if problem_type == "Classification":
                 # Define available classification models
                 classification_models = ["Random Forest", "Logistic Regression", "SVM", "KNN", "Decision Tree", "Naive Bayes", "Gradient Boosting", "MLP (Neural Network)"]
                                    
-                model_type = st.selectbox("Select a classification model:", classification_models)
+                model_type = st.selectbox("Select a classification model:" if st.session_state.language == 'id' else "Pilih model klasifikasi:", classification_models)
                 
                 if model_type == "Random Forest":
-                    n_estimators = st.slider("Number of trees:", 10, 500, 100)
-                    max_depth = st.slider("Maximum depth:", 1, 50, 10)
+                    n_estimators = st.slider("Number of trees:" if st.session_state.language == 'id' else "Jumlah pohon:", 10, 500, 100)
+                    max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 50, 10)
                     
                     base_model = RandomForestClassifier(random_state=42)
                     
@@ -996,9 +996,9 @@ with tab4:
                             random_state=42
                         )
                         
-                elif model_type == "Logistic Regression":
-                    C = st.slider("Regularization parameter (C):", 0.01, 10.0, 1.0)
-                    max_iter = st.slider("Maximum iterations:", 100, 1000, 100)
+                elif model_type == "Logistic Regression" if st.session_state.language == 'id' else "Regresi Logistik":
+                    C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.01, 10.0, 1.0)
+                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 100)
                     
                     base_model = LogisticRegression(random_state=42)
                     
@@ -1017,9 +1017,9 @@ with tab4:
                         )
                         
                 elif model_type == "SVM":
-                    C = st.slider("Regularization parameter (C):", 0.1, 10.0, 1.0)
-                    kernel = st.selectbox("Kernel:", ["linear", "poly", "rbf", "sigmoid"])
-                    gamma = st.selectbox("Gamma (kernel coefficient):", ["scale", "auto"])
+                    C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.1, 10.0, 1.0)
+                    kernel = st.selectbox("Kernel:" if st.session_state.language == 'id' else "Kernel:", ["linear", "poly", "rbf", "sigmoid"])
+                    gamma = st.selectbox("Gamma (kernel coefficient):" if st.session_state.language == 'id' else "Gamma (koefisien kernel):", ["scale", "auto"])
                     
                     base_model = SVC(probability=True, random_state=42)
                     
@@ -1040,9 +1040,9 @@ with tab4:
                         )
                         
                 elif model_type == "KNN":
-                    n_neighbors = st.slider("Number of neighbors (K):", 1, 20, 5)
-                    weights = st.selectbox("Weight function:", ["uniform", "distance"])
-                    algorithm = st.selectbox("Algorithm:", ["auto", "ball_tree", "kd_tree", "brute"])
+                    n_neighbors = st.slider("Number of neighbors (K):" if st.session_state.language == 'id' else "Jumlah tetangga (K):", 1, 20, 5)
+                    weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
+                    algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
                     
                     base_model = KNeighborsClassifier()
                     
@@ -1062,9 +1062,9 @@ with tab4:
                         )
                         
                 elif model_type == "Decision Tree":
-                    max_depth = st.slider("Maximum depth:", 1, 50, 10)
-                    min_samples_split = st.slider("Minimum samples to split:", 2, 20, 2)
-                    criterion = st.selectbox("Split criterion:", ["gini", "entropy"])
+                    max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 50, 10)
+                    min_samples_split = st.slider("Minimum samples to split:" if st.session_state.language == 'id' else "Jumlah sampel untuk membagi:", 2, 20, 2)
+                    criterion = st.selectbox("Split criterion:" if st.session_state.language == 'id' else "Kriteria membagi:", ["gini", "entropy"])
                     
                     base_model = DecisionTreeClassifier(random_state=42)
                     
@@ -1085,7 +1085,7 @@ with tab4:
                         )
                         
                 elif model_type == "Naive Bayes":
-                    var_smoothing = st.slider("Variance smoothing:", 1e-10, 1e-8, 1e-9, format="%.1e")
+                    var_smoothing = st.slider("Variance smoothing:" if st.session_state.language == 'id' else "Penyesuaian varian:", 1e-10, 1e-8, 1e-9, format="%.1e")
                     
                     base_model = GaussianNB()
                     
@@ -1100,9 +1100,9 @@ with tab4:
                         )
                         
                 elif model_type == "Gradient Boosting":
-                    n_estimators = st.slider("Number of boosting stages:", 10, 500, 100)
-                    learning_rate = st.slider("Learning rate:", 0.01, 0.3, 0.1)
-                    max_depth = st.slider("Maximum depth:", 1, 10, 3)
+                    n_estimators = st.slider("Number of boosting stages:" if st.session_state.language == 'id' else "Jumlah boosting stages:", 10, 500, 100)
+                    learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
+                    max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
                     
                     base_model = GradientBoostingClassifier(random_state=42)
                     
@@ -1123,12 +1123,12 @@ with tab4:
                         )
                         
                 elif model_type == "MLP (Neural Network)":
-                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):", "100,50")
+                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'id' else "Hidden layer sizes (pisahkan dengan koma):", "100,50")
                     hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
-                    activation = st.selectbox("Activation function:", ["relu", "tanh", "logistic"])
-                    solver = st.selectbox("Solver:", ["adam", "sgd", "lbfgs"])
-                    alpha = st.slider("Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
-                    max_iter = st.slider("Maximum iterations:", 100, 1000, 200)
+                    activation = st.selectbox("Activation function:" if st.session_state.language == 'id' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
+                    solver = st.selectbox("Solver:" if st.session_state.language == 'id' else "Solver:", ["adam", "sgd", "lbfgs"])
+                    alpha = st.slider("Alpha (L2 penalty):" if st.session_state.language == 'id' else "Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
+                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 200)
                     
                     base_model = MLPClassifier(random_state=42)
                     
@@ -1163,12 +1163,12 @@ with tab4:
 
             else:  # Regression
                 # Regular regression models (non-time series)
-                model_type = st.selectbox("Pilih model regresi:", 
+                model_type = st.selectbox("Pilih model regresi:" if st.session_state.language == 'id' else "Select a regression model:", 
                                          ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor", "MLP Regressor"])
                 
                 if model_type == "Random Forest":
-                    n_estimators = st.slider("Jumlah trees:", 10, 500, 100)
-                    max_depth = st.slider("Kedalaman maksimum:", 1, 50, 10)
+                    n_estimators = st.slider("Jumlah pepohonan:" if st.session_state.language == 'id' else "Number of Trees:", 10, 500, 100)
+                    max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
                     
                     base_model = RandomForestRegressor(random_state=42)
                     
@@ -1188,9 +1188,9 @@ with tab4:
                         )
                         
                 elif model_type == "Gradient Boosting":
-                    n_estimators = st.slider("Jumlah boosting stages:", 10, 500, 100)
-                    learning_rate = st.slider("Learning rate:", 0.01, 0.3, 0.1)
-                    max_depth = st.slider("Kedalaman maksimum:", 1, 10, 3)
+                    n_estimators = st.slider("Jumlah boosting stages:" if st.session_state.language == 'id' else "Number of boosting stages:", 10, 500, 100)
+                    learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
+                    max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 10, 3)
                     
                     base_model = GradientBoostingRegressor(random_state=42)
                     
@@ -1211,7 +1211,7 @@ with tab4:
                         )
                         
                 elif model_type == "Linear Regression":
-                    fit_intercept = st.checkbox("Fit intercept", value=True)
+                    fit_intercept = st.checkbox("Fit intercept" if st.session_state.language == 'id' else "Fit intercept", value=True)
                     
                     base_model = LinearRegression()
                     
@@ -1227,10 +1227,10 @@ with tab4:
                         )
                         
                 elif model_type == "SVR":
-                    C = st.slider("Regularization parameter (C):", 0.1, 10.0, 1.0)
-                    kernel = st.selectbox("Kernel:", ["linear", "poly", "rbf", "sigmoid"])
-                    gamma = st.selectbox("Gamma (kernel coefficient):", ["scale", "auto"])
-                    epsilon = st.slider("Epsilon:", 0.01, 0.5, 0.1)
+                    C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.1, 10.0, 1.0)
+                    kernel = st.selectbox("Kernel:" if st.session_state.language == 'id' else "Kernel:", ["linear", "poly", "rbf", "sigmoid"])
+                    gamma = st.selectbox("Gamma (kernel coefficient):" if st.session_state.language == 'id' else "Gamma (koefisien kernel):", ["scale", "auto"])
+                    epsilon = st.slider("Epsilon:"if st.session_state.language == 'id' else "Epsilon:", 0.01, 0.5, 0.1)
                     
                     base_model = SVR()
                     
@@ -1250,9 +1250,9 @@ with tab4:
                             epsilon=epsilon
                         )
                 elif model_type == "Bagging Regressor":
-                    n_estimators = st.slider("Jumlah estimator:", 10, 200, 50)
-                    max_samples = st.slider("Persentase sampel per estimator:", 10, 100, 100)
-                    base_estimator = st.selectbox("Base estimator:", ["Decision Tree", "Linear Regression"])
+                    n_estimators = st.slider("Jumlah estimator:" if st.session_state.language == 'id' else "Number of Estimators:", 10, 200, 50)
+                    max_samples = st.slider("Persentase sampel per estimator:" if st.session_state.language == 'id' else "Percentage of samples per estimator:", 10, 100, 100)
+                    base_estimator = st.selectbox("Base estimator:" if st.session_state.language == 'id' else "Base estimator:", ["Decision Tree", "Linear Regression"])
                     if base_estimator == "Decision Tree":
                         from sklearn.tree import DecisionTreeRegressor
                         base = DecisionTreeRegressor()
@@ -1278,33 +1278,33 @@ with tab4:
                 elif model_type == "Voting Regressor":
                     # Simple voting regressor with 2-3 base models
                     estimators = []
-                    if st.checkbox("Gunakan Random Forest", value=True):
+                    if st.checkbox("Gunakan Random Forest" if st.session_state.language == 'id' else "Use Random Forest", value=True):
                         estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
-                    if st.checkbox("Gunakan Linear Regression", value=True):
+                    if st.checkbox("Gunakan Linear Regression" if st.session_state.language == 'id' else "Use Linear Regression", value=True):
                         estimators.append(('lr', LinearRegression()))
-                    if st.checkbox("Gunakan Gradient Boosting", value=False):
+                    if st.checkbox("Gunakan Gradient Boosting" if st.session_state.language == 'id' else "Use Gradient Boosting", value=False):
                         estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
                     if len(estimators) < 2:
-                        st.warning("Pilih minimal dua estimator untuk Voting Regressor.")
+                        st.warning("Pilih minimal dua estimator untuk Voting Regressor." if st.session_state.language == 'id' else "Select at least two estimators for Voting Regressor.")
                         model = None
                     else:
                         model = VotingRegressor(estimators=estimators)
                 elif model_type == "Stacking Regressor":
                     # Simple stacking with 2-3 base models and a final regressor
                     base_estimators = []
-                    if st.checkbox("Gunakan Random Forest (Stacking)", value=True, key="stack_rf"):
+                    if st.checkbox("Gunakan Random Forest (Stacking)" if st.session_state.language == 'id' else "Use Random Forest (Stacking)", value=True, key="stack_rf"):
                         base_estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
-                    if st.checkbox("Gunakan Linear Regression (Stacking)", value=True, key="stack_lr"):
+                    if st.checkbox("Gunakan Linear Regression (Stacking)" if st.session_state.language == 'id' else "Use Linear Regression (Stacking)", value=True, key="stack_lr"):
                         base_estimators.append(('lr', LinearRegression()))
-                    if st.checkbox("Gunakan Gradient Boosting (Stacking)", value=False, key="stack_gb"):
+                    if st.checkbox("Gunakan Gradient Boosting (Stacking)" if st.session_state.language == 'id' else "Use Gradient Boosting (Stacking)", value=False, key="stack_gb"):
                         base_estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
-                    final_estimator = st.selectbox("Final estimator:", ["Linear Regression", "Random Forest"], key="stack_final")
+                    final_estimator = st.selectbox("Final estimator:" if st.session_state.language == 'id' else "Final estimator:", ["Linear Regression", "Random Forest"], key="stack_final")
                     if final_estimator == "Linear Regression":
                         final = LinearRegression()
                     else:
                         final = RandomForestRegressor(n_estimators=20, random_state=42)
                     if len(base_estimators) < 2:
-                        st.warning("Pilih minimal dua base estimator untuk Stacking Regressor.")
+                        st.warning("Pilih minimal dua base estimator untuk Stacking Regressor." if st.session_state.language == 'id' else "Select at least two base estimators for Stacking Regressor.")
                         model = None
                     else:
                         model = StackingRegressor(
@@ -1314,9 +1314,9 @@ with tab4:
                         )
                 elif model_type == "KNN Regressor":
                     from sklearn.neighbors import KNeighborsRegressor
-                    n_neighbors = st.slider("Number of neighbors (K):", 1, 20, 5)
-                    weights = st.selectbox("Weight function:", ["uniform", "distance"])
-                    algorithm = st.selectbox("Algorithm:", ["auto", "ball_tree", "kd_tree", "brute"])
+                    n_neighbors = st.slider("Number of neighbors (K):" if st.session_state.language == 'id' else "Jumlah tetangga (K):", 1, 20, 5)
+                    weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
+                    algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
                     base_model = KNeighborsRegressor()
                     if use_grid_search:
                         param_grid = {
@@ -1334,12 +1334,12 @@ with tab4:
                         )
                 elif model_type == "MLP Regressor":
                     from sklearn.neural_network import MLPRegressor
-                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):", "100,50")
+                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'en' else "Ukuran hidden layer (pisahkan dengan koma):", "100,50")
                     hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
-                    activation = st.selectbox("Activation function:", ["relu", "tanh", "logistic"])
+                    activation = st.selectbox("Activation function:" if st.session_state.language == 'en' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
                     solver = st.selectbox("Solver:", ["adam", "sgd", "lbfgs"])
-                    alpha = st.slider("Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
-                    max_iter = st.slider("Maximum iterations:", 100, 1000, 200)
+                    alpha = st.slider("Alpha (L2 penalty):" if st.session_state.language == 'en' else "Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
+                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'en' else "Iterasi maksimum:", 100, 1000, 200)
                     base_model = MLPRegressor(random_state=42)
                     if use_grid_search:
                         param_grid = {
@@ -1360,14 +1360,14 @@ with tab4:
                             random_state=42
                         )
                 else:
-                    st.error("Please select a valid regression model.")
+                    st.error("Silahkan pilih model regresi." if st.session_state.language == 'id' else "Please select a valid regression model.")
                     model = None
             
-            model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):", value=f"")
+            model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):" if st.session_state.language == 'id' else "Nama model (bebas, gunakan huruf/angka/underscore):", value=f"")
 
             # Train model button
             if model is not None and st.button("Train Model"):
-                with st.spinner(f"Training {model_type} model..."):
+                with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else "Training {model_type} model..."):
                     try:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
@@ -1375,16 +1375,16 @@ with tab4:
 
                         # Jika menggunakan GridSearchCV, tampilkan parameter terbaik
                         if use_grid_search and hasattr(model, "best_params_"):
-                            st.success(f"Model training completed in {training_time:.2f} seconds with GridSearchCV!")
-                            st.subheader("Best Parameters:")
+                            st.success(f"Pelatihan model selesai dalam {training_time:.2f} detik dengan GridSearchCV. Parameter terbaik: {model.best_params_}" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds with GridSearchCV!")
+                            st.subheader("Parameter Terbaik" if st.session_state.language == 'id' else "Best Parameters:")
                             st.write(model.best_params_)
-                            st.write(f"Best Score (CV): {model.best_score_:.4f}")
+                            st.write(f"Skor terbaik (CV): {model.best_score_:.4f}" if st.session_state.language == 'id' else "Best Score (CV): {model.best_score_:.4f}")
 
                             # Gunakan model terbaik untuk prediksi
                             y_pred = model.best_estimator_.predict(st.session_state.X_test)
                             st.session_state.model = model.best_estimator_
                         else:
-                            st.success(f"Model training completed in {training_time:.2f} seconds!")
+                            st.success(f"Model selesai dilatih dalam {training_time:.2f} detik" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds!")
                             y_pred = model.predict(st.session_state.X_test)
                             st.session_state.model = model
                         
@@ -1395,7 +1395,7 @@ with tab4:
                         model_filename = f"models/{safe_name}.pkl"
                         with open(model_filename, 'wb') as f:
                             pickle.dump(st.session_state.model, f)
-                        st.success(f"Model saved as '{model_filename}'")
+                        st.success(f"Model telah disimpan sebagai '{model_filename}'" if st.session_state.language == 'id' else "Model saved as '{model_filename}'")
                         
                         # Evaluasi model
                         if problem_type == "Classification":
@@ -1414,7 +1414,7 @@ with tab4:
                             # Classification Report
                             report = classification_report(st.session_state.y_test, y_pred, output_dict=True)
                             report_df = pd.DataFrame(report).transpose()
-                            st.write("Classification Report:")
+                            st.write("Label Report" if st.session_state.language == 'id' else "Classification Report:")
                             st.dataframe(report_df)
                             
                         else:  # Regression
@@ -1431,12 +1431,12 @@ with tab4:
                             st.write(f"Adjusted R² Score: {adj_r2:.4f}")
 
                             # Tambahan: Uji Multikolinearitas (VIF)
-                            st.subheader("Uji Multikolinearitas (VIF)")
+                            st.subheader("Uji Multikolinearitas (VIF)" if st.session_state.language == 'id' else "Multicollinearity Test (VIF)")
                             vif_df = calculate_vif(st.session_state.X_train)
                             st.dataframe(vif_df)
 
                             # Tambahan: Uji Heteroskedastisitas (Breusch-Pagan)
-                            st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)")
+                            st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)" if st.session_state.language == 'id' else "Heteroskedasticity Test (Breusch-Pagan)")
                             bp_result = breusch_pagan_test(st.session_state.y_test, y_pred, st.session_state.X_test)
                             st.write(f"Lagrange multiplier statistic: {bp_result['Lagrange multiplier statistic']:.4f}")
                             st.write(f"p-value: {bp_result['p-value']:.4f}")
@@ -1465,11 +1465,11 @@ with tab4:
                             st.pyplot(fig)
                             
                     except Exception as e:
-                        st.error(f"Error during model training: {str(e)}") 
+                        st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error during model training: {str(e)}") 
 
             # Tambahkan bagian untuk prediksi data baru
             if st.session_state.model is not None:
-                st.subheader("Prediksi Data Baru")
+                st.subheader("Prediksi Data Baru" if st.session_state.language == 'id' else "Predict New Data")
                 
                 # Import library untuk PDF
                 from fpdf import FPDF
@@ -1483,20 +1483,20 @@ with tab4:
                     
                     # Header
                     pdf.set_font('Arial', 'B', 16)
-                    pdf.cell(0, 10, 'Laporan Hasil Prediksi', 0, 1, 'C')
+                    pdf.cell(0, 10, 'Laporan Hasil Prediksi' if st.session_state.language == 'id' else 'Prediction Report', 0, 1, 'C')
                     pdf.ln(10)
                     
                     # Informasi Umum
                     pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Informasi Umum:', 0, 1)
+                    pdf.cell(0, 10, 'Informasi Umum:' if st.session_state.language == 'id' else 'General Information:', 0, 1)
                     pdf.set_font('Arial', '', 12)
-                    pdf.cell(0, 10, f'Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1)
-                    pdf.cell(0, 10, f'Jenis Model: {type(st.session_state.model).__name__}', 0, 1)
-                    pdf.cell(0, 10, f'Metode: {problem_type}', 0, 1)
+                    pdf.cell(0, 10, f'Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S" if st.session_state.language == 'id' else "%Y-%m-%d %H:%M:%S")}', 0, 1)
+                    pdf.cell(0, 10, f'Jenis Model: {type(st.session_state.model).__name__}' if st.session_state.language == 'id' else f'Model Type: {type(st.session_state.model).__name__}', 0, 1)
+                    pdf.cell(0, 10, f'Metode: {problem_type}' if st.session_state.language == 'id' else f'Method: {problem_type}', 0, 1)
                     
                     # Parameter Model
                     pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Parameter Model:', 0, 1)
+                    pdf.cell(0, 10, 'Parameter Model:' if st.session_state.language == 'id' else 'Model Parameters:', 0, 1)
                     pdf.set_font('Arial', '', 10)
                     try:
                         for param, value in st.session_state.model.get_params().items():
@@ -1506,11 +1506,11 @@ with tab4:
                                 value_str = value_str[:47] + '...'
                             pdf.multi_cell(0, 10, f'{param}: {value_str}')
                     except Exception as e:
-                        pdf.cell(0, 10, 'Parameter model tidak tersedia', 0, 1)
+                        pdf.cell(0, 10, 'Parameter model tidak tersedia' if st.session_state.language == 'id' else 'Model parameters not available', 0, 1)
                     
                     # Metrik Evaluasi
                     pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Metrik Evaluasi Model:', 0, 1)
+                    pdf.cell(0, 10, 'Metrik Evaluasi Model:' if st.session_state.language == 'id' else 'Model Evaluation Metrics:', 0, 1)
                     pdf.set_font('Arial', '', 12)
                     
                     # Tambahkan perhitungan metrik evaluasi
@@ -1524,12 +1524,12 @@ with tab4:
                         pdf.cell(0, 10, f'Root Mean Squared Error (RMSE): {rmse:.4f}', 0, 1)
                         pdf.cell(0, 10, f'R² Score: {r2:.4f}', 0, 1)
                     else:
-                        pdf.cell(0, 10, 'Metrik evaluasi tidak tersedia', 0, 1)
+                        pdf.cell(0, 10, 'Metrik evaluasi tidak tersedia' if st.session_state.language == 'id' else 'Evaluation metrics not available', 0, 1)
                     
                     # Hasil Prediksi
                     pdf.add_page()
                     pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Hasil Prediksi:', 0, 1)
+                    pdf.cell(0, 10, 'Hasil Prediksi:' if st.session_state.language == 'id' else 'Prediction Results:', 0, 1)
                     pdf.set_font('Arial', '', 10)
                     
                     # Tabel hasil prediksi
@@ -1542,7 +1542,7 @@ with tab4:
                     pdf.set_font('Arial', 'B', 10)
                     for col in input_data.columns:
                         pdf.cell(col_width, row_height, str(col)[:15], 1)
-                    pdf.cell(col_width, row_height, 'Prediksi', 1)
+                    pdf.cell(col_width, row_height, 'Prediksi' if st.session_state.language == 'id' else 'Prediction', 1)
                     pdf.ln()
                     
                     # Isi tabel
@@ -1554,7 +1554,7 @@ with tab4:
                             pdf.set_font('Arial', 'B', 10)
                             for col in input_data.columns:
                                 pdf.cell(col_width, row_height, str(col)[:15], 1)
-                            pdf.cell(col_width, row_height, 'Prediksi', 1)
+                            pdf.cell(col_width, row_height, 'Prediksi' if st.session_state.language == 'id' else 'Prediction', 1)
                             pdf.ln()
                             pdf.set_font('Arial', '', 10)
                         
@@ -1577,22 +1577,22 @@ with tab4:
                     # Penanggung Jawab
                     pdf.add_page()
                     pdf.set_font('Arial', 'B', 12)
-                    pdf.cell(0, 10, 'Penanggung Jawab:', 0, 1)
+                    pdf.cell(0, 10, 'Penanggung Jawab:' if st.session_state.language == 'id' else 'Responsible:', 0, 0, 1)
                     pdf.set_font('Arial', '', 12)
-                    pdf.cell(0, 10, 'Nama: ____________________', 0, 1)
-                    pdf.cell(0, 10, 'Jabatan: ____________________', 0, 1)
-                    pdf.cell(0, 10, 'Tanggal: ____________________', 0, 1)
-                    pdf.cell(0, 20, 'Tanda Tangan:', 0, 1)
+                    pdf.cell(0, 10, 'Nama: ____________________' if st.session_state.language == 'id' else 'Name: ____________________', 0, 1)
+                    pdf.cell(0, 10, 'Jabatan: ____________________' if st.session_state.language == 'id' else 'Position: ____________________', 0, 1)
+                    pdf.cell(0, 10, 'Tanggal: ____________________' if st.session_state.language == 'id' else 'Date: ____________________', 0, 1)
+                    pdf.cell(0, 20, 'Tanda Tangan:'if st.session_state.language == 'id' else 'Signature:', 0, 1)
                     pdf.cell(0, 20, '_____________________', 0, 1)
                     
                     return pdf
                 
                 # Pilih metode input data
-                input_method = st.radio("Pilih metode input data:", ["Input Manual", "Upload CSV"])
+                input_method = st.radio("Pilih metode input data:" if st.session_state.language == 'id' else "Select input method:", ["Input Manual", "Upload CSV"])
                 
                 if input_method == "Input Manual":
                     # Buat form input untuk setiap fitur
-                    st.write("Masukkan nilai untuk setiap fitur:")
+                    st.write("Masukkan nilai untuk setiap fitur:" if st.session_state.language == 'id' else "Enter values for each feature:")
                     
                     input_data = {}
                     
@@ -1629,37 +1629,37 @@ with tab4:
                             prediction = st.session_state.model.predict(input_df)
                             
                             # Tampilkan hasil prediksi
-                            st.subheader("Hasil Prediksi")
+                            st.subheader("Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Result")
                             if problem_type == "Classification":
-                                st.write(f"Kelas yang diprediksi: {prediction[0]}")
+                                st.write(f"Kelas yang diprediksi: {prediction[0]}" if st.session_state.language == 'id' else f"Predicted Class: {prediction[0]}")
                                 
                                 # Jika model memiliki predict_proba, tampilkan probabilitas
                                 if hasattr(st.session_state.model, 'predict_proba'):
                                     proba = st.session_state.model.predict_proba(input_df)
                                     proba_df = pd.DataFrame(proba, columns=st.session_state.model.classes_)
-                                    st.write("Probabilitas untuk setiap kelas:")
+                                    st.write("Probabilitas untuk setiap kelas:" if st.session_state.language == 'id' else "Probabilities for each class:")
                                     st.dataframe(proba_df)
                             else:
-                                st.write(f"Nilai yang diprediksi: {prediction[0]:.4f}")
+                                st.write(f"Nilai yang diprediksi: {prediction[0]:.4f}" if st.session_state.language == 'id' else f"Predicted Value: {prediction[0]:.4f}")
                             
                             # Buat laporan PDF
                             try:
                                 pdf = create_prediction_report(input_df, prediction, st.session_state.model, problem_type)
                                 pdf_output = pdf.output(dest='S').encode('latin1')
                                 st.download_button(
-                                    label="Download Laporan PDF",
+                                    label="Download Laporan PDF" if st.session_state.language == 'id' else "Download PDF Report",
                                     data=pdf_output,
                                     file_name=f"prediction_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                                     mime="application/pdf"
                                 )
                             except Exception as e:
-                                st.error(f"Error saat membuat laporan PDF: {str(e)}")
+                                st.error(f"Error saat membuat laporan PDF: {str(e)}" if st.session_state.language == 'id' else f"Error creating PDF report: {str(e)}")
                             
                         except Exception as e:
-                            st.error(f"Error saat melakukan prediksi: {str(e)}")
+                            st.error(f"Error saat melakukan prediksi: {str(e)}" if st.session_state.language == 'id' else f"Error during prediction: {str(e)}")
                 
                 else:  # Upload CSV
-                    st.write("Upload file CSV dengan data yang ingin diprediksi:")
+                    st.write("Upload file CSV dengan data yang ingin diprediksi:" if st.session_state.language == 'id' else "Upload CSV file with data to predict:")
                     uploaded_file = st.file_uploader("Pilih file CSV", type="csv", key="prediction_file")
                     
                     if uploaded_file is not None:
@@ -1668,14 +1668,14 @@ with tab4:
                             pred_data = pd.read_csv(uploaded_file)
                             
                             # Tampilkan preview data
-                            st.write("Preview data:")
+                            st.write("Data Preview:" if st.session_state.language == 'id' else "Preview data:" )
                             st.dataframe(pred_data.head())
                             
                             # Periksa apakah semua fitur yang diperlukan ada
                             missing_features = [f for f in st.session_state.X_train.columns if f not in pred_data.columns]
                             
                             if missing_features:
-                                st.error(f"Data tidak memiliki fitur yang diperlukan: {', '.join(missing_features)}")
+                                st.error(f"Data tidak memiliki fitur yang diperlukan: {', '.join(missing_features)}" if st.session_state.language == 'id' else f"Data is missing required features: {', '.join(missing_features)}")
                             else:
                                 # Pilih hanya fitur yang digunakan dalam model
                                 pred_data = pred_data[st.session_state.X_train.columns]
@@ -1691,7 +1691,7 @@ with tab4:
                                 if st.session_state.scaler is not None and num_cols:
                                     pred_data[num_cols] = st.session_state.scaler.transform(pred_data[num_cols])
                                 
-                                if st.button("Prediksi Batch"):
+                                if st.button("Prediksi Batch" if st.session_state.language == 'id' else "Batch Prediction"):
                                     # Lakukan prediksi
                                     predictions = st.session_state.model.predict(pred_data)
                                     
@@ -1700,7 +1700,7 @@ with tab4:
                                     result_df['Prediction'] = predictions
                                     
                                     # Tampilkan hasil
-                                    st.subheader("Hasil Prediksi")
+                                    st.subheader("Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Results")
                                     st.dataframe(result_df)
                                     
                                     # Buat laporan PDF
@@ -1714,12 +1714,12 @@ with tab4:
                                         mime="application/pdf"
                                     )
                                 except Exception as e:
-                                    st.error(f"Error saat membuat laporan PDF: {str(e)}")
+                                    st.error(f"Error saat membuat laporan PDF: {str(e)}" if st.session_state.language == 'id' else f"Error creating PDF report: {str(e)}")
                                     
                                     # Opsi untuk mengunduh hasil CSV
                                     csv = result_df.to_csv(index=False)
                                     st.download_button(
-                                        label="Download Hasil Prediksi (CSV)",
+                                        label="Download Hasil Prediksi (CSV)" if st.session_state.language == 'id' else "Download Prediction Results (CSV)",
                                         data=csv,
                                         file_name="prediction_results.csv",
                                         mime="text/csv",
@@ -1727,39 +1727,39 @@ with tab4:
                                     )
                         
                         except Exception as e:
-                            st.error(f"Error saat memproses file: {str(e)}")
+                            st.error(f"Error saat memproses file: {str(e)}" if st.session_state.language == 'id' else f"Error processing file: {str(e)}")
                             
                 # Tambahkan bagian untuk memuat model yang sudah disimpan
-                st.subheader("Muat Model yang Sudah Disimpan")
+                st.subheader("Muat Model yang Sudah Disimpan" if st.session_state.language == 'id' else "Load Saved Model")
                 
                 # Cek apakah folder models ada
                 if os.path.exists("models"):
                     model_files = [f for f in os.listdir("models") if f.endswith(".pkl")]
                     
                     if model_files:
-                        selected_model_file = st.selectbox("Pilih model yang akan dimuat:", model_files)
+                        selected_model_file = st.selectbox("Pilih model yang akan dimuat:" if st.session_state.language == 'id' else "Select a model to load:", model_files)
                         
-                        if st.button("Muat Model"):
+                        if st.button("Muat Model" if st.session_state.language == 'id' else "Load Model"):
                             try:
                                 with open(os.path.join("models", selected_model_file), 'rb') as f:
                                     loaded_model = pickle.load(f)
                                 
                                 st.session_state.model = loaded_model
-                                st.success(f"Model {selected_model_file} berhasil dimuat!")
+                                st.success(f"Model {selected_model_file} berhasil dimuat!" if st.session_state.language == 'id' else f"Model {selected_model_file} loaded successfully!")
                             except Exception as e:
                                 st.error(f"Error saat memuat model: {str(e)}")
                     else:
-                        st.info("Tidak ada model tersimpan di folder 'models'.")
+                        st.info("Tidak ada model tersimpan di folder 'models'." if st.session_state.language == 'id' else "No saved models found in the 'models' folder.")
                 else:
-                    st.info("Folder 'models' belum dibuat. Latih dan simpan model terlebih dahulu.")
+                    st.info("Folder 'models' belum dibuat. Latih dan simpan model terlebih dahulu." if st.session_state.language == 'id' else "Folder 'models' does not exist. Train and save models first.")
             else:
-                st.info("Silakan latih model terlebih dahulu sebelum melakukan prediksi.")
+                st.info("Silakan latih model terlebih dahulu sebelum melakukan prediksi." if st.session_state.language == 'id' else "Please train a model first before making predictions.")
     else:
-        st.info("Please complete the preprocessing steps in the previous tab first.")
+        st.info("Please complete the preprocessing steps in the previous tab first." if st.session_state.language == 'id' else "Please complete the preprocessing steps in the previous tab first.")
 
 # Tab5: Model Interpretation (SHAP)
 with tab5:
-    st.header("Model Interpretation with SHAP")
+    st.header("Model Interpretation with SHAP" if st.session_state.language == 'id' else "Model Interpretation with SHAP")
     
     # Only allow SHAP for regression (prediction) models, not for classification or forecasting
     if (
@@ -1767,7 +1767,8 @@ with tab5:
         and st.session_state.problem_type == "Regression"
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
-        st.write("""
+        st.write("""SHAP (SHapley Additive exPlanations) adalah pendekatan teori permainan untuk menjelaskan output dari model machine learning mana pun. 
+        Dia menghubungkan penugasan optimal kredit dengan penjelasan lokal menggunakan nilai Shapley dari teori permainan dan pengekspansian terkait mereka.""" if st.session_state.language == 'id' else """
         SHAP (SHapley Additive exPlanations) is a game theoretic approach to explain the output of any machine learning model. 
         It connects optimal credit allocation with local explanations using the classic Shapley values from game theory and their related extensions.
         """)
@@ -1779,7 +1780,7 @@ with tab5:
             """)
             
             # Add feature selection for SHAP analysis
-            st.subheader("Feature Selection for SHAP Analysis")
+            st.subheader("Pemilihan Fitur" if st.session_state.language == 'id' else "Feature Selection for SHAP Analysis")
             
             # If model has feature importances, use them to suggest important features
             if hasattr(st.session_state.model, 'feature_importances_'):
@@ -1800,27 +1801,26 @@ with tab5:
                 }).sort_values('Importance', ascending=False)
                 
                 # Get top features
-                top_n = st.slider("Number of top features to include:", 5, 
+                top_n = st.slider("Jumlah fitur teratas yang akan digunakan:" if st.session_state.language == 'id' else "Number of top features to include:", 5, 
                                min(30, len(st.session_state.X_train.columns)), 10)
                 top_features = feature_importance.head(top_n)['Feature'].tolist()
                 
                 # Let user select from suggested features or choose their own
-                selected_features = st.multiselect(
-                    "Select features for SHAP analysis:",
+                selected_features = st.multiselect("Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
                     options=st.session_state.X_train.columns.tolist(),
                     default=top_features
                 )
             else:
                 # If no feature_importances_, let user select all features
                 selected_features = st.multiselect(
-                    "Select features for SHAP analysis:",
+                    "Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
                     options=st.session_state.X_train.columns.tolist(),
                     default=st.session_state.X_train.columns[:10].tolist()  # Default to first 10
                 )
             
             if st.button("Generate SHAP Values"):
                 if not selected_features:
-                    st.error("Please select at least one feature for SHAP analysis.")
+                    st.error("Silahkan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
                 else:
                         sample_size = min(100, len(st.session_state.X_train[selected_features]))
                         X_sample = st.session_state.X_train[selected_features].sample(sample_size, random_state=42)
@@ -1858,7 +1858,7 @@ with tab5:
                         
                         # Summary plot
                         st.subheader("SHAP Summary Plot")
-                        st.write("This plot shows the impact of each feature on the model output.")
+                        st.write("Plot ini menunjukkan pengaruh setiap fitur terhadap output model." if st.session_state.language == 'id' else "This plot shows the impact of each feature on the model output.")
                         
                         fig, ax = plt.subplots(figsize=(10, 8))
                         if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
@@ -1872,7 +1872,7 @@ with tab5:
                         
                         # Feature importance plot
                         st.subheader("SHAP Feature Importance")
-                        st.write("This plot shows the average absolute SHAP value for each feature.")
+                        st.write("Plot ini menunjukkan rata-rata nilai absolut SHAP value untuk setiap fitur." if st.session_state.language == 'id' else "This plot shows the average absolute SHAP value for each feature.")
                         
                         fig, ax = plt.subplots(figsize=(10, 8))
                         if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
@@ -1884,11 +1884,11 @@ with tab5:
                         
                         # Dependence plots
                         st.subheader("SHAP Dependence Plots")
-                        st.write("These plots show how the model output varies with the value of a feature.")
+                        st.write("Plot ini menunjukkan bagaimana model output berubah dengan nilai fitur tertentu." if st.session_state.language == 'id' else "These plots show how the model output varies with the value of a feature.")
                         
                         # Let user select a feature for the dependence plot
                         feature_options = X_sample.columns.tolist()
-                        selected_feature = st.selectbox("Select a feature for the dependence plot:", feature_options)
+                        selected_feature = st.selectbox("Silahkan pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select a feature for the dependence plot:", feature_options)
                         
                         feature_idx = feature_options.index(selected_feature)
                         
@@ -1917,7 +1917,7 @@ with tab5:
                         
                         # Individual prediction explanation
                         st.subheader("Individual Prediction Explanation")
-                        st.write("Select a sample from the test set to explain its prediction.")
+                        st.write("Silahkan pilih sampel dari set pengujian untuk menjelaskan prediksinya." if st.session_state.language == 'id' else "Select a sample from the test set to explain its prediction.")
                         
                         sample_idx = st.slider("Sample index:", 0, len(st.session_state.X_test) - 1, 0)
                         
@@ -1940,7 +1940,7 @@ with tab5:
                         
                         # Force plot
                         st.write("SHAP Force Plot:")
-                        st.write("This plot shows how each feature contributes to the prediction for this sample.")
+                        st.write("Plot ini menunjukkan bagaimana setiap fitur berpengaruh pada prediksi untuk satu sampel." if st.session_state.language == 'id' else "This plot shows how each feature contributes to the prediction for this sample.")
                         
                         fig, ax = plt.subplots(figsize=(12, 3))
                         if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(sample_shap_values, np.ndarray):
@@ -1970,7 +1970,7 @@ with tab5:
                         
                         # Waterfall plot (alternative to force plot)
                         st.write("SHAP Waterfall Plot:")
-                        st.write("This plot shows how each feature pushes the model output from the base value to the final prediction.")
+                        st.write("Plot ini menunjukkan bagaimana setiap fitur berpengaruh pada prediksi." if st.session_state.language == 'id' else "This plot shows how each feature pushes the model output from the base value to the final prediction.")
                         
                         fig, ax = plt.subplots(figsize=(10, 8))
                         if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(sample_shap_values, np.ndarray):
@@ -2012,32 +2012,34 @@ with tab5:
                         st.pyplot(fig)
                         plt.clf()
                         
-                        st.success("SHAP analysis completed!")
+                        st.success("SHAP selesai dengan sukses!" if st.session_state.language == 'id' else "SHAP analysis completed!")
     elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("SHAP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
+        st.warning("SHAP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "SHAP is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
     else:
-        st.info("Please train a regression model in the 'Model Training' tab first.")
+        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
 
 
 # Tab6: Model Interpretation (LIME)
 with tab6:
-    st.header("Model Interpretation with LIME")
+    st.header("Interpretasi Model dengan LIME" if st.session_state.language == 'id' else "Model Interpretation with LIME")
     
     # Only allow LIME for regression (prediction) models, not for classification or forecasting
     if not LIME_AVAILABLE:
-        st.error("LIME tidak terinstal. Silakan instal dengan 'pip install lime'.")
+        st.error("LIME tidak terinstal. Silakan instal dengan 'pip install lime'." if st.session_state.language == 'id' else "LIME is not installed. Please install it with 'pip install lime'.")
     elif (
         st.session_state.model is not None
         and st.session_state.problem_type == "Regression"
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
-        st.write("""
+        st.write("""LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining machine learning model predictions.
+        Unlike SHAP, which provides global contribution values, LIME focuses on individual prediction explanations by creating a local interpretable model.
+        It approximates the model locally around the prediction to provide insights into how each feature contributes to the prediction.""" if st.session_state.language == 'id' else """
         LIME (Local Interpretable Model-agnostic Explanations) adalah teknik untuk menjelaskan prediksi model machine learning.
         Tidak seperti SHAP yang memberikan nilai kontribusi global, LIME fokus pada penjelasan prediksi individual dengan membuat model lokal yang dapat diinterpretasi.
         """)
         
         # Feature selection for LIME analysis
-        st.subheader("Pemilihan Fitur untuk Analisis LIME")
+        st.subheader("Pemilihan Fitur untuk Analisis LIME" if st.session_state.language == 'id' else "Feature Selection for LIME Analysis")
         
         # If model has feature importances, use them to suggest important features
         if hasattr(st.session_state.model, 'feature_importances_'):
@@ -2058,13 +2060,13 @@ with tab6:
             }).sort_values('Importance', ascending=False)
             
             # Get top features
-            top_n = st.slider("Jumlah fitur teratas yang akan digunakan:", 5, 
+            top_n = st.slider("Jumlah fitur teratas yang akan digunakan:" if st.session_state.language == 'id' else "Number of top features to include:", 5, 
                            min(30, len(st.session_state.X_train.columns)), 10, key="lime_top_n")
             top_features = feature_importance.head(top_n)['Feature'].tolist()
             
             # Let user select from suggested features or choose their own
             selected_features = st.multiselect(
-                "Pilih fitur untuk analisis LIME:",
+                "Pilih fitur untuk analisis LIME:" if st.session_state.language == 'id' else "Select features for LIME analysis:",
                 options=st.session_state.X_train.columns.tolist(),
                 default=top_features,
                 key="lime_features"
@@ -2072,21 +2074,21 @@ with tab6:
         else:
             # If no feature_importances_, let user select all features
             selected_features = st.multiselect(
-                "Pilih fitur untuk analisis LIME:",
+                "Pilih fitur untuk analisis LIME:" if st.session_state.language == 'id' else "Select features for LIME analysis:",
                 options=st.session_state.X_train.columns.tolist(),
                 default=st.session_state.X_train.columns[:10].tolist(),  # Default to first 10
                 key="lime_features_all"
             )
         
         # Number of features to show in the explanation
-        num_features_show = st.slider("Jumlah fitur yang ditampilkan dalam penjelasan:", 3, 
+        num_features_show = st.slider("Jumlah fitur yang ditampilkan dalam penjelasan:" if st.session_state.language == 'id' else "Number of features to show in the explanation:", 3, 
                                     min(20, len(selected_features)), 5)
         
-        if st.button("Generate LIME Explanations"):
+        if st.button("Generate LIME Explanations" if st.session_state.language == 'id' else "Generate LIME Explanations"):
             if not selected_features:
-                st.error("Silakan pilih setidaknya satu fitur untuk analisis LIME.")
+                st.error("Silakan pilih setidaknya satu fitur untuk analisis LIME." if st.session_state.language == 'id' else "Please select at least one feature for LIME analysis.")
             else:
-                with st.spinner("Menghitung penjelasan LIME..."):
+                with st.spinner("Menghitung penjelasan LIME..." if st.session_state.language == 'id' else "Calculating LIME explanations..."):
                     # Create a smaller sample with only selected features for training the explainer
                     X_train_selected = st.session_state.X_train[selected_features]
                     X_test_selected = st.session_state.X_test[selected_features]
@@ -2104,8 +2106,8 @@ with tab6:
                     )
                     
                     # Let user select a sample from the test set to explain
-                    st.subheader("Penjelasan Prediksi Individual")
-                    st.write("Pilih sampel dari set pengujian untuk menjelaskan prediksinya.")
+                    st.subheader("Penjelasan Prediksi Individual" if st.session_state.language == 'id' else "Individual Prediction Explanation")
+                    st.write("Pilih sampel dari set pengujian untuk menjelaskan prediksinya." if st.session_state.language == 'id' else "Select a sample from the test set to explain its prediction.")
                     
                     sample_idx = st.slider("Indeks sampel:", 0, len(X_test_selected) - 1, 0, key="lime_sample_idx")
                     
@@ -2113,7 +2115,7 @@ with tab6:
                     sample = X_test_selected.iloc[sample_idx]
                     
                     # Display the sample data
-                    st.write("Data sampel:")
+                    st.write("Data sampel:" if st.session_state.language == 'id' else "Sample data:")
                     sample_df = pd.DataFrame([sample], columns=selected_features)
                     st.dataframe(sample_df)
                     
@@ -2159,7 +2161,7 @@ with tab6:
                         )
                     
                     # Plot the explanation
-                    st.subheader("Visualisasi Penjelasan LIME")
+                    st.subheader("Visualisasi Penjelasan LIME" if st.session_state.language == 'id' else "LIME Explanation Visualization")
                     
                     # Instead of using save_to_file, use matplotlib to display the explanation
                     fig = plt.figure(figsize=(10, 6))
@@ -2168,7 +2170,7 @@ with tab6:
                     st.pyplot(fig)
                     
                     # Display the explanation as a table
-                    st.subheader("Penjelasan dalam Bentuk Tabel")
+                    st.subheader("Penjelasan dalam Bentuk Tabel" if st.session_state.language == 'id' else "Explanation in Table Format")
                     
                     # Get the explanation as a list of tuples
                     explanation_list = explanation.as_list()
@@ -2181,18 +2183,18 @@ with tab6:
                     st.dataframe(explanation_df)
                     
                     # Display feature values for the explained instance
-                    st.subheader("Nilai Fitur untuk Sampel yang Dijelaskan")
+                    st.subheader("Nilai Fitur untuk Sampel yang Dijelaskan" if st.session_state.language == 'id' else "Feature Values for Explained Sample" if st.session_state.language == 'id' else "Feature Values for Explained Sample")
                     feature_values = pd.DataFrame({
                         "Feature": selected_features,
                         "Value": sample.values
                     })
                     st.dataframe(feature_values)
                     
-                    st.success("Analisis LIME selesai!")
+                    st.success("Analisis LIME selesai!" if st.session_state.language == 'id' else "LIME analysis completed successfully!")
     elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
+        st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "LIME is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
     else:
-        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'.")
+        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
 
 # Tab7: Model Interpretation (Partial Dependence Plot)
 with tab7:
@@ -2205,22 +2207,24 @@ with tab7:
     ):
         st.write("""
         Partial Dependence Plot (PDP) membantu memvisualisasikan hubungan antara satu atau dua fitur dan prediksi model, 
-        dengan mengisolasi efek fitur tersebut dari fitur lainnya.
+        dengan mengisolasi efek fitur tersebut dari fitur lainnya""" if st.session_state.language == 'id' else """
+        Partial Dependence Plot (PDP) helps visualize the relationship between one or two features and the model predictions, 
+        isolating the effect of those features from others.
         """)
         # Pilih fitur untuk PDP
         features = st.multiselect(
-            "Pilih satu atau dua fitur untuk PDP:",
+            "Pilih satu atau dua fitur untuk PDP:" if st.session_state.language == 'id' else "Select one or two features for PDP:",
             options=st.session_state.X_train.columns.tolist(),
             default=st.session_state.X_train.columns[:1].tolist(),
             max_selections=2
         )
         if len(features) == 0:
-            st.info("Pilih minimal satu fitur.")
+            st.info("Pilih minimal satu fitur." if st.session_state.language == 'id' else "Please select at least one feature.")
         elif len(features) > 2:
-            st.warning("Pilih maksimal dua fitur untuk PDP.")
+            st.warning("Pilih maksimal dua fitur untuk PDP." if st.session_state.language == 'id' else "Please select at most two features for PDP.")
         else:
             if st.button("Generate PDP"):
-                with st.spinner("Menghitung Partial Dependence..."):
+                with st.spinner("Menghitung Partial Dependence..." if st.session_state.language == 'id' else "Calculating Partial Dependence..."):
                     try:
                         fig, ax = plt.subplots(figsize=(8, 6))
                         display = PartialDependenceDisplay.from_estimator(
@@ -2230,10 +2234,10 @@ with tab7:
                             ax=ax
                         )
                         st.pyplot(fig)
-                        st.success("PDP berhasil dibuat!")
+                        st.success("PDP berhasil dibuat!" if st.session_state.language == 'id' else "PDP created successfully!")
                     except Exception as e:
-                        st.error(f"Error saat membuat PDP: {str(e)}")
+                        st.error(f"Error saat membuat PDP: {str(e)}" if st.session_state.language == 'id' else f"Error creating PDP: {str(e)}")
     elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("PDP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan.")
+        st.warning("PDP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "PDP is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
     else:
-        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'.")
+        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
