@@ -343,6 +343,17 @@ with tab3:
         else:
             st.success("Tidak ditemukan nilai yang hilang dalam dataset." if st.session_state.language == 'id' else "No missing values found in the dataset.")
         
+        # Handle duplicated data
+        st.subheader("Atasi Data Duplikat" if st.session_state.language == 'id' else "Handle Duplicated Data")
+        n_duplicates = data.duplicated().sum()
+        if n_duplicates > 0:
+            st.warning(f"Ditemukan {n_duplicates} baris duplikat." if st.session_state.language == 'id' else f"Found {n_duplicates} duplicated rows.")
+            if st.button("Hapus Baris Duplikat" if st.session_state.language == 'id' else "Remove Duplicated Rows"):
+                data = data.drop_duplicates()
+                st.success("Baris duplikat berhasil dihapus." if st.session_state.language == 'id' else "Duplicated rows removed successfully.")
+        else:
+            st.info("Tidak ada data duplikat yang ditemukan." if st.session_state.language == 'id' else "No duplicated data found.")
+        
         # Handle Outliers
         st.subheader("Atasi Data Outlier" if st.session_state.language == 'id' else "Handle Outliers")
         
@@ -1368,7 +1379,7 @@ with tab4:
 
             # Train model button
             if model is not None and st.button("Train Model"):
-                with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else "Training {model_type} model..."):
+                with st.spinner(f"Melatih model..." if st.session_state.language == 'id' else "Training {model_type} model..."):
                     try:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
