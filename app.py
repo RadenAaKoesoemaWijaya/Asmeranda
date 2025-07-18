@@ -470,6 +470,8 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
+                "Recursive Elimination Current",
+                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance",
@@ -560,6 +562,8 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
+                "Recursive Elimination Current",
+                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance"
@@ -568,6 +572,8 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
+                "Recursive Elimination Current",
+                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance"
@@ -591,18 +597,43 @@ with tab3:
                     corr_df = corr_df.sort_values("Correlation", ascending=False)
                     top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
                     return set(corr_df.head(top_n)["Feature"].tolist())
-                elif method == "Recursive Feature Elimination (RFE)":
+                elif feature_selection_method == "Recursive Elimination Current":
                     from sklearn.feature_selection import RFE
-                    from sklearn.linear_model import LinearRegression, LogisticRegression  # Tambahkan import ini
                     if problem_type == "Regression":
                         estimator = LinearRegression()
                     else:
                         estimator = LogisticRegression(max_iter=500)
-                    rfe = RFE(estimator, n_features_to_select=min(10, len(all_columns)))
+                    n_features = st.slider("Jumlah fitur yang dipilih:", 1, len(all_columns), min(10, len(all_columns)))
+                    rfe = RFE(estimator, n_features_to_select=n_features)
                     rfe.fit(data[all_columns], data[target_column])
-                    rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
-                    return set(rfe_df[rfe_df["Selected"]]["Feature"].tolist())
-                elif method == "LASSO":
+                    rfe_df = pd.DataFrame({
+                        "Feature": all_columns,
+                        "Selected": rfe.support_,
+                        "Ranking": rfe.ranking_
+                    })
+                    st.dataframe(rfe_df.sort_values("Ranking"))
+                    selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
+
+                elif feature_selection_method == "Recursive Elimination–Election":
+                    from sklearn.feature_selection import RFECV
+                    if problem_type == "Regression":
+                        estimator = LinearRegression()
+                        scoring = "r2"
+                    else:
+                        estimator = LogisticRegression(max_iter=500)
+                        scoring = "accuracy"
+                    rfecv = RFECV(estimator, step=1, cv=5, scoring=scoring)
+                    rfecv.fit(data[all_columns], data[target_column])
+                    rfecv_df = pd.DataFrame({
+                        "Feature": all_columns,
+                        "Selected": rfecv.support_,
+                        "Ranking": rfecv.ranking_
+                    })
+                    st.dataframe(rfecv_df.sort_values("Ranking"))
+                    selected_features = rfecv_df[rfecv_df["Selected"]]["Feature"].tolist()
+                    st.success(f"Optimal number of features: {rfecv.n_features_}")
+
+                elif feature_selection_method == "LASSO":
                     from sklearn.linear_model import Lasso, LogisticRegression
                     if problem_type == "Regression":
                         lasso = Lasso(alpha=0.01, max_iter=1000)
