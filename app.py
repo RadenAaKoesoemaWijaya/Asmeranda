@@ -343,17 +343,6 @@ with tab3:
         else:
             st.success("Tidak ditemukan nilai yang hilang dalam dataset." if st.session_state.language == 'id' else "No missing values found in the dataset.")
         
-        # Handle duplicated data
-        st.subheader("Atasi Data Duplikat" if st.session_state.language == 'id' else "Handle Duplicated Data")
-        n_duplicates = data.duplicated().sum()
-        if n_duplicates > 0:
-            st.warning(f"Ditemukan {n_duplicates} baris duplikat." if st.session_state.language == 'id' else f"Found {n_duplicates} duplicated rows.")
-            if st.button("Hapus Baris Duplikat" if st.session_state.language == 'id' else "Remove Duplicated Rows"):
-                data = data.drop_duplicates()
-                st.success("Baris duplikat berhasil dihapus." if st.session_state.language == 'id' else "Duplicated rows removed successfully.")
-        else:
-            st.info("Tidak ada data duplikat yang ditemukan." if st.session_state.language == 'id' else "No duplicated data found.")
-        
         # Handle Outliers
         st.subheader("Atasi Data Outlier" if st.session_state.language == 'id' else "Handle Outliers")
         
@@ -470,8 +459,6 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
-                "Recursive Elimination Current",
-                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance",
@@ -562,8 +549,6 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
-                "Recursive Elimination Current",
-                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance"
@@ -572,8 +557,6 @@ with tab3:
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
-                "Recursive Elimination Current",
-                "Recursive Elimination–Election",
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance"
@@ -597,43 +580,18 @@ with tab3:
                     corr_df = corr_df.sort_values("Correlation", ascending=False)
                     top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
                     return set(corr_df.head(top_n)["Feature"].tolist())
-                elif feature_selection_method == "Recursive Elimination Current":
+                elif method == "Recursive Feature Elimination (RFE)":
                     from sklearn.feature_selection import RFE
+                    from sklearn.linear_model import LinearRegression, LogisticRegression  # Tambahkan import ini
                     if problem_type == "Regression":
                         estimator = LinearRegression()
                     else:
                         estimator = LogisticRegression(max_iter=500)
-                    n_features = st.slider("Jumlah fitur yang dipilih:", 1, len(all_columns), min(10, len(all_columns)))
-                    rfe = RFE(estimator, n_features_to_select=n_features)
+                    rfe = RFE(estimator, n_features_to_select=min(10, len(all_columns)))
                     rfe.fit(data[all_columns], data[target_column])
-                    rfe_df = pd.DataFrame({
-                        "Feature": all_columns,
-                        "Selected": rfe.support_,
-                        "Ranking": rfe.ranking_
-                    })
-                    st.dataframe(rfe_df.sort_values("Ranking"))
-                    selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
-
-                elif feature_selection_method == "Recursive Elimination–Election":
-                    from sklearn.feature_selection import RFECV
-                    if problem_type == "Regression":
-                        estimator = LinearRegression()
-                        scoring = "r2"
-                    else:
-                        estimator = LogisticRegression(max_iter=500)
-                        scoring = "accuracy"
-                    rfecv = RFECV(estimator, step=1, cv=5, scoring=scoring)
-                    rfecv.fit(data[all_columns], data[target_column])
-                    rfecv_df = pd.DataFrame({
-                        "Feature": all_columns,
-                        "Selected": rfecv.support_,
-                        "Ranking": rfecv.ranking_
-                    })
-                    st.dataframe(rfecv_df.sort_values("Ranking"))
-                    selected_features = rfecv_df[rfecv_df["Selected"]]["Feature"].tolist()
-                    st.success(f"Optimal number of features: {rfecv.n_features_}")
-
-                elif feature_selection_method == "LASSO":
+                    rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
+                    return set(rfe_df[rfe_df["Selected"]]["Feature"].tolist())
+                elif method == "LASSO":
                     from sklearn.linear_model import Lasso, LogisticRegression
                     if problem_type == "Regression":
                         lasso = Lasso(alpha=0.01, max_iter=1000)
@@ -1410,7 +1368,7 @@ with tab4:
 
             # Train model button
             if model is not None and st.button("Train Model"):
-                with st.spinner(f"Melatih model..." if st.session_state.language == 'id' else "Training {model_type} model..."):
+                with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else "Training {model_type} model..."):
                     try:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
