@@ -582,6 +582,7 @@ with tab3:
                     return set(corr_df.head(top_n)["Feature"].tolist())
                 elif method == "Recursive Feature Elimination (RFE)":
                     from sklearn.feature_selection import RFE
+                    from sklearn.linear_model import LinearRegression, LogisticRegression  # Tambahkan import ini
                     if problem_type == "Regression":
                         estimator = LinearRegression()
                     else:
@@ -1490,7 +1491,9 @@ with tab4:
                     pdf.set_font('Arial', 'B', 12)
                     pdf.cell(0, 10, 'Informasi Umum:' if st.session_state.language == 'id' else 'General Information:', 0, 1)
                     pdf.set_font('Arial', '', 12)
-                    pdf.cell(0, 10, f'Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S" if st.session_state.language == 'id' else "%Y-%m-%d %H:%M:%S")}', 0, 1)
+
+                    date_format = "%Y-%m-%d %H:%M:%S"
+                    pdf.cell(0, 10, f'Tanggal: {datetime.now().strftime(date_format)}' if st.session_state.language == 'id' else f'Date: {datetime.now().strftime(date_format)}', 0, 1)
                     pdf.cell(0, 10, f'Jenis Model: {type(st.session_state.model).__name__}' if st.session_state.language == 'id' else f'Model Type: {type(st.session_state.model).__name__}', 0, 1)
                     pdf.cell(0, 10, f'Metode: {problem_type}' if st.session_state.language == 'id' else f'Method: {problem_type}', 0, 1)
                     
