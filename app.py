@@ -710,7 +710,7 @@ with tab3:
             # Scaling numerical features
             numerical_cols = [col for col in selected_features if col in st.session_state.numerical_columns]
             if numerical_cols:
-                st.subheader("Lakukan Scaling" if st.session_state.language == 'id' else "Scale Numerical Features")
+                st.subheader("Scale Numerical Features")
                 scaling = st.checkbox("Apply standard scaling to numerical features", value=True)
                 if scaling:
                     scaler = StandardScaler()
@@ -719,7 +719,10 @@ with tab3:
                 X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
                 X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
                 st.session_state.scaler = scaler
-                st.success("Scaling applied to numerical features.")
+                if scaling:
+                    st.success("StandardScaler applied to numerical features.")
+                else:
+                    st.success("MinMaxScaler applied to numerical features.")
 
             # Update session_state setelah encoding/scaling
             st.session_state.X_train = X_train
@@ -1207,11 +1210,11 @@ with tab4:
                                            
                     if use_grid_search:
                         param_grid = {
-                            'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
-                            'max_depth': [3, 6, 9] if max_depth == 6 else [max(1, max_depth-3), max_depth, min(15, max_depth+3)],
-                            'learning_rate': [0.01, 0.1, 0.2] if learning_rate == 0.1 else [max(0.01, learning_rate/2), learning_rate, min(0.3, learning_rate*2)],
-                            'subsample': [0.6, 0.8, 1.0],
-                            'colsample_bytree': [0.6, 0.8, 1.0]
+                            'hidden_layer_sizes': [(100,), (100,50), (50,50,50)],
+                            'activation': ['relu', 'tanh', 'logistic'],
+                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'alpha': [0.0001, 0.001, 0.01],
+                            'max_iter': [200, 500, 1000]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
 
@@ -1368,12 +1371,12 @@ with tab4:
                         )
                 elif model_type == "MLP Regressor":
                     from sklearn.neural_network import MLPRegressor
-                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'en' else "Ukuran hidden layer (pisahkan dengan koma):", "100,50")
+                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'id' else "Ukuran hidden layer (pisahkan dengan koma):", "100,50")
                     hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
-                    activation = st.selectbox("Activation function:" if st.session_state.language == 'en' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
-                    solver = st.selectbox("Solver:", ["adam", "sgd", "lbfgs"])
-                    alpha = st.slider("Alpha (L2 penalty):" if st.session_state.language == 'en' else "Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
-                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'en' else "Iterasi maksimum:", 100, 1000, 200)
+                    activation = st.selectbox("Activation function:" if st.session_state.language == 'id' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
+                    solver = st.selectbox("Solver:" if st.session_state.language == 'id' else "Solver:", ["adam", "sgd", "lbfgs"])
+                    alpha = st.slider("Alpha (L2 penalty):" if st.session_state.language == 'id' else "Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
+                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 200)
                     base_model = MLPRegressor(random_state=42)
                     if use_grid_search:
                         param_grid = {
