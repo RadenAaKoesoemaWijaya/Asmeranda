@@ -485,8 +485,13 @@ with tab3:
             top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
             selected_features = mi_df.head(top_n)["Feature"].tolist()
         elif feature_selection_method == "Pearson Correlation":
-            corr = data[all_columns].corrwith(data[target_column]).abs()
-            corr_df = pd.DataFrame({"Feature": all_columns, "Correlation": corr})
+            numeric_columns = data[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+            if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
+                st.error("Target kolom harus numerik untuk Pearson Correlation.")
+                corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
+            else:
+                corr = data[numeric_columns].corrwith(data[target_column]).abs()
+            corr_df = pd.DataFrame({"Feature": numeric_columns, "Correlation": corr})
             corr_df = corr_df.sort_values("Correlation", ascending=False)
             st.dataframe(corr_df)
             top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
@@ -1103,7 +1108,7 @@ with tab4:
                 elif model_type == "Gradient Boosting":
                     n_estimators = st.slider("Number of boosting stages:" if st.session_state.language == 'id' else "Jumlah boosting stages:", 10, 500, 100)
                     learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
-                    max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
+                    max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
                     
                     base_model = GradientBoostingClassifier(random_state=42)
                     
@@ -1111,7 +1116,7 @@ with tab4:
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'learning_rate': [0.01, 0.1, 0.2] if learning_rate == 0.1 else [max(0.01, learning_rate/2), learning_rate, min(0.3, learning_rate*2)],
-                            'max_depth': [2, 3, 5] if max_depth == 3 else [max(1, max_depth-1), max_depth, min(10, max_depth+2)],
+                            'max_depth': [3, 6, 9] if max_depth == 3 else [max(1, max_depth-3), max_depth, min(10, max_depth+3)],
                             'subsample': [0.8, 0.9, 1.0]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
@@ -1191,7 +1196,7 @@ with tab4:
                 elif model_type == "Gradient Boosting":
                     n_estimators = st.slider("Jumlah boosting stages:" if st.session_state.language == 'id' else "Number of boosting stages:", 10, 500, 100)
                     learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
-                    max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 10, 3)
+                    max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
                     
                     base_model = GradientBoostingRegressor(random_state=42)
                     
