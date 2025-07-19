@@ -26,13 +26,20 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
 
-# Try to import LIME, but don't fail if it's not installed
 try:
     import lime
     from lime import lime_tabular
     LIME_AVAILABLE = True
 except ImportError:
     LIME_AVAILABLE = False
+
+try:
+    from imblearn.over_sampling import RandomOverSampler, SMOTE
+    from imblearn.under_sampling import RandomUnderSampler
+    from imblearn.combine import SMOTEENN, SMOTETomek
+    IMB_AVAILABLE = True
+except ImportError:
+    IMB_AVAILABLE = False
 
 # Initialize translation
 TRANSLATIONS = {
@@ -57,7 +64,7 @@ st.set_page_config(
 
 # Language toggle button
 if 'language' not in st.session_state:
-    st.session_state.language = 'en'
+    st.session_state.language = 'id'  # Default language is Indonesian
 
 col1, col2 = st.columns([0.9, 0.1])
 with col2:
@@ -498,12 +505,17 @@ with tab3:
             selected_features = corr_df.head(top_n)["Feature"].tolist()
         elif feature_selection_method == "Recursive Feature Elimination (RFE)":
             from sklearn.feature_selection import RFE
+            # --- Tambahkan encoding untuk fitur kategorikal sebelum RFE ---
+            X_rfe = data[all_columns].copy()
+            for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
+                le = LabelEncoder()
+                X_rfe[col] = le.fit_transform(X_rfe[col].astype(str))
             if problem_type == "Regression":
                 estimator = LinearRegression()
             else:
                 estimator = LogisticRegression(max_iter=500)
             rfe = RFE(estimator, n_features_to_select=min(10, len(all_columns)))
-            rfe.fit(data[all_columns], data[target_column])
+            rfe.fit(X_rfe, data[target_column])
             rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
             st.dataframe(rfe_df)
             selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
@@ -653,47 +665,7 @@ with tab3:
             # Prepare data for modeling
             X = data[selected_features]
             y = data[target_column]
-            
-            # Encoding categorical features
-            categorical_cols = X.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-            
-            if categorical_cols:
-                st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
-                
-                encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
-                
-                if encoding_method == "Label Encoding":
-                    encoders = {}
-                    for col in categorical_cols:
-                        le = LabelEncoder()
-                        X[col] = le.fit_transform(X[col].astype(str))
-                        encoders[col] = le
-                    st.session_state.encoders = encoders
-                    st.success("Encoding label diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "Label encoding applied to categorical features.")
-                else:
-                    X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
-                    st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
-            
-            # Scale numerical features
-            numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
-            
-            if numerical_cols:
-                st.subheader("Lakukan Scaling" if st.session_state.language == 'id' else "Scale Numerical Features")
-                
-                scaling = st.checkbox("Menerapkan scaling pada fitur numerik" if st.session_state.language == 'id' else "Apply standard scaling to numerical features", value=True)
-                
-                if scaling:
-                    scaler = StandardScaler()
-                    X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
-                    st.session_state.scaler = scaler
-                    st.success("Standard scaling diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else "Standard scaling applied to numerical features.")
-
-                else:
-                    scaler = MinMaxScaler()
-                    X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
-                    st.session_state.scaler = scaler
-                    st.success("Minmax scaling diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else "MinMax scaling applied to numerical features.")
-            
+                        
             # Train-test split
             st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
             
@@ -715,6 +687,82 @@ with tab3:
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
             st.dataframe(X.head())
+
+            categorical_cols = [col for col in selected_features if col in st.session_state.categorical_columns]
+            if categorical_cols:
+                st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
+                encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
+                if encoding_method == "Label Encoding":
+                    encoders = {}
+                    for col in categorical_cols:
+                        le = LabelEncoder()
+                        X_train[col] = le.fit_transform(X_train[col].astype(str))
+                        X_test[col] = le.transform(X_test[col].astype(str))
+                        encoders[col] = le
+                    st.session_state.encoders = encoders
+                    st.success("Encoding label diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "Label encoding applied to categorical features.")
+                else:
+                    X_train = pd.get_dummies(X_train, columns=categorical_cols, drop_first=True)
+                    X_test = pd.get_dummies(X_test, columns=categorical_cols, drop_first=True)
+                    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+                    st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
+
+            # Scaling numerical features
+            numerical_cols = [col for col in selected_features if col in st.session_state.numerical_columns]
+            if numerical_cols:
+                st.subheader("Lakukan Scaling" if st.session_state.language == 'id' else "Scale Numerical Features")
+                scaling = st.checkbox("Apply standard scaling to numerical features", value=True)
+                if scaling:
+                    scaler = StandardScaler()
+                else:
+                    scaler = MinMaxScaler()
+                X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
+                X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
+                st.session_state.scaler = scaler
+                st.success("Scaling applied to numerical features.")
+
+            # Update session_state setelah encoding/scaling
+            st.session_state.X_train = X_train
+            st.session_state.X_test = X_test
+            st.session_state.y_train = y_train
+            st.session_state.y_test = y_test
+
+            if problem_type == "Classification":
+                st.subheader("Penanganan Imbalanced Dataset")
+                imbalance_method = st.selectbox(
+                    "Pilih metode balancing:",
+                    ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
+                )
+                if imbalance_method != "None" and IMB_AVAILABLE:
+                    from collections import Counter
+                    class_counts = Counter(y_train)
+                    min_class_count = min(class_counts.values())
+                    smote_kwargs = {}
+                    if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
+                        if min_class_count <= 1:
+                            st.warning("Tidak bisa SMOTE karena ada kelas dengan hanya 1 sampel.")
+                            sampler = None
+                        else:
+                            k_neighbors = min(5, min_class_count - 1)
+                            smote_kwargs = {"k_neighbors": k_neighbors}
+                    if imbalance_method == "Random Over Sampling":
+                        sampler = RandomOverSampler(random_state=42)
+                    elif imbalance_method == "Random Under Sampling":
+                        sampler = RandomUnderSampler(random_state=42)
+                    elif imbalance_method == "SMOTE":
+                        sampler = SMOTE(random_state=42, **smote_kwargs)
+                    elif imbalance_method == "SMOTEENN":
+                        sampler = SMOTEENN(random_state=42, smote=SMOTE(**smote_kwargs))
+                    elif imbalance_method == "SMOTETomek":
+                        sampler = SMOTETomek(random_state=42, smote=SMOTE(**smote_kwargs))
+                    else:
+                        sampler = None
+                    if sampler is not None:
+                        try:
+                            X_train, y_train = sampler.fit_resample(X_train, y_train)
+                            st.success("Data training berhasil di-balance.")
+                        except Exception as e:
+                            st.error(f"Gagal balancing: {e}")
     else:
         st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
 
@@ -756,7 +804,7 @@ with tab4:
             
             st.subheader("Lakukan K-Fold Cross Validation" if st.session_state.language == 'id' else "Perform K-Fold Cross Validation")
             
-            n_splits = st.slider("Jumlah fold (K):", 2, 10, 5)
+            n_splits = st.slider("Jumlah fold (K):" if st.session_state.language == 'id' else "Number of folds (K):", 2, 10, 5)
             cv_scoring = None
             
             if problem_type == "Classification":
@@ -1236,16 +1284,16 @@ with tab4:
                     C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.1, 10.0, 1.0)
                     kernel = st.selectbox("Kernel:" if st.session_state.language == 'id' else "Kernel:", ["linear", "poly", "rbf", "sigmoid"])
                     gamma = st.selectbox("Gamma (kernel coefficient):" if st.session_state.language == 'id' else "Gamma (koefisien kernel):", ["scale", "auto"])
-                    epsilon = st.slider("Epsilon:"if st.session_state.language == 'id' else "Epsilon:", 0.01, 0.5, 0.1)
-                    
+                    epsilon = st.slider("Epsilon:" if st.session_state.language == 'id' else "Epsilon:", 0.01, 0.5, 0.1)
+
                     base_model = SVR()
-                    
+
                     if use_grid_search:
                         param_grid = {
                             'C': [0.1, 1.0, 10.0] if C == 1.0 else [max(0.1, C/2), C, min(10.0, C*2)],
                             'kernel': [kernel] if kernel != "rbf" else ['linear', 'rbf'],
                             'gamma': [gamma] if gamma != "scale" else ['scale', 'auto'],
-                            'epsilon': [0.05, 0.1, 0.2] if epsilon == 0.1 else [max(0.01, epsilon/2), epsilon, min(0.5, epsilon*2)]
+                            'epsilon': [epsilon]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     else:
@@ -1255,46 +1303,26 @@ with tab4:
                             gamma=gamma,
                             epsilon=epsilon
                         )
-                elif model_type == "Bagging Regressor":
-                    n_estimators = st.slider("Jumlah estimator:" if st.session_state.language == 'id' else "Number of Estimators:", 10, 200, 50)
-                    max_samples = st.slider("Persentase sampel per estimator:" if st.session_state.language == 'id' else "Percentage of samples per estimator:", 10, 100, 100)
-                    base_estimator = st.selectbox("Base estimator:" if st.session_state.language == 'id' else "Base estimator:", ["Decision Tree", "Linear Regression"])
-                    if base_estimator == "Decision Tree":
-                        from sklearn.tree import DecisionTreeRegressor
-                        base = DecisionTreeRegressor()
-                    else:
-                        base = LinearRegression()
-                    # Fix for scikit-learn >= 1.2: use 'estimator' instead of 'base_estimator'
-                    import sklearn
-                    skl_version = tuple(map(int, sklearn.__version__.split('.')[:2]))
-                    if skl_version >= (1, 2):
-                        model = BaggingRegressor(
-                            estimator=base,
-                            n_estimators=n_estimators,
-                            max_samples=max_samples/100,
-                            random_state=42
-                        )
-                    else:
-                        model = BaggingRegressor(
-                            base_estimator=base,
-                            n_estimators=n_estimators,
-                            max_samples=max_samples/100,
-                            random_state=42
-                        )
+
                 elif model_type == "Voting Regressor":
-                    # Simple voting regressor with 2-3 base models
-                    estimators = []
-                    if st.checkbox("Gunakan Random Forest" if st.session_state.language == 'id' else "Use Random Forest", value=True):
-                        estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
-                    if st.checkbox("Gunakan Linear Regression" if st.session_state.language == 'id' else "Use Linear Regression", value=True):
-                        estimators.append(('lr', LinearRegression()))
-                    if st.checkbox("Gunakan Gradient Boosting" if st.session_state.language == 'id' else "Use Gradient Boosting", value=False):
-                        estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
-                    if len(estimators) < 2:
-                        st.warning("Pilih minimal dua estimator untuk Voting Regressor." if st.session_state.language == 'id' else "Select at least two estimators for Voting Regressor.")
+                    from sklearn.ensemble import VotingRegressor
+                    from sklearn.neighbors import KNeighborsRegressor
+                    # Pilih base estimators untuk VotingRegressor
+                    base_estimators = []
+                    if st.checkbox("Gunakan Random Forest", value=True, key="vote_rf"):
+                        base_estimators.append(('rf', RandomForestRegressor(n_estimators=50, random_state=42)))
+                    if st.checkbox("Gunakan Linear Regression", value=True, key="vote_lr"):
+                        base_estimators.append(('lr', LinearRegression()))
+                    if st.checkbox("Gunakan Gradient Boosting", value=False, key="vote_gb"):
+                        base_estimators.append(('gb', GradientBoostingRegressor(n_estimators=50, random_state=42)))
+                    if st.checkbox("Gunakan KNN Regressor", value=False, key="vote_knn"):
+                        base_estimators.append(('knn', KNeighborsRegressor()))
+                    if len(base_estimators) < 2:
+                        st.warning("Pilih minimal dua base estimator untuk Voting Regressor." if st.session_state.language == 'id' else "Select at least two base estimators for Voting Regressor.")
                         model = None
                     else:
-                        model = VotingRegressor(estimators=estimators)
+                        model = VotingRegressor(estimators=base_estimators)
+                        
                 elif model_type == "Stacking Regressor":
                     # Simple stacking with 2-3 base models and a final regressor
                     base_estimators = []
@@ -1767,271 +1795,175 @@ with tab4:
 
 # Tab5: Model Interpretation (SHAP)
 with tab5:
-    st.header("Model Interpretation with SHAP" if st.session_state.language == 'id' else "Model Interpretation with SHAP")
-    
-    # Only allow SHAP for regression (prediction) models, not for classification or forecasting
+    st.header("Interpretasi Model dengan SHAP" if st.session_state.language == 'id' else "Model Interpretation with SHAP")
+
     if (
         st.session_state.model is not None
-        and st.session_state.problem_type == "Regression"
+        and st.session_state.problem_type in ["Regression", "Classification"]
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
-        st.write("""SHAP (SHapley Additive exPlanations) adalah pendekatan teori permainan untuk menjelaskan output dari model machine learning mana pun. 
-        Dia menghubungkan penugasan optimal kredit dengan penjelasan lokal menggunakan nilai Shapley dari teori permainan dan pengekspansian terkait mereka.""" if st.session_state.language == 'id' else """
-        SHAP (SHapley Additive exPlanations) is a game theoretic approach to explain the output of any machine learning model. 
-        It connects optimal credit allocation with local explanations using the classic Shapley values from game theory and their related extensions.
+        st.write("""
+        SHAP (SHapley Additive exPlanations) adalah pendekatan teori permainan untuk menjelaskan output dari model machine learning mana pun.
+        """ if st.session_state.language == 'id' else """
+        SHAP (SHapley Additive exPlanations) is a game theoretic approach to explain the output of any machine learning model.
         """)
-        
-        # 3. Implement Feature Selection Before SHAP Analysis
-        if st.session_state.model is not None:
-            st.write("""
-            Interpretability ML
-            """)
-            
-            # Add feature selection for SHAP analysis
-            st.subheader("Pemilihan Fitur" if st.session_state.language == 'id' else "Feature Selection for SHAP Analysis")
-            
-            # If model has feature importances, use them to suggest important features
-            if hasattr(st.session_state.model, 'feature_importances_'):
-                # For tree-based models
-                importances = st.session_state.model.feature_importances_
-                feature_names = st.session_state.X_train.columns if hasattr(st.session_state.X_train, 'columns') else [f"feature_{i}" for i in range(len(importances))]
-                
-                # Ensure both arrays have the same length
-                if len(importances) != len(feature_names):
-                    # Truncate the longer array to match the shorter one
-                    min_length = min(len(importances), len(feature_names))
-                    importances = importances[:min_length]
-                    feature_names = feature_names[:min_length]
-                
-                feature_importance = pd.DataFrame({
-                    'Feature': feature_names,
-                    'Importance': importances
-                }).sort_values('Importance', ascending=False)
-                
-                # Get top features
-                top_n = st.slider("Jumlah fitur teratas yang akan digunakan:" if st.session_state.language == 'id' else "Number of top features to include:", 5, 
-                               min(30, len(st.session_state.X_train.columns)), 10)
-                top_features = feature_importance.head(top_n)['Feature'].tolist()
-                
-                # Let user select from suggested features or choose their own
-                selected_features = st.multiselect("Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
-                    options=st.session_state.X_train.columns.tolist(),
-                    default=top_features
-                )
+
+        # Fitur yang digunakan untuk SHAP
+        feature_names = st.session_state.X_train.columns.tolist()
+        selected_features = st.multiselect(
+            "Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
+            options=feature_names,
+            default=feature_names[:min(10, len(feature_names))]
+        )
+
+        if st.button("Generate SHAP Values"):
+            if not selected_features:
+                st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
             else:
-                # If no feature_importances_, let user select all features
-                selected_features = st.multiselect(
-                    "Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
-                    options=st.session_state.X_train.columns.tolist(),
-                    default=st.session_state.X_train.columns[:10].tolist()  # Default to first 10
-                )
-            
-            if st.button("Generate SHAP Values"):
-                if not selected_features:
-                    st.error("Silahkan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
+                X_sample = st.session_state.X_train[selected_features].sample(min(100, len(st.session_state.X_train)), random_state=42)
+                model = st.session_state.model
+
+                # Pilih explainer yang sesuai
+                if hasattr(model, "predict_proba") or hasattr(model, "predict"):
+                    try:
+                        if hasattr(model, "feature_importances_"):
+                            explainer = shap.TreeExplainer(model)
+                        else:
+                            explainer = shap.KernelExplainer(model.predict, X_sample)
+                    except Exception as e:
+                        st.error(f"Error saat membuat explainer: {e}")
+                        st.stop()
                 else:
-                        sample_size = min(100, len(st.session_state.X_train[selected_features]))
-                        X_sample = st.session_state.X_train[selected_features].sample(sample_size, random_state=42)
-                        
-                        # Create explainer
-                        if isinstance(st.session_state.model, (RandomForestClassifier, RandomForestRegressor)):
-                            # Fix for additivity error - use interventional feature perturbation only
-                            # Removed check_additivity parameter which is causing the error
-                            explainer = shap.TreeExplainer(
-                                st.session_state.model,
-                                feature_perturbation="interventional"
-                            )
-                        else:
-                            # Convert X_sample to numpy array if it's not already
-                            X_sample_values = X_sample.values if hasattr(X_sample, 'values') else np.array(X_sample)
-                            # Ensure all values are numeric
-                            X_sample_values = pd.get_dummies(pd.DataFrame(X_sample_values)).values
-                            X_sample_values = np.asarray(X_sample_values).astype(np.float64)
-                            
-                            def model_predict(X):
-                                # Ensure X is in the right format for the model
-                                if isinstance(X, list):
-                                    X = np.array(X)
-                                # Apply the same preprocessing as training data
-                                X = pd.get_dummies(pd.DataFrame(X)).values
-                                X = np.asarray(X).astype(np.float64)
-                                return st.session_state.model.predict(X)
-                            
-                            # Create the explainer with the wrapper function
-                            # Tambahkan parameter data untuk menggantikan background data
-                            explainer = shap.KernelExplainer(model_predict, data=X_sample_values)
-                        
-                        # Calculate SHAP values
-                        shap_values = explainer.shap_values(X_sample)
-                        
-                        # Summary plot
-                        st.subheader("SHAP Summary Plot")
-                        st.write("Plot ini menunjukkan pengaruh setiap fitur terhadap output model." if st.session_state.language == 'id' else "This plot shows the impact of each feature on the model output.")
-                        
-                        fig, ax = plt.subplots(figsize=(10, 8))
-                        if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
-                            # For multi-class classification
-                            class_to_show = 0  # Show SHAP values for the first class
-                            shap.summary_plot(shap_values[class_to_show], X_sample, show=False)
-                        else:
-                            shap.summary_plot(shap_values, X_sample, show=False)
-                        st.pyplot(fig)
-                        plt.clf()
-                        
-                        # Feature importance plot
-                        st.subheader("SHAP Feature Importance")
-                        st.write("Plot ini menunjukkan rata-rata nilai absolut SHAP value untuk setiap fitur." if st.session_state.language == 'id' else "This plot shows the average absolute SHAP value for each feature.")
-                        
-                        fig, ax = plt.subplots(figsize=(10, 8))
-                        if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
-                            shap.summary_plot(shap_values[class_to_show], X_sample, plot_type="bar", show=False)
-                        else:
-                            shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
-                        st.pyplot(fig)
-                        plt.clf()
-                        
-                        # Dependence plots
-                        st.subheader("SHAP Dependence Plots")
-                        st.write("Plot ini menunjukkan bagaimana model output berubah dengan nilai fitur tertentu." if st.session_state.language == 'id' else "These plots show how the model output varies with the value of a feature.")
-                        
-                        # Let user select a feature for the dependence plot
-                        feature_options = X_sample.columns.tolist()
-                        selected_feature = st.selectbox("Silahkan pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select a feature for the dependence plot:", feature_options)
-                        
-                        feature_idx = feature_options.index(selected_feature)
-                        
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        # --- FIX: Ensure correct shape for classification (multi-class) ---
-                        if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(shap_values, np.ndarray):
-                            # For multi-class classification, use the first class
-                            shap.dependence_plot(
-                                feature_idx,
-                                shap_values[class_to_show],  # Use only one class's SHAP values
-                                X_sample,
-                                show=False,
-                                ax=ax
-                            )
-                        else:
-                            # For regression or binary classification
-                            shap.dependence_plot(
-                                feature_idx,
-                                shap_values,
-                                X_sample,
-                                show=False,
-                                ax=ax
-                            )
-                        st.pyplot(fig)
-                        plt.clf()
-                        
-                        # Individual prediction explanation
-                        st.subheader("Individual Prediction Explanation")
-                        st.write("Silahkan pilih sampel dari set pengujian untuk menjelaskan prediksinya." if st.session_state.language == 'id' else "Select a sample from the test set to explain its prediction.")
-                        
-                        sample_idx = st.slider("Sample index:", 0, len(st.session_state.X_test) - 1, 0)
-                        
-                        # Get the selected sample
-                        sample = st.session_state.X_test.iloc[sample_idx:sample_idx+1]
-                        
-                        # Calculate SHAP values for this sample
-                        sample_shap_values = explainer.shap_values(sample)
-                        
-                        # Display the sample data
-                        st.write("Sample data:")
-                        st.dataframe(sample)
-                        
-                        # Display the actual and predicted values
-                        actual = st.session_state.y_test.iloc[sample_idx]
-                        predicted = st.session_state.model.predict(sample)[0]
-                        
-                        st.write(f"Actual value: {actual}")
-                        st.write(f"Predicted value: {predicted}")
-                        
-                        # Force plot
-                        st.write("SHAP Force Plot:")
-                        st.write("Plot ini menunjukkan bagaimana setiap fitur berpengaruh pada prediksi untuk satu sampel." if st.session_state.language == 'id' else "This plot shows how each feature contributes to the prediction for this sample.")
-                        
-                        fig, ax = plt.subplots(figsize=(12, 3))
-                        if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(sample_shap_values, np.ndarray):
-                            # For multi-class classification
-                            shap.force_plot(
-                                explainer.expected_value[class_to_show], 
-                                sample_shap_values[class_to_show], 
-                                sample, 
-                                matplotlib=True,
-                                show=False
-                            )
-                        else:
-                            # For regression or binary classification
-                            expected_value = explainer.expected_value
-                            if isinstance(expected_value, list):
-                                expected_value = expected_value[0]
-                            
-                            shap.force_plot(
-                                expected_value, 
-                                sample_shap_values, 
-                                sample, 
-                                matplotlib=True,
-                                show=False
-                            )
-                        st.pyplot(fig)
-                        plt.clf()
-                        
-                        # Waterfall plot (alternative to force plot)
-                        st.write("SHAP Waterfall Plot:")
-                        st.write("Plot ini menunjukkan bagaimana setiap fitur berpengaruh pada prediksi." if st.session_state.language == 'id' else "This plot shows how each feature pushes the model output from the base value to the final prediction.")
-                        
-                        fig, ax = plt.subplots(figsize=(10, 8))
-                        if isinstance(st.session_state.model, (RandomForestClassifier, LogisticRegression)) and not isinstance(sample_shap_values, np.ndarray):
-                            # For multi-class classification, use the first class
-                            expected_val = explainer.expected_value[class_to_show]
-                            if isinstance(expected_val, np.ndarray):
-                                expected_val = float(expected_val[0])
-                            
-                            shap_val = sample_shap_values[class_to_show][0]
-                            
-                            shap.plots._waterfall.waterfall_legacy(
-                                expected_val, 
-                                shap_val, 
-                                feature_names=X_sample.columns,
-                                show=False
-                            )
-                        else:
-                            # For regression or binary classification
-                            expected_val = explainer.expected_value
-                            
-                            # Handle different types of expected_value
-                            if isinstance(expected_val, list):
-                                expected_val = expected_val[0]
-                            if isinstance(expected_val, np.ndarray):
-                                expected_val = float(expected_val[0])
-                            
-                            # Handle different types of shap_values
-                            if isinstance(sample_shap_values, list):
-                                shap_val = sample_shap_values[0][0]
-                            else:
-                                shap_val = sample_shap_values[0]
-                            
-                            shap.plots._waterfall.waterfall_legacy(
-                                expected_val, 
-                                shap_val, 
-                                feature_names=X_sample.columns,
-                                show=False
-                            )
-                        st.pyplot(fig)
-                        plt.clf()
-                        
-                        st.success("SHAP selesai dengan sukses!" if st.session_state.language == 'id' else "SHAP analysis completed!")
-    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("SHAP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "SHAP is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
+                    st.error("Model tidak mendukung SHAP.")
+                    st.stop()
+
+                # Hitung SHAP values
+                try:
+                    shap_values = explainer.shap_values(X_sample)
+                except Exception as e:
+                    st.error(f"Error saat menghitung SHAP values: {e}")
+                    st.stop()
+
+                # Untuk klasifikasi multi-class, pilih kelas
+                class_to_show = 0
+                if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
+                    class_labels = [str(i) for i in range(len(shap_values))]
+                    class_to_show = st.selectbox(
+                        "Pilih kelas untuk analisis SHAP:" if st.session_state.language == 'id' else "Select class for SHAP analysis:",
+                        class_labels, index=0
+                    )
+                    class_to_show = int(class_to_show)
+
+                # Summary plot
+                st.subheader("SHAP Summary Plot")
+                fig, ax = plt.subplots(figsize=(10, 6))
+                if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
+                    shap.summary_plot(shap_values[class_to_show], X_sample, show=False)
+                else:
+                    shap.summary_plot(shap_values, X_sample, show=False)
+                st.pyplot(fig)
+                plt.clf()
+
+                # Feature importance plot
+                st.subheader("SHAP Feature Importance")
+                fig, ax = plt.subplots(figsize=(10, 6))
+                if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
+                    shap.summary_plot(shap_values[class_to_show], X_sample, plot_type="bar", show=False)
+                else:
+                    shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
+                st.pyplot(fig)
+                plt.clf()
+
+                # Dependence plot
+                st.subheader("SHAP Dependence Plot")
+                dep_feature = st.selectbox(
+                    "Pilih fitur untuk dependence plot:" if st.session_state.language == 'id' else "Select feature for dependence plot:",
+                    selected_features
+                )
+                fig, ax = plt.subplots(figsize=(10, 6))
+                feature_idx = selected_features.index(dep_feature)
+                if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
+                    shap.dependence_plot(feature_idx, shap_values[class_to_show], X_sample, show=False, ax=ax)
+                else:
+                    shap.dependence_plot(feature_idx, shap_values, X_sample, show=False, ax=ax)
+                st.pyplot(fig)
+                plt.clf()
+
+                # Individual prediction explanation
+                st.subheader("Individual Prediction Explanation")
+                sample_idx = st.slider("Sample index:", 0, len(st.session_state.X_test) - 1, 0)
+                sample = st.session_state.X_test[selected_features].iloc[[sample_idx]]
+                try:
+                    sample_shap_values = explainer.shap_values(sample)
+                except Exception as e:
+                    st.error(f"Error saat menghitung SHAP values untuk sampel: {e}")
+                    st.stop()
+
+                st.write("Data sampel:")
+                st.dataframe(sample)
+                actual = st.session_state.y_test.iloc[sample_idx]
+                predicted = model.predict(sample)[0]
+                st.write(f"Actual: {actual}")
+                st.write(f"Predicted: {predicted}")
+
+                # Force plot
+                st.write("SHAP Force Plot:")
+                fig, ax = plt.subplots(figsize=(12, 3))
+                if st.session_state.problem_type == "Classification" and isinstance(sample_shap_values, list):
+                    shap.force_plot(
+                        explainer.expected_value[class_to_show],
+                        sample_shap_values[class_to_show][0],
+                        sample,
+                        matplotlib=True,
+                        show=False
+                    )
+                else:
+                    expected_value = explainer.expected_value
+                    if isinstance(expected_value, list):
+                        expected_value = expected_value[0]
+                    shap.force_plot(
+                        expected_value,
+                        sample_shap_values[0] if isinstance(sample_shap_values, list) else sample_shap_values,
+                        sample,
+                        matplotlib=True,
+                        show=False
+                    )
+                st.pyplot(fig)
+                plt.clf()
+
+                # Waterfall plot
+                st.write("SHAP Waterfall Plot:")
+                fig, ax = plt.subplots(figsize=(10, 6))
+                if st.session_state.problem_type == "Classification" and isinstance(sample_shap_values, list):
+                    shap.plots._waterfall.waterfall_legacy(
+                        explainer.expected_value[class_to_show],
+                        sample_shap_values[class_to_show][0],
+                        feature_names=sample.columns,
+                        show=False
+                    )
+                else:
+                    expected_value = explainer.expected_value
+                    if isinstance(expected_value, list):
+                        expected_value = expected_value[0]
+                    shap_val = sample_shap_values[0] if isinstance(sample_shap_values, list) else sample_shap_values[0]
+                    shap.plots._waterfall.waterfall_legacy(
+                        expected_value,
+                        shap_val,
+                        feature_names=sample.columns,
+                        show=False
+                    )
+                st.pyplot(fig)
+                plt.clf()
+
+                st.success("Analisis SHAP selesai!" if st.session_state.language == 'id' else "SHAP analysis completed!")
     else:
-        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
+        st.info("Silakan latih model terlebih dahulu." if st.session_state.language == 'id' else "Please train a model first.")
 
 
 # Tab6: Model Interpretation (LIME)
 with tab6:
     st.header("Interpretasi Model dengan LIME" if st.session_state.language == 'id' else "Model Interpretation with LIME")
-    
-    # Only allow LIME for regression (prediction) models, not for classification or forecasting
+
     if not LIME_AVAILABLE:
         st.error("LIME tidak terinstal. Silakan instal dengan 'pip install lime'." if st.session_state.language == 'id' else "LIME is not installed. Please install it with 'pip install lime'.")
     elif (
@@ -2042,163 +1974,79 @@ with tab6:
         st.write("""
         LIME (Local Interpretable Model-agnostic Explanations) adalah teknik untuk menjelaskan prediksi model machine learning.
         Tidak seperti SHAP yang memberikan nilai kontribusi global, LIME fokus pada penjelasan prediksi individual dengan membuat model lokal yang dapat diinterpretasi.
-        """  if st.session_state.language == 'id' else """
+        """ if st.session_state.language == 'id' else """
         LIME (Local Interpretable Model-agnostic Explanations) is a technique for explaining machine learning model predictions.
         Unlike SHAP which provides global contribution values, LIME focuses on individual prediction explanations by creating a local interpretable model.
         """)
-        
-        # Feature selection for LIME analysis
+
+        # Pilih fitur untuk LIME
         st.subheader("Pemilihan Fitur untuk Analisis LIME" if st.session_state.language == 'id' else "Feature Selection for LIME Analysis")
-        
-        # If model has feature importances, use them to suggest important features
-        if hasattr(st.session_state.model, 'feature_importances_'):
-            # For tree-based models
-            importances = st.session_state.model.feature_importances_
-            feature_names = st.session_state.X_train.columns if hasattr(st.session_state.X_train, 'columns') else [f"feature_{i}" for i in range(len(importances))]
-            
-            # Ensure both arrays have the same length
-            if len(importances) != len(feature_names):
-                # Truncate the longer array to match the shorter one
-                min_length = min(len(importances), len(feature_names))
-                importances = importances[:min_length]
-                feature_names = feature_names[:min_length]
-            
-            feature_importance = pd.DataFrame({
-                'Feature': feature_names,
-                'Importance': importances
-            }).sort_values('Importance', ascending=False)
-            
-            # Get top features
-            top_n = st.slider("Jumlah fitur teratas yang akan digunakan:" if st.session_state.language == 'id' else "Number of top features to include:", 5, 
-                           min(30, len(st.session_state.X_train.columns)), 10, key="lime_top_n")
-            top_features = feature_importance.head(top_n)['Feature'].tolist()
-            
-            # Let user select from suggested features or choose their own
-            selected_features = st.multiselect(
-                "Pilih fitur untuk analisis LIME:" if st.session_state.language == 'id' else "Select features for LIME analysis:",
-                options=st.session_state.X_train.columns.tolist(),
-                default=top_features,
-                key="lime_features"
-            )
-        else:
-            # If no feature_importances_, let user select all features
-            selected_features = st.multiselect(
-                "Pilih fitur untuk analisis LIME:" if st.session_state.language == 'id' else "Select features for LIME analysis:",
-                options=st.session_state.X_train.columns.tolist(),
-                default=st.session_state.X_train.columns[:10].tolist(),  # Default to first 10
-                key="lime_features_all"
-            )
-        
-        # Number of features to show in the explanation
-        num_features_show = st.slider("Jumlah fitur yang ditampilkan dalam penjelasan:" if st.session_state.language == 'id' else "Number of features to show in the explanation:", 3, 
-                                    min(20, len(selected_features)), 5)
-        
+        feature_names = st.session_state.X_train.columns.tolist()
+        selected_features = st.multiselect(
+            "Pilih fitur untuk analisis LIME:" if st.session_state.language == 'id' else "Select features for LIME analysis:",
+            options=feature_names,
+            default=feature_names[:min(10, len(feature_names))]
+        )
+
+        num_features_show = st.slider(
+            "Jumlah fitur yang ditampilkan dalam penjelasan:" if st.session_state.language == 'id' else "Number of features to show in the explanation:",
+            3, min(20, len(selected_features)), 5
+        )
+
         if st.button("Generate LIME Explanations" if st.session_state.language == 'id' else "Generate LIME Explanations"):
             if not selected_features:
                 st.error("Silakan pilih setidaknya satu fitur untuk analisis LIME." if st.session_state.language == 'id' else "Please select at least one feature for LIME analysis.")
             else:
                 with st.spinner("Menghitung penjelasan LIME..." if st.session_state.language == 'id' else "Calculating LIME explanations..."):
-                    # Create a smaller sample with only selected features for training the explainer
                     X_train_selected = st.session_state.X_train[selected_features]
                     X_test_selected = st.session_state.X_test[selected_features]
-                    
-                    # Determine if it's a classification or regression problem
-                    mode = "classification" if st.session_state.problem_type == "Classification" else "regression"
-                    
-                    # Create the LIME explainer
+
                     explainer = lime_tabular.LimeTabularExplainer(
                         X_train_selected.values,
                         feature_names=selected_features,
-                        class_names=[str(c) for c in np.unique(st.session_state.y_train)] if mode == "classification" else None,
-                        mode=mode,
+                        mode="regression",
                         random_state=42
                     )
-                    
-                    # Let user select a sample from the test set to explain
+
                     st.subheader("Penjelasan Prediksi Individual" if st.session_state.language == 'id' else "Individual Prediction Explanation")
-                    st.write("Pilih sampel dari set pengujian untuk menjelaskan prediksinya." if st.session_state.language == 'id' else "Select a sample from the test set to explain its prediction.")
-                    
-                    sample_idx = st.slider("Indeks sampel:", 0, len(X_test_selected) - 1, 0, key="lime_sample_idx")
-                    
-                    # Get the selected sample
+                    sample_idx = st.slider(
+                        "Indeks sampel:", 0, len(X_test_selected) - 1, 0,
+                        key="lime_sample_idx"
+                    )
                     sample = X_test_selected.iloc[sample_idx]
-                    
-                    # Display the sample data
                     st.write("Data sampel:" if st.session_state.language == 'id' else "Sample data:")
-                    sample_df = pd.DataFrame([sample], columns=selected_features)
-                    st.dataframe(sample_df)
-                    
-                    # Display the actual and predicted values
+                    st.dataframe(pd.DataFrame([sample], columns=selected_features))
+
                     actual = st.session_state.y_test.iloc[sample_idx]
-                    
-                    # Perbaikan: Gunakan data asli dari X_test untuk prediksi
-                    # Ini memastikan semua fitur yang digunakan saat training tersedia
                     original_sample = st.session_state.X_test.iloc[sample_idx:sample_idx+1]
                     predicted = st.session_state.model.predict(original_sample)[0]
-                    
                     st.write(f"Nilai aktual: {actual}")
                     st.write(f"Nilai prediksi: {predicted}")
-                    
-                    # Generate LIME explanation
-                    if mode == "classification":
-                        # For classification, we need to use predict_proba
-                        if hasattr(st.session_state.model, 'predict_proba'):
-                            def predict_fn(x):
-                                return st.session_state.model.predict_proba(x)
-                            
-                            explanation = explainer.explain_instance(
-                                sample.values, 
-                                predict_fn,
-                                num_features=num_features_show
-                            )
-                        else:
-                            # If model doesn't have predict_proba, use predict
-                            def predict_fn(x):
-                                return np.array([1-st.session_state.model.predict(x), st.session_state.model.predict(x)]).T
-                            
-                            explanation = explainer.explain_instance(
-                                sample.values, 
-                                predict_fn,
-                                num_features=num_features_show
-                            )
-                    else:
-                        # For regression
-                        explanation = explainer.explain_instance(
-                            sample.values, 
-                            st.session_state.model.predict,
-                            num_features=num_features_show
-                        )
-                    
-                    # Plot the explanation
+
+                    explanation = explainer.explain_instance(
+                        sample.values,
+                        st.session_state.model.predict,
+                        num_features=num_features_show
+                    )
+
                     st.subheader("Visualisasi Penjelasan LIME" if st.session_state.language == 'id' else "LIME Explanation Visualization")
-                    
-                    # Instead of using save_to_file, use matplotlib to display the explanation
                     fig = plt.figure(figsize=(10, 6))
                     explanation.as_pyplot_figure(plt.gca())
                     plt.tight_layout()
                     st.pyplot(fig)
-                    
-                    # Display the explanation as a table
+
                     st.subheader("Penjelasan dalam Bentuk Tabel" if st.session_state.language == 'id' else "Explanation in Table Format")
-                    
-                    # Get the explanation as a list of tuples
-                    explanation_list = explanation.as_list()
-                    
-                    # Convert to DataFrame for better display
-                    explanation_df = pd.DataFrame(explanation_list, columns=["Feature", "Kontribusi"])
+                    explanation_df = pd.DataFrame(explanation.as_list(), columns=["Feature", "Kontribusi"])
                     explanation_df = explanation_df.sort_values("Kontribusi", ascending=False)
-                    
-                    # Display the table
                     st.dataframe(explanation_df)
-                    
-                    # Display feature values for the explained instance
-                    st.subheader("Nilai Fitur untuk Sampel yang Dijelaskan" if st.session_state.language == 'id' else "Feature Values for Explained Sample" if st.session_state.language == 'id' else "Feature Values for Explained Sample")
+
+                    st.subheader("Nilai Fitur untuk Sampel yang Dijelaskan" if st.session_state.language == 'id' else "Feature Values for Explained Sample")
                     feature_values = pd.DataFrame({
                         "Feature": selected_features,
                         "Value": sample.values
                     })
                     st.dataframe(feature_values)
-                    
+
                     st.success("Analisis LIME selesai!" if st.session_state.language == 'id' else "LIME analysis completed successfully!")
     elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
         st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "LIME is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
