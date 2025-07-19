@@ -705,7 +705,7 @@ with tab3:
             st.session_state.y_test = y_test
             st.session_state.processed_data = data
             
-            st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else "Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
+            st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
             
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
@@ -997,7 +997,7 @@ with tab4:
                             random_state=42
                         )
                         
-                elif model_type == "Logistic Regression" if st.session_state.language == 'id' else "Regresi Logistik":
+                elif model_type == "Logistic Regression" :
                     C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.01, 10.0, 1.0)
                     max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 100)
                     
@@ -1368,7 +1368,7 @@ with tab4:
 
             # Train model button
             if model is not None and st.button("Train Model"):
-                with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else "Training {model_type} model..."):
+                with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
                     try:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
@@ -1379,7 +1379,7 @@ with tab4:
                             st.success(f"Pelatihan model selesai dalam {training_time:.2f} detik dengan GridSearchCV. Parameter terbaik: {model.best_params_}" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds with GridSearchCV!")
                             st.subheader("Parameter Terbaik" if st.session_state.language == 'id' else "Best Parameters:")
                             st.write(model.best_params_)
-                            st.write(f"Skor terbaik (CV): {model.best_score_:.4f}" if st.session_state.language == 'id' else "Best Score (CV): {model.best_score_:.4f}")
+                            st.write(f"Skor terbaik (CV): {model.best_score_:.4f}" if st.session_state.language == 'id' else f"Best Score (CV): {model.best_score_:.4f}")
 
                             # Gunakan model terbaik untuk prediksi
                             y_pred = model.best_estimator_.predict(st.session_state.X_test)
