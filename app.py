@@ -1824,6 +1824,27 @@ with tab5:
                 st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
             else:
                 X_sample = st.session_state.X_train[selected_features].sample(min(100, len(st.session_state.X_train)), random_state=42)
+                
+                # Identifikasi kolom kategorikal dalam X_sample
+                categorical_cols = []
+                for col in X_sample.columns:
+                    if X_sample[col].dtype == 'object' or X_sample[col].dtype == 'string' or X_sample[col].dtype == '<U3':
+                        categorical_cols.append(col)
+                
+                # Terapkan One-Hot Encoding pada fitur kategorikal
+                if categorical_cols:
+                    st.info("Menerapkan One-Hot Encoding pada fitur kategorikal untuk SHAP analysis." if st.session_state.language == 'id' else "Applying One-Hot Encoding to categorical features for SHAP analysis.")
+                    X_sample = pd.get_dummies(X_sample, columns=categorical_cols, drop_first=True)
+                
+                # Pastikan semua nilai dalam X_sample adalah numerik
+                for col in X_sample.columns:
+                    if not pd.api.types.is_numeric_dtype(X_sample[col]):
+                        try:
+                            X_sample[col] = X_sample[col].astype(float)
+                        except ValueError:
+                            # Jika masih ada kolom non-numerik, gunakan encoding numerik
+                            X_sample[col] = pd.factorize(X_sample[col])[0]
+                
                 model = st.session_state.model
 
                 # Pilih explainer yang sesuai
@@ -1832,7 +1853,17 @@ with tab5:
                         if hasattr(model, "feature_importances_"):
                             explainer = shap.TreeExplainer(model)
                         else:
-                            explainer = shap.KernelExplainer(model.predict, X_sample)
+                            try:
+                                # Pastikan X_sample adalah numerik saat inisialisasi KernelExplainer
+                                X_sample_kernel = X_sample.astype(float)
+                                explainer = shap.KernelExplainer(model.predict, X_sample_kernel)
+                            except TypeError as e:
+                                if "can't multiply sequence by non-int of type 'float'" in str(e):
+                                    st.error("Error: Tidak dapat mengalikan sequence dengan float. Pastikan semua fitur kategorikal telah dikonversi ke numerik.")
+                                    st.info("Tip: Gunakan One-Hot Encoding untuk fitur kategorikal sebelum menggunakan SHAP.")
+                                else:
+                                    st.error(f"Error saat membuat explainer: {e}")
+                                st.stop()
                     except Exception as e:
                         st.error(f"Error saat membuat explainer: {e}")
                         st.stop()
@@ -1842,7 +1873,15 @@ with tab5:
 
                 # Hitung SHAP values
                 try:
-                    shap_values = explainer.shap_values(X_sample)
+                    # Pastikan X_sample adalah numerik saat menghitung SHAP values
+                    shap_values = explainer.shap_values(X_sample.astype(float))
+                except TypeError as e:
+                    if "can't multiply sequence by non-int of type 'float'" in str(e):
+                        st.error("Error: Tidak dapat mengalikan sequence dengan float. Pastikan semua fitur kategorikal telah dikonversi ke numerik.")
+                        st.info("Tip: Gunakan One-Hot Encoding untuk fitur kategorikal sebelum menggunakan SHAP.")
+                    else:
+                        st.error(f"Error saat menghitung SHAP values: {e}")
+                    st.stop()
                 except Exception as e:
                     st.error(f"Error saat menghitung SHAP values: {e}")
                     st.stop()
@@ -1860,20 +1899,32 @@ with tab5:
                 # Summary plot
                 st.subheader("SHAP Summary Plot")
                 fig, ax = plt.subplots(figsize=(10, 6))
+                
+                # Pastikan X_sample adalah numerik untuk summary plot
+                X_sample_numeric = X_sample.copy()
+                for col in X_sample_numeric.columns:
+                    if not pd.api.types.is_numeric_dtype(X_sample_numeric[col]):
+                        try:
+                            X_sample_numeric[col] = X_sample_numeric[col].astype(float)
+                        except ValueError:
+                            X_sample_numeric[col] = pd.factorize(X_sample_numeric[col])[0]
+                
                 if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
-                    shap.summary_plot(shap_values[class_to_show], X_sample, show=False)
+                    shap.summary_plot(shap_values[class_to_show], X_sample_numeric, show=False)
                 else:
-                    shap.summary_plot(shap_values, X_sample, show=False)
+                    shap.summary_plot(shap_values, X_sample_numeric, show=False)
                 st.pyplot(fig)
                 plt.clf()
 
                 # Feature importance plot
                 st.subheader("SHAP Feature Importance")
                 fig, ax = plt.subplots(figsize=(10, 6))
+                
+                # Gunakan X_sample_numeric yang sudah dibuat sebelumnya
                 if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
-                    shap.summary_plot(shap_values[class_to_show], X_sample, plot_type="bar", show=False)
+                    shap.summary_plot(shap_values[class_to_show], X_sample_numeric, plot_type="bar", show=False)
                 else:
-                    shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
+                    shap.summary_plot(shap_values, X_sample_numeric, plot_type="bar", show=False)
                 st.pyplot(fig)
                 plt.clf()
 
@@ -1885,10 +1936,11 @@ with tab5:
                 )
                 fig, ax = plt.subplots(figsize=(10, 6))
                 feature_idx = selected_features.index(dep_feature)
+                # Gunakan X_sample_numeric yang sudah dibuat sebelumnya
                 if st.session_state.problem_type == "Classification" and isinstance(shap_values, list):
-                    shap.dependence_plot(feature_idx, shap_values[class_to_show], X_sample, show=False, ax=ax)
+                    shap.dependence_plot(feature_idx, shap_values[class_to_show], X_sample_numeric, show=False, ax=ax)
                 else:
-                    shap.dependence_plot(feature_idx, shap_values, X_sample, show=False, ax=ax)
+                    shap.dependence_plot(feature_idx, shap_values, X_sample_numeric, show=False, ax=ax)
                 st.pyplot(fig)
                 plt.clf()
 
@@ -1896,8 +1948,42 @@ with tab5:
                 st.subheader("Individual Prediction Explanation")
                 sample_idx = st.slider("Sample index:", 0, len(st.session_state.X_test) - 1, 0)
                 sample = st.session_state.X_test[selected_features].iloc[[sample_idx]]
+                
+                # Identifikasi kolom kategorikal dalam sample
+                categorical_cols = []
+                for col in sample.columns:
+                    if sample[col].dtype == 'object' or sample[col].dtype == 'string' or sample[col].dtype == '<U3':
+                        categorical_cols.append(col)
+                
+                # Terapkan One-Hot Encoding pada fitur kategorikal
+                if categorical_cols:
+                    # Gunakan One-Hot Encoding yang sama dengan X_sample
+                    sample = pd.get_dummies(sample, columns=categorical_cols, drop_first=True)
+                    
+                    # Pastikan sample memiliki kolom yang sama dengan X_sample
+                    for col in X_sample.columns:
+                        if col not in sample.columns:
+                            sample[col] = 0
+                    sample = sample[X_sample.columns]
+                
+                # Pastikan semua nilai dalam sample adalah numerik
+                for col in sample.columns:
+                    if not pd.api.types.is_numeric_dtype(sample[col]):
+                        try:
+                            sample[col] = sample[col].astype(float)
+                        except ValueError:
+                            # Jika masih ada kolom non-numerik, gunakan encoding numerik
+                            sample[col] = pd.factorize(sample[col])[0]
+                
                 try:
-                    sample_shap_values = explainer.shap_values(sample)
+                    sample_shap_values = explainer.shap_values(sample.astype(float))
+                except TypeError as e:
+                    if "can't multiply sequence by non-int of type 'float'" in str(e):
+                        st.error("Error: Tidak dapat mengalikan sequence dengan float. Pastikan semua fitur kategorikal telah dikonversi ke numerik.")
+                        st.info("Tip: Gunakan One-Hot Encoding untuk fitur kategorikal sebelum menggunakan SHAP.")
+                    else:
+                        st.error(f"Error saat menghitung SHAP values untuk sampel: {e}")
+                    st.stop()
                 except Exception as e:
                     st.error(f"Error saat menghitung SHAP values untuk sampel: {e}")
                     st.stop()
@@ -1912,11 +1998,30 @@ with tab5:
                 # Force plot
                 st.write("SHAP Force Plot:")
                 fig, ax = plt.subplots(figsize=(12, 3))
+                
+                # Pastikan sample adalah numerik untuk force plot
+                sample_numeric = sample.copy()
+                
+                # Pastikan sample_numeric memiliki kolom yang sama dengan X_sample_numeric
+                if 'X_sample_numeric' in locals():
+                    for col in X_sample_numeric.columns:
+                        if col not in sample_numeric.columns:
+                            sample_numeric[col] = 0
+                    sample_numeric = sample_numeric[X_sample_numeric.columns]
+                
+                # Pastikan semua nilai dalam sample_numeric adalah numerik
+                for col in sample_numeric.columns:
+                    if not pd.api.types.is_numeric_dtype(sample_numeric[col]):
+                        try:
+                            sample_numeric[col] = sample_numeric[col].astype(float)
+                        except ValueError:
+                            sample_numeric[col] = pd.factorize(sample_numeric[col])[0]
+                
                 if st.session_state.problem_type == "Classification" and isinstance(sample_shap_values, list):
                     shap.force_plot(
                         explainer.expected_value[class_to_show],
                         sample_shap_values[class_to_show][0],
-                        sample,
+                        sample_numeric,
                         matplotlib=True,
                         show=False
                     )
@@ -1927,7 +2032,7 @@ with tab5:
                     shap.force_plot(
                         expected_value,
                         sample_shap_values[0] if isinstance(sample_shap_values, list) else sample_shap_values,
-                        sample,
+                        sample_numeric,
                         matplotlib=True,
                         show=False
                     )
