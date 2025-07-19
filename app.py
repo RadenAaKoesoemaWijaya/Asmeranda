@@ -25,6 +25,10 @@ import time
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
+from imblearn.over_sampling import RandomOverSampler, SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.combine import SMOTEENN, SMOTETomek
+from collections import Counter
 
 # Try to import LIME, but don't fail if it's not installed
 try:
@@ -451,6 +455,29 @@ with tab3:
 
         all_columns = [col for col in data.columns if col != target_column]
 
+        # --- Tambahkan opsi penanganan imbalanced dataset untuk klasifikasi ---
+        if problem_type == "Classification":
+            st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Handle Imbalanced Dataset")
+            imbalance_method = st.selectbox(
+                "Pilih metode penyeimbangan data:" if st.session_state.language == 'id' else "Select balancing method:",
+                [
+                    "None",
+                    "Random Over Sampling",
+                    "Random Under Sampling",
+                    "SMOTE",
+                    "SMOTEENN",
+                    "SMOTETomek"
+                ]
+            )
+            # Import library imbalanced-learn jika diperlukan
+            if imbalance_method != "None":
+                try:
+
+                    IMB_AVAILABLE = True
+                except ImportError:
+                    IMB_AVAILABLE = False
+                    st.error("imblearn belum terinstal. Silakan install dengan `pip install imbalanced-learn`.")
+
         # Pilih algoritma seleksi fitur
         feature_selection_method = st.selectbox(
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
@@ -689,6 +716,45 @@ with tab3:
                     st.session_state.scaler = scaler
                     st.success("Minmax scaling diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else "MinMax scaling applied to numerical features.")
             
+            # --- Terapkan balancing untuk data klasifikasi jika dipilih ---
+            if problem_type == "Classification" and 'imbalance_method' in locals() and imbalance_method != "None" and IMB_AVAILABLE:
+                st.info(f"Balancing data menggunakan metode: {imbalance_method}")
+                class_counts = Counter(y)
+                min_class_count = min(class_counts.values())
+                smote_kwargs = {}
+
+                # SMOTE dan turunannya butuh min_class_count > k_neighbors
+                if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
+                    if min_class_count <= 1:
+                        st.warning("Tidak bisa melakukan SMOTE karena ada kelas dengan hanya 1 sampel. Tambahkan data atau gunakan metode balancing lain.")
+                        sampler = None
+                    else:
+                        # k_neighbors harus < min_class_count
+                        k_neighbors = min(5, min_class_count - 1)
+                        smote_kwargs = {"k_neighbors": k_neighbors}
+                else:
+                    smote_kwargs = {}
+
+                if imbalance_method == "Random Over Sampling":
+                    sampler = RandomOverSampler(random_state=42)
+                elif imbalance_method == "Random Under Sampling":
+                    sampler = RandomUnderSampler(random_state=42)
+                elif imbalance_method == "SMOTE":
+                    sampler = SMOTE(random_state=42, **smote_kwargs)
+                elif imbalance_method == "SMOTEENN":
+                    sampler = SMOTEENN(random_state=42, smote=SMOTE(**smote_kwargs))
+                elif imbalance_method == "SMOTETomek":
+                    sampler = SMOTETomek(random_state=42, smote=SMOTE(**smote_kwargs))
+                else:
+                    sampler = None
+
+                if sampler is not None:
+                    try:
+                        X, y = sampler.fit_resample(X, y)
+                        st.success("Data berhasil di-balance.")
+                    except ValueError as e:
+                        st.error(f"Gagal balancing: {e}")
+
             # Train-test split
             st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
             
