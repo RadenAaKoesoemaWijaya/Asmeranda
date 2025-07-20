@@ -2135,24 +2135,36 @@ with tab5:
                 # Waterfall plot
                 st.write("SHAP Waterfall Plot:")
                 fig, ax = plt.subplots(figsize=(10, 6))
-                if st.session_state.problem_type == "Classification" and isinstance(sample_shap_values, list):
-                    shap.plots._waterfall.waterfall_legacy(
-                        explainer.expected_value[class_to_show],
-                        sample_shap_values[class_to_show][0],
-                        feature_names=sample.columns,
-                        show=False
-                    )
-                else:
-                    expected_value = explainer.expected_value
-                    if isinstance(expected_value, list):
-                        expected_value = expected_value[0]
-                    shap_val = sample_shap_values[0] if isinstance(sample_shap_values, list) else sample_shap_values[0]
-                    shap.plots._waterfall.waterfall_legacy(
-                        expected_value,
-                        shap_val,
-                        feature_names=sample.columns,
-                        show=False
-                    )
+                try:
+                    if st.session_state.problem_type == "Classification" and isinstance(sample_shap_values, list):
+                        # Pastikan expected_value adalah scalar, bukan array
+                        expected_value = explainer.expected_value[class_to_show]
+                        if isinstance(expected_value, np.ndarray):
+                            expected_value = float(expected_value[0])
+                        shap.plots._waterfall.waterfall_legacy(
+                            expected_value,
+                            sample_shap_values[class_to_show][0],
+                            feature_names=sample.columns,
+                            show=False
+                        )
+                    else:
+                        expected_value = explainer.expected_value
+                        if isinstance(expected_value, list):
+                            expected_value = expected_value[0]
+                        if isinstance(expected_value, np.ndarray):
+                            expected_value = float(expected_value[0])
+                        shap_val = sample_shap_values[0] if isinstance(sample_shap_values, list) else sample_shap_values[0]
+                        shap.plots._waterfall.waterfall_legacy(
+                            expected_value,
+                            shap_val,
+                            feature_names=sample.columns,
+                            show=False
+                        )
+                except Exception as e:
+                    st.error(f"Error saat membuat waterfall plot: {e}")
+                    st.info("Tip: Untuk model multi-output, coba gunakan shap.waterfall_plot(explainer.expected_value[0], shap_values[0][0], X[0])")
+                    plt.clf()
+                    st.stop()
                 st.pyplot(fig)
                 plt.clf()
 
