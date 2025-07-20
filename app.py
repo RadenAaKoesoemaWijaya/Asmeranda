@@ -45,12 +45,12 @@ except ImportError:
 TRANSLATIONS = {
     'en': {
         'app_title': 'Comprehensive Machine Learning App',
-        'app_description': 'This application helps you analyze your data, preprocess it for machine learning, train models, and interpret the results using SHAP values.',
+        'app_description': 'This application helps you analyze your data, preprocess it for machine learning, train models, and interpret the results using eXplainable AI.',
         # Add more translations here
     },
     'id': {
         'app_title': 'Aplikasi Machine Learning Komprehensif',
-        'app_description': 'Aplikasi ini membantu Anda menganalisis data, memprosesnya untuk machine learning, melatih model, dan menginterpretasikan hasil menggunakan nilai SHAP.',
+        'app_description': 'Aplikasi ini membantu Anda menganalisis data, memprosesnya untuk machine learning, melatih model, dan menginterpretasikan hasil menggunakan eXplainable AI.',
         # Add more translations here
     }
 }
@@ -1462,7 +1462,14 @@ with tab4:
                                 # Untuk klasifikasi biner
                                 if len(np.unique(st.session_state.y_test)) == 2:
                                     y_prob = model.predict_proba(st.session_state.X_test)[:, 1]
-                                    fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob)
+                                    # Menangani kasus ketika y_test berisi nilai kategorikal seperti '<20', '>20'
+                                    if isinstance(st.session_state.y_test.iloc[0], str):
+                                        # Konversi nilai kategorikal ke numerik (0 dan 1)
+                                        unique_values = sorted(np.unique(st.session_state.y_test))
+                                        pos_label = unique_values[1]  # Nilai kedua sebagai pos_label
+                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob, pos_label=pos_label)
+                                    else:
+                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob)
                                     roc_auc = auc(fpr, tpr)
                                     
                                     # Plot ROC Curve
