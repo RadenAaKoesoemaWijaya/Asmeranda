@@ -12,7 +12,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, classification_report, confusion_matrix, roc_curve, roc_auc_score, auc
 from sklearn.feature_selection import SelectKBest, f_regression, f_classif, mutual_info_regression, mutual_info_classif
 from sklearn.decomposition import PCA
 from sklearn.inspection import partial_dependence, PartialDependenceDisplay
@@ -1453,6 +1453,99 @@ with tab4:
                             report_df = pd.DataFrame(report).transpose()
                             st.write("Label Report" if st.session_state.language == 'id' else "Classification Report:")
                             st.dataframe(report_df)
+                            
+                            # ROC Curve dan AUC Score
+                            st.subheader("ROC Curve dan AUC Score" if st.session_state.language == 'id' else "ROC Curve and AUC Score")
+                            
+                            # Cek apakah model mendukung predict_proba
+                            if hasattr(model, 'predict_proba'):
+                                # Untuk klasifikasi biner
+                                if len(np.unique(st.session_state.y_test)) == 2:
+                                    y_prob = model.predict_proba(st.session_state.X_test)[:, 1]
+                                    fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob)
+                                    roc_auc = auc(fpr, tpr)
+                                    
+                                    # Plot ROC Curve
+                                    fig, ax = plt.subplots(figsize=(10, 8))
+                                    ax.plot(fpr, tpr, label=f'ROC curve (area = {roc_auc:.2f})')
+                                    ax.plot([0, 1], [0, 1], 'k--')
+                                    ax.set_xlim([0.0, 1.0])
+                                    ax.set_ylim([0.0, 1.05])
+                                    ax.set_xlabel('False Positive Rate')
+                                    ax.set_ylabel('True Positive Rate')
+                                    ax.set_title('Receiver Operating Characteristic (ROC)')
+                                    ax.legend(loc="lower right")
+                                    st.pyplot(fig)
+                                    
+                                    st.write(f"AUC Score: {roc_auc:.4f}")
+                                
+                                # Untuk klasifikasi multi-kelas
+                                else:
+                                    try:
+                                        y_prob = model.predict_proba(st.session_state.X_test)
+                                        
+                                        # Buat label biner untuk setiap kelas
+                                        y_test_bin = pd.get_dummies(st.session_state.y_test).values
+                                        
+                                        # Pastikan jumlah kelas dalam y_prob dan y_test_bin sama
+                                        n_classes = min(y_prob.shape[1], y_test_bin.shape[1])
+                                        
+                                        if n_classes > 0:
+                                            # One-vs-Rest ROC
+                                            fig, ax = plt.subplots(figsize=(10, 8))
+                                            
+                                            for i in range(n_classes):
+                                                fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_prob[:, i])
+                                                roc_auc = auc(fpr, tpr)
+                                                ax.plot(fpr, tpr, label=f'Class {i} (area = {roc_auc:.2f})')
+                                            
+                                            ax.plot([0, 1], [0, 1], 'k--')
+                                            ax.set_xlim([0.0, 1.0])
+                                            ax.set_ylim([0.0, 1.05])
+                                            ax.set_xlabel('False Positive Rate')
+                                            ax.set_ylabel('True Positive Rate')
+                                            ax.set_title('Multi-class ROC Curve (One-vs-Rest)')
+                                            ax.legend(loc="lower right")
+                                            st.pyplot(fig)
+                                            
+                                            # Hitung dan tampilkan AUC Score untuk setiap kelas
+                                            st.write("AUC Scores per class:")
+                                            for i in range(n_classes):
+                                                class_auc = roc_auc_score(y_test_bin[:, i], y_prob[:, i])
+                                                st.write(f"Class {i}: {class_auc:.4f}")
+                                            
+                                            # Hitung rata-rata AUC (macro) hanya jika jumlah kelas sama
+                                            if y_prob.shape[1] == y_test_bin.shape[1]:
+                                                macro_auc = roc_auc_score(y_test_bin, y_prob, multi_class='ovr', average='macro')
+                                                st.write(f"Macro Average AUC: {macro_auc:.4f}")
+                                            else:
+                                                st.warning("Tidak dapat menghitung Macro Average AUC karena jumlah kelas berbeda antara prediksi dan aktual." 
+                                                          if st.session_state.language == 'id' else 
+                                                          "Cannot calculate Macro Average AUC because the number of classes differs between prediction and actual.")
+                                        else:
+                                            st.warning("Tidak ada kelas yang dapat digunakan untuk kurva ROC." 
+                                                      if st.session_state.language == 'id' else 
+                                                      "No classes available for ROC curve.")
+                                    except Exception as e:
+                                        st.error(f"Error saat membuat kurva ROC: {str(e)}" 
+                                                if st.session_state.language == 'id' else 
+                                                f"Error creating ROC curve: {str(e)}")
+                                        st.warning("Pastikan data pengujian memiliki semua kelas yang ada dalam data pelatihan." 
+                                                  if st.session_state.language == 'id' else 
+                                                  "Make sure the test data contains all classes present in the training data.")
+                                        # Tampilkan informasi tambahan untuk debugging
+                                        st.write(f"Jumlah kelas unik dalam y_test: {len(np.unique(st.session_state.y_test))}")
+                                        if hasattr(model, 'classes_'):
+                                            st.write(f"Kelas dalam model: {model.classes_}")
+                                            st.write(f"Jumlah kelas dalam model: {len(model.classes_)}")
+                                        if 'y_prob' in locals():
+                                            st.write(f"Dimensi y_prob: {y_prob.shape}")
+                                        if 'y_test_bin' in locals():
+                                            st.write(f"Dimensi y_test_bin: {y_test_bin.shape}")
+                            else:
+                                st.warning("Model ini tidak mendukung prediksi probabilitas, sehingga kurva ROC tidak dapat ditampilkan." 
+                                          if st.session_state.language == 'id' else 
+                                          "This model doesn't support probability prediction, so ROC curve cannot be displayed.")
                             
                         else:  # Regression
                             mse = mean_squared_error(st.session_state.y_test, y_pred)
