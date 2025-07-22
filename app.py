@@ -456,6 +456,105 @@ with tab3:
         # Feature selection
         st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
 
+        # Tambahkan penanganan imbalanced dataset sebelum feature selection
+        if problem_type == "Classification":
+            st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
+            
+            # Tampilkan distribusi kelas
+            class_counts = data[target_column].value_counts()
+            fig, ax = plt.subplots(figsize=(10, 4))
+            class_counts.plot(kind='bar', ax=ax)
+            plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
+            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+            st.pyplot(fig)
+            
+            # Hitung rasio imbalance
+            if len(class_counts) > 1:
+                imbalance_ratio = class_counts.max() / class_counts.min()
+                st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
+                
+                # Tanyakan pengguna apakah ingin menangani imbalanced dataset
+                handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
+                
+                if handle_imbalance and IMB_AVAILABLE:
+                    imbalance_method = st.selectbox(
+                        "Pilih metode balancing:" if st.session_state.language == 'id' else "Select balancing method:",
+                        ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
+                    )
+                    
+                    if imbalance_method != "None":
+                        # Simpan data asli
+                        original_data = data.copy()
+                        
+                        # Siapkan data untuk balancing
+                        X_imbalance = data.drop(columns=[target_column])
+                        y_imbalance = data[target_column]
+                        
+                        # Terapkan metode balancing yang dipilih
+                        from collections import Counter
+                        min_class_count = min(class_counts.values())
+                        smote_kwargs = {}
+                        
+                        if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
+                            if min_class_count <= 1:
+                                st.warning("Tidak bisa menggunakan SMOTE karena ada kelas dengan hanya 1 sampel." if st.session_state.language == 'id' else "Cannot use SMOTE because there is a class with only 1 sample.")
+                                sampler = None
+                            else:
+                                k_neighbors = min(5, min_class_count - 1)
+                                smote_kwargs = {"k_neighbors": k_neighbors}
+                        
+                        if imbalance_method == "Random Over Sampling":
+                            sampler = RandomOverSampler(random_state=42)
+                            method_description = "Menambah jumlah sampel kelas minoritas dengan duplikasi acak" if st.session_state.language == 'id' else "Increases minority class samples by random duplication"
+                        elif imbalance_method == "Random Under Sampling":
+                            sampler = RandomUnderSampler(random_state=42)
+                            method_description = "Mengurangi jumlah sampel kelas mayoritas secara acak" if st.session_state.language == 'id' else "Reduces majority class samples randomly"
+                        elif imbalance_method == "SMOTE":
+                            sampler = SMOTE(random_state=42, **smote_kwargs)
+                            method_description = "Membuat sampel sintetis untuk kelas minoritas berdasarkan tetangga terdekat" if st.session_state.language == 'id' else "Creates synthetic samples for minority class based on nearest neighbors"
+                        elif imbalance_method == "SMOTEENN":
+                            sampler = SMOTEENN(random_state=42, smote=SMOTE(**smote_kwargs))
+                            method_description = "Kombinasi SMOTE dan Edited Nearest Neighbors untuk pembersihan" if st.session_state.language == 'id' else "Combines SMOTE and Edited Nearest Neighbors for cleaning"
+                        elif imbalance_method == "SMOTETomek":
+                            sampler = SMOTETomek(random_state=42, smote=SMOTE(**smote_kwargs))
+                            method_description = "Kombinasi SMOTE dan Tomek Links untuk pembersihan" if st.session_state.language == 'id' else "Combines SMOTE and Tomek Links for cleaning"
+                        else:
+                            sampler = None
+                        
+                        if sampler is not None:
+                            try:
+                                X_resampled, y_resampled = sampler.fit_resample(X_imbalance, y_imbalance)
+                                
+                                # Update data dengan hasil balancing
+                                data = pd.concat([X_resampled, pd.Series(y_resampled, name=target_column)], axis=1)
+                                
+                                # Tampilkan distribusi kelas setelah balancing
+                                new_class_counts = pd.Series(y_resampled).value_counts()
+                                fig, ax = plt.subplots(figsize=(10, 4))
+                                new_class_counts.plot(kind='bar', ax=ax)
+                                plt.title('Distribusi Kelas Setelah Balancing' if st.session_state.language == 'id' else 'Class Distribution After Balancing')
+                                plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                                plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                                st.pyplot(fig)
+                                
+                                st.success(f"Data berhasil di-balance menggunakan {imbalance_method}" if st.session_state.language == 'id' else f"Data successfully balanced using {imbalance_method}")
+                                st.info(method_description)
+                                
+                                # Tampilkan perbandingan jumlah sampel
+                                comparison_df = pd.DataFrame({
+                                    'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
+                                    'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
+                                })
+                                st.dataframe(comparison_df)
+                                
+                            except Exception as e:
+                                st.error(f"Gagal melakukan balancing: {e}" if st.session_state.language == 'id' else f"Failed to balance data: {e}")
+                                # Kembalikan data ke aslinya jika gagal
+                                data = original_data
+                elif not IMB_AVAILABLE:
+                    st.warning("Pustaka imbalanced-learn tidak tersedia. Silakan install dengan 'pip install imbalanced-learn'" if st.session_state.language == 'id' else "The imbalanced-learn library is not available. Please install it with 'pip install imbalanced-learn'")
+
         all_columns = [col for col in data.columns if col != target_column]
 
         # Pilih algoritma seleksi fitur
@@ -710,19 +809,25 @@ with tab3:
             # Scaling numerical features
             numerical_cols = [col for col in selected_features if col in st.session_state.numerical_columns]
             if numerical_cols:
-                st.subheader("Scale Numerical Features")
-                scaling = st.checkbox("Apply standard scaling to numerical features", value=True)
-                if scaling:
+                st.subheader("Scale Numerical Features" if st.session_state.language == 'id' else "Scale Numerical Features")
+                scaling_method = st.selectbox(
+                    "Pilih metode scaling:" if st.session_state.language == 'id' else "Select scaling method:",
+                    ["StandardScaler", "MinMaxScaler"],
+                    key="scaling_method"
+                )
+                
+                if scaling_method == "StandardScaler":
                     scaler = StandardScaler()
-                else:
+                    scaling_description = "StandardScaler (mean=0, std=1)" if st.session_state.language == 'id' else "StandardScaler (mean=0, std=1)"
+                else:  # MinMaxScaler
                     scaler = MinMaxScaler()
+                    scaling_description = "MinMaxScaler (range 0-1)" if st.session_state.language == 'id' else "MinMaxScaler (range 0-1)"
+                
                 X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
                 X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
                 st.session_state.scaler = scaler
-                if scaling:
-                    st.success("StandardScaler applied to numerical features.")
-                else:
-                    st.success("MinMaxScaler applied to numerical features.")
+                st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
+                st.info(scaling_description)
 
             # Update session_state setelah encoding/scaling
             st.session_state.X_train = X_train
@@ -730,42 +835,7 @@ with tab3:
             st.session_state.y_train = y_train
             st.session_state.y_test = y_test
 
-            if problem_type == "Classification":
-                st.subheader("Penanganan Imbalanced Dataset")
-                imbalance_method = st.selectbox(
-                    "Pilih metode balancing:",
-                    ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
-                )
-                if imbalance_method != "None" and IMB_AVAILABLE:
-                    from collections import Counter
-                    class_counts = Counter(y_train)
-                    min_class_count = min(class_counts.values())
-                    smote_kwargs = {}
-                    if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
-                        if min_class_count <= 1:
-                            st.warning("Tidak bisa SMOTE karena ada kelas dengan hanya 1 sampel.")
-                            sampler = None
-                        else:
-                            k_neighbors = min(5, min_class_count - 1)
-                            smote_kwargs = {"k_neighbors": k_neighbors}
-                    if imbalance_method == "Random Over Sampling":
-                        sampler = RandomOverSampler(random_state=42)
-                    elif imbalance_method == "Random Under Sampling":
-                        sampler = RandomUnderSampler(random_state=42)
-                    elif imbalance_method == "SMOTE":
-                        sampler = SMOTE(random_state=42, **smote_kwargs)
-                    elif imbalance_method == "SMOTEENN":
-                        sampler = SMOTEENN(random_state=42, smote=SMOTE(**smote_kwargs))
-                    elif imbalance_method == "SMOTETomek":
-                        sampler = SMOTETomek(random_state=42, smote=SMOTE(**smote_kwargs))
-                    else:
-                        sampler = None
-                    if sampler is not None:
-                        try:
-                            X_train, y_train = sampler.fit_resample(X_train, y_train)
-                            st.success("Data training berhasil di-balance.")
-                        except Exception as e:
-                            st.error(f"Gagal balancing: {e}")
+            
     else:
         st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
 
