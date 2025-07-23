@@ -493,7 +493,7 @@ with tab3:
                         
                         # Terapkan metode balancing yang dipilih
                         from collections import Counter
-                        min_class_count = min(class_counts.values())
+                        min_class_count = min(class_counts.values)
                         smote_kwargs = {}
                         
                         if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
