@@ -568,7 +568,8 @@ with tab3:
                 "LASSO",
                 "Gradient Boosting Importance",
                 "Random Forest Importance",
-                "Ensemble Feature Selection"
+                "Ensemble Feature Selection",
+                "Multi-Stage Feature Selection" # Tambahkan opsi baru ini
             ]
         )
 
@@ -757,6 +758,124 @@ with tab3:
 
             st.write(f"Fitur hasil gabungan: {selected_features}" if st.session_state.language == 'id' else f"Combined features: {selected_features}")
 
+        elif feature_selection_method == "Multi-Stage Feature Selection":
+            st.subheader("Multi-Stage Feature Selection" if st.session_state.language == 'id' else "Multi-Stage Feature Selection")
+            st.info("Metode ini menggunakan pendekatan 3 tahap: Information Gain → Random Forest Feature Importance → RFE" if st.session_state.language == 'id' else 
+                   "This method uses a 3-stage approach: Information Gain → Random Forest Feature Importance → RFE")
+            
+            from sklearn.feature_selection import RFE, SelectKBest
+            from sklearn.ensemble import RandomForestClassifier
+            
+            # Persiapkan data untuk feature selection
+            X_fs = data[all_columns].copy()
+            for col in X_fs.select_dtypes(include=['object', 'category']).columns:
+                le = LabelEncoder()
+                X_fs[col] = le.fit_transform(X_fs[col].astype(str))
+            
+            # Tampilkan parameter untuk setiap tahap
+            st.write("Tahap 1: Information Gain" if st.session_state.language == 'id' else "Stage 1: Information Gain")
+            ig_percent = st.slider("Persentase fitur yang dipertahankan setelah Information Gain (%)" if st.session_state.language == 'id' else 
+                                  "Percentage of features to keep after Information Gain (%)", 10, 90, 40)
+            
+            st.write("Tahap 2: Random Forest Feature Importance" if st.session_state.language == 'id' else "Stage 2: Random Forest Feature Importance")
+            rf_percent = st.slider("Persentase fitur yang dipertahankan setelah Random Forest (%)" if st.session_state.language == 'id' else 
+                                  "Percentage of features to keep after Random Forest (%)", 10, 90, 50)
+            
+            st.write("Tahap 3: Recursive Feature Elimination" if st.session_state.language == 'id' else "Stage 3: Recursive Feature Elimination")
+            final_features = st.slider("Jumlah fitur akhir" if st.session_state.language == 'id' else "Final number of features", 
+                                      1, min(20, len(all_columns)), min(10, len(all_columns)))
+            
+            # Tahap 1: Seleksi Fitur dengan Information Gain (SelectKBest + mutual_info_classif)
+            n_features_after_ig = max(1, int(X_fs.shape[1] * ig_percent / 100))
+            
+            if problem_type == "Regression":
+                selector_ig = SelectKBest(score_func=mutual_info_regression, k=n_features_after_ig)
+            else:
+                selector_ig = SelectKBest(score_func=mutual_info_classif, k=n_features_after_ig)
+                
+            X_train_ig = selector_ig.fit_transform(X_fs, data[target_column])
+            
+            # Dapatkan nama fitur yang terpilih
+            selected_features_ig_mask = selector_ig.get_support()
+            selected_features_ig_names = X_fs.columns[selected_features_ig_mask]
+            
+            # Tampilkan hasil tahap 1
+            st.write(f"Fitur terpilih setelah Information Gain ({n_features_after_ig}):" if st.session_state.language == 'id' else 
+                    f"Selected features after Information Gain ({n_features_after_ig}):")
+            st.write(", ".join(selected_features_ig_names))
+            
+            # Tahap 2: Seleksi Fitur dengan Feature Importance dari Random Forest
+            n_features_after_rf_fi = max(1, int(len(selected_features_ig_names) * rf_percent / 100))
+            
+            # Latih Random Forest pada data yang sudah difilter IG
+            if problem_type == "Regression":
+                rf_model_for_importance = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+            else:
+                rf_model_for_importance = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+                
+            rf_model_for_importance.fit(X_fs[selected_features_ig_names], data[target_column])
+            
+            # Dapatkan feature importance
+            feature_importances_rf = pd.Series(rf_model_for_importance.feature_importances_, index=selected_features_ig_names)
+            sorted_importances_rf = feature_importances_rf.sort_values(ascending=False)
+            
+            # Pilih fitur-fitur teratas berdasarkan importance
+            top_features_rf_names = sorted_importances_rf.head(n_features_after_rf_fi).index.tolist()
+            
+            # Tampilkan hasil tahap 2
+            st.write(f"Fitur terpilih setelah Random Forest Feature Importance ({n_features_after_rf_fi}):" if st.session_state.language == 'id' else 
+                    f"Selected features after Random Forest Feature Importance ({n_features_after_rf_fi}):")
+            st.write(", ".join(top_features_rf_names))
+            
+            # Tahap 3: Seleksi Fitur dengan Recursive Feature Elimination (RFE) + Random Forest
+            n_features_final = min(final_features, len(top_features_rf_names))
+            
+            # Pastikan jumlah fitur akhir minimal 2 untuk RFE
+            if len(top_features_rf_names) < 2:
+                # Jika fitur kurang dari 2, gunakan semua fitur yang tersisa tanpa RFE
+                final_selected_features_names = top_features_rf_names
+                st.warning("Jumlah fitur setelah tahap 2 kurang dari 2. RFE membutuhkan minimal 2 fitur. Menggunakan semua fitur dari tahap 2." if st.session_state.language == 'id' else 
+                          "Number of features after stage 2 is less than 2. RFE requires at least 2 features. Using all features from stage 2.")
+            else:
+                # Gunakan Random Forest Classifier/Regressor sebagai estimator untuk RFE
+                if problem_type == "Regression":
+                    estimator_rfe = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                else:
+                    estimator_rfe = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+                
+                # Pastikan n_features_final minimal 2
+                n_features_final = max(2, n_features_final)
+                
+                selector_rfe = RFE(estimator=estimator_rfe, n_features_to_select=n_features_final, step=1, verbose=0)
+                
+                # Lakukan RFE pada data yang sudah difilter oleh RF Feature Importance
+                selector_rfe.fit(X_fs[top_features_rf_names], data[target_column])
+                
+                # Dapatkan nama fitur akhir yang terpilih
+                selected_features_rfe_mask = selector_rfe.get_support()
+                final_selected_features_names = np.array(top_features_rf_names)[selected_features_rfe_mask].tolist()
+            
+            # Tampilkan hasil akhir
+            st.write(f"Fitur akhir terpilih setelah RFE ({n_features_final}):" if st.session_state.language == 'id' else 
+                    f"Final selected features after RFE ({n_features_final}):")
+            st.write(", ".join(final_selected_features_names))
+            
+            # Tampilkan perbandingan jumlah fitur di setiap tahap
+            st.subheader("Ringkasan Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection Summary")
+            summary_data = {
+                "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
+                                                                           "Information Gain", 
+                                                                           "Random Forest", 
+                                                                           "RFE"],
+                "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
+                                                                                             n_features_after_ig, 
+                                                                                             n_features_after_rf_fi, 
+                                                                                             n_features_final]
+            }
+            st.table(pd.DataFrame(summary_data))
+            
+            # Set fitur yang terpilih untuk digunakan dalam model
+            selected_features = final_selected_features_names    
 
         if not selected_features:
             st.warning("Silahkan pilih fitur terlebih dahulu." if st.session_state.language == 'id' else "Please select at least one feature.")
