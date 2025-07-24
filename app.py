@@ -497,44 +497,75 @@ with tab3:
                 st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
                 
                 # Opsi untuk menghilangkan kelas minoritas
-                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority class", value=False)
+                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False)
                 
                 if remove_minority:
-                    # Identifikasi kelas minoritas
-                    minority_class = class_counts.idxmin()
-                    minority_count = class_counts.min()
+                    # Tampilkan semua kelas dan jumlah sampelnya dalam urutan menaik
+                    st.write("Pilih kelas yang ingin dihapus:" if st.session_state.language == 'id' else "Select classes to remove:")
                     
-                    # Konfirmasi penghapusan
-                    st.warning(f"Kelas minoritas '{minority_class}' dengan {minority_count} sampel akan dihapus" if st.session_state.language == 'id' 
-                              else f"Minority class '{minority_class}' with {minority_count} samples will be removed")
+                    # Urutkan kelas berdasarkan jumlah sampel (dari yang terkecil)
+                    sorted_classes = class_counts.sort_values().index.tolist()
+                    class_to_remove = {}
                     
-                    confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
+                    # Buat checkbox untuk setiap kelas
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        for i, cls in enumerate(sorted_classes[:len(sorted_classes)//2 + len(sorted_classes)%2]):
+                            class_to_remove[cls] = st.checkbox(
+                                f"{cls} ({class_counts[cls]} sampel)" if st.session_state.language == 'id' else f"{cls} ({class_counts[cls]} samples)", 
+                                value=False,
+                                key=f"remove_class_{cls}"
+                            )
+                    with col2:
+                        for i, cls in enumerate(sorted_classes[len(sorted_classes)//2 + len(sorted_classes)%2:]):
+                            class_to_remove[cls] = st.checkbox(
+                                f"{cls} ({class_counts[cls]} sampel)" if st.session_state.language == 'id' else f"{cls} ({class_counts[cls]} samples)", 
+                                value=False,
+                                key=f"remove_class_{cls}"
+                            )
                     
-                    if confirm_removal:
-                        # Simpan data asli
-                        original_data = data.copy()
+                    # Identifikasi kelas yang akan dihapus
+                    classes_to_remove = [cls for cls, remove in class_to_remove.items() if remove]
+                    
+                    if classes_to_remove:
+                        # Konfirmasi penghapusan
+                        classes_str = ", ".join([f"'{cls}'" for cls in classes_to_remove])
+                        samples_count = sum([class_counts[cls] for cls in classes_to_remove])
                         
-                        # Hapus kelas minoritas
-                        data = data[data[target_column] != minority_class]
+                        st.warning(
+                            f"Kelas {classes_str} dengan total {samples_count} sampel akan dihapus" if st.session_state.language == 'id' 
+                            else f"Classes {classes_str} with total {samples_count} samples will be removed"
+                        )
                         
-                        # Tampilkan distribusi kelas setelah penghapusan
-                        new_class_counts = data[target_column].value_counts()
-                        fig, ax = plt.subplots(figsize=(10, 4))
-                        new_class_counts.plot(kind='bar', ax=ax)
-                        plt.title('Distribusi Kelas Setelah Penghapusan' if st.session_state.language == 'id' else 'Class Distribution After Removal')
-                        plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
-                        plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
-                        st.pyplot(fig)
+                        confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
                         
-                        st.success(f"Kelas minoritas '{minority_class}' berhasil dihapus" if st.session_state.language == 'id' 
-                                  else f"Minority class '{minority_class}' successfully removed")
-                        
-                        # Tampilkan perbandingan jumlah sampel
-                        comparison_df = pd.DataFrame({
-                            'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
-                            'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
-                        })
-                        st.dataframe(comparison_df)
+                        if confirm_removal:
+                            # Simpan data asli
+                            original_data = data.copy()
+                            
+                            # Hapus kelas yang dipilih
+                            data = data[~data[target_column].isin(classes_to_remove)]
+                            
+                            # Tampilkan distribusi kelas setelah penghapusan
+                            new_class_counts = data[target_column].value_counts()
+                            fig, ax = plt.subplots(figsize=(10, 4))
+                            new_class_counts.plot(kind='bar', ax=ax)
+                            plt.title('Distribusi Kelas Setelah Penghapusan' if st.session_state.language == 'id' else 'Class Distribution After Removal')
+                            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                            st.pyplot(fig)
+                            
+                            st.success(
+                                f"Kelas {classes_str} berhasil dihapus" if st.session_state.language == 'id' 
+                                else f"Classes {classes_str} successfully removed"
+                            )
+                            
+                            # Tampilkan perbandingan jumlah sampel
+                            comparison_df = pd.DataFrame({
+                                'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
+                                'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
+                            })
+                            st.dataframe(comparison_df)
                 
                 # Tanyakan pengguna apakah ingin menangani imbalanced dataset
                 handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
