@@ -456,7 +456,29 @@ with tab3:
         # Feature selection
         st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
 
-        # Tambahkan penanganan imbalanced dataset sebelum feature selection
+        # Pindahkan encoding sebelum imbalanced dataset handling
+        categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
+        if categorical_cols:
+            st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
+            encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
+            if encoding_method == "Label Encoding":
+                encoders = {}
+                for col in categorical_cols:
+                    le = LabelEncoder()
+                    data[col] = le.fit_transform(data[col].astype(str))
+                    encoders[col] = le
+                st.session_state.encoders = encoders
+                st.success("Encoding label diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "Label encoding applied to categorical features.")
+            else:  # One-Hot Encoding
+                # Simpan target column
+                target_series = data[target_column].copy()
+                # One-hot encode data
+                data = pd.get_dummies(data.drop(columns=[target_column]), columns=categorical_cols, drop_first=True)
+                # Kembalikan target column
+                data[target_column] = target_series
+                st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
+
+        # Tambahkan penanganan imbalanced dataset setelah encoding dan hanya untuk klasifikasi
         if problem_type == "Classification":
             st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
             
@@ -905,25 +927,6 @@ with tab3:
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
             st.dataframe(X.head())
-
-            categorical_cols = [col for col in selected_features if col in st.session_state.categorical_columns]
-            if categorical_cols:
-                st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
-                encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
-                if encoding_method == "Label Encoding":
-                    encoders = {}
-                    for col in categorical_cols:
-                        le = LabelEncoder()
-                        X_train[col] = le.fit_transform(X_train[col].astype(str))
-                        X_test[col] = le.transform(X_test[col].astype(str))
-                        encoders[col] = le
-                    st.session_state.encoders = encoders
-                    st.success("Encoding label diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "Label encoding applied to categorical features.")
-                else:
-                    X_train = pd.get_dummies(X_train, columns=categorical_cols, drop_first=True)
-                    X_test = pd.get_dummies(X_test, columns=categorical_cols, drop_first=True)
-                    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
-                    st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
 
             # Scaling numerical features
             numerical_cols = [col for col in selected_features if col in st.session_state.numerical_columns]
@@ -2140,7 +2143,7 @@ with tab5:
                 if hasattr(model, "predict_proba") or hasattr(model, "predict"):
                     try:
                         if hasattr(model, "feature_importances_"):
-                            explainer = shap.TreeExplainer(model)
+                            explainer = shap.TreeExplainer(model, feature_perturbation='interventional', check_additivity=False)
                         else:
                             try:
                                 # Pastikan X_sample adalah numerik saat inisialisasi KernelExplainer
