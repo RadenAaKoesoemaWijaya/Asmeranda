@@ -2152,7 +2152,7 @@ with tab5:
                         
                         if any(tree_model in model_type for tree_model in ['randomforest', 'gradientboosting', 'xgb', 'lgbm', 'catboost', 'decisiontree']):
                             # Gunakan TreeExplainer untuk model berbasis pohon
-                            explainer = shap.TreeExplainer(st.session_state.model, feature_perturbation='interventional', check_additivity=False)
+                            explainer = shap.TreeExplainer(st.session_state.model)
                             shap_values = explainer.shap_values(X_sample)
                             
                             # Untuk model klasifikasi dengan output multi-kelas
@@ -2361,7 +2361,7 @@ with tab5:
                                     # Pilih explainer berdasarkan jenis model
                                     if model_type in ['random_forest', 'gradient_boosting']:
                                         # Gunakan TreeExplainer untuk model berbasis pohon
-                                        explainer = shap.TreeExplainer(st.session_state.model, feature_perturbation='interventional', check_additivity=False)
+                                        explainer = shap.TreeExplainer(st.session_state.model)
                                     else:
                                         # Gunakan KernelExplainer untuk model lainnya
                                         background = shap.kmeans(st.session_state.forecast_train_data[selected_features].sample(min(50, len(st.session_state.forecast_train_data)), random_state=42), 5)
