@@ -496,6 +496,46 @@ with tab3:
                 imbalance_ratio = class_counts.max() / class_counts.min()
                 st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
                 
+                # Opsi untuk menghilangkan kelas minoritas
+                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority class", value=False)
+                
+                if remove_minority:
+                    # Identifikasi kelas minoritas
+                    minority_class = class_counts.idxmin()
+                    minority_count = class_counts.min()
+                    
+                    # Konfirmasi penghapusan
+                    st.warning(f"Kelas minoritas '{minority_class}' dengan {minority_count} sampel akan dihapus" if st.session_state.language == 'id' 
+                              else f"Minority class '{minority_class}' with {minority_count} samples will be removed")
+                    
+                    confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
+                    
+                    if confirm_removal:
+                        # Simpan data asli
+                        original_data = data.copy()
+                        
+                        # Hapus kelas minoritas
+                        data = data[data[target_column] != minority_class]
+                        
+                        # Tampilkan distribusi kelas setelah penghapusan
+                        new_class_counts = data[target_column].value_counts()
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        new_class_counts.plot(kind='bar', ax=ax)
+                        plt.title('Distribusi Kelas Setelah Penghapusan' if st.session_state.language == 'id' else 'Class Distribution After Removal')
+                        plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                        plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                        st.pyplot(fig)
+                        
+                        st.success(f"Kelas minoritas '{minority_class}' berhasil dihapus" if st.session_state.language == 'id' 
+                                  else f"Minority class '{minority_class}' successfully removed")
+                        
+                        # Tampilkan perbandingan jumlah sampel
+                        comparison_df = pd.DataFrame({
+                            'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
+                            'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
+                        })
+                        st.dataframe(comparison_df)
+                
                 # Tanyakan pengguna apakah ingin menangani imbalanced dataset
                 handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
                 
