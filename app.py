@@ -2138,11 +2138,12 @@ with tab5:
                     # Pastikan semua nilai dalam X_sample adalah numerik
                     for col in X_sample.columns:
                         try:
-                            X_sample[col] = X_sample[col].astype(float)
+                            # Konversi ke numpy array terlebih dahulu
+                            X_sample[col] = np.array(X_sample[col]).astype(float)
                         except:
                             try:
-                                # Jika gagal, coba factorize
-                                X_sample[col] = pd.factorize(X_sample[col])[0]
+                                # Jika gagal, gunakan factorize dan konversi ke float
+                                X_sample[col] = pd.factorize(X_sample[col])[0].astype(float)
                             except Exception as e:
                                 st.error(f"Error saat mengkonversi kolom {col} ke numerik: {str(e)}")
                     
@@ -2309,8 +2310,7 @@ with tab5:
                         
                     except Exception as e:
                         st.error(f"Error saat menghitung nilai SHAP: {str(e)}")
-                        st.info("Tips: Jika mengalami error 'Additivity check failed', coba gunakan model yang lebih sederhana atau kurangi jumlah fitur." if st.session_state.language == 'id' else 
-                               "Tip: If experiencing 'Additivity check failed' error, try using a simpler model or reduce the number of features.")
+                        
     
     # Tambahkan dukungan untuk model forecasting
     elif (st.session_state.model is not None and 'is_timeseries' in locals() and is_timeseries):
@@ -2356,11 +2356,12 @@ with tab5:
                                     # Pastikan semua nilai dalam X_sample adalah numerik
                                     for col in X_sample.columns:
                                         try:
-                                            X_sample[col] = X_sample[col].astype(float)
+                                            # Konversi ke numpy array terlebih dahulu
+                                            X_sample[col] = np.array(X_sample[col]).astype(float)
                                         except:
                                             try:
-                                                # Jika gagal, coba factorize
-                                                X_sample[col] = pd.factorize(X_sample[col])[0]
+                                                # Jika gagal, gunakan factorize dan konversi ke float
+                                                X_sample[col] = pd.factorize(X_sample[col])[0].astype(float)
                                             except Exception as e:
                                                 st.error(f"Error saat mengkonversi kolom {col} ke numerik: {str(e)}")
                                     
@@ -2416,8 +2417,7 @@ with tab5:
                                     
                                 except Exception as e:
                                     st.error(f"Error saat menghitung nilai SHAP: {str(e)}")
-                                    st.info("Tips: Jika mengalami error 'Additivity check failed', coba gunakan model yang lebih sederhana atau kurangi jumlah fitur." if st.session_state.language == 'id' else 
-                                           "Tip: If experiencing 'Additivity check failed' error, try using a simpler model or reduce the number of features.")
+                                    
                 else:
                     st.warning("Tidak dapat menemukan fitur untuk model forecasting. Pastikan model telah dilatih dengan benar." if st.session_state.language == 'id' else 
                                "Could not find features for the forecasting model. Make sure the model has been trained correctly.")
