@@ -2628,7 +2628,11 @@ with tab6:
 
                     st.subheader("Visualisasi Penjelasan LIME" if st.session_state.language == 'id' else "LIME Explanation Visualization")
                     fig = plt.figure(figsize=(10, 6))
-                    explanation.as_pyplot_figure(plt.gca())
+                    if st.session_state.problem_type == "Classification":
+                        # Use the predicted class index as label
+                        explanation.as_pyplot_figure(plt.gca(), label=predicted)
+                    else:
+                        explanation.as_pyplot_figure(plt.gca())
                     plt.tight_layout()
                     st.pyplot(fig)
 
