@@ -2322,9 +2322,11 @@ with tab5:
                         # Hitung rata-rata nilai absolut SHAP untuk setiap fitur
                         if isinstance(shap_values_selected, list):
                             # Untuk multi-output, ambil output pertama
-                            feature_importance = np.abs(shap_values_selected[0]).mean(0)
+                            shap_arr = np.array(shap_values_selected[0], dtype=float)
+                            feature_importance = np.abs(shap_arr).mean(0)
                         else:
-                            feature_importance = np.abs(shap_values_selected).mean(0)
+                            shap_arr = np.array(shap_values_selected, dtype=float)
+                            feature_importance = np.abs(shap_arr).mean(0)
                         
                         # Dapatkan indeks fitur terurut berdasarkan kepentingan
                         top_indices = feature_importance.argsort()[-5:][::-1]
