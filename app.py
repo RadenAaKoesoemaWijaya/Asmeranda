@@ -2058,7 +2058,10 @@ with tab4:
                             num_cols = [c for c in input_df.columns if c in st.session_state.numerical_columns]
                             if st.session_state.scaler is not None and num_cols:
                                 input_df[num_cols] = st.session_state.scaler.transform(input_df[num_cols])
-                            
+
+                            # Pastikan urutan kolom sama dengan saat training
+                            input_df = input_df[st.session_state.X_train.columns]
+
                             # Lakukan prediksi
                             prediction = st.session_state.model.predict(input_df)
                             
