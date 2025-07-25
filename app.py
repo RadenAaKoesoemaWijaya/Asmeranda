@@ -2368,14 +2368,14 @@ with tab5:
                         
                         st.pyplot(force_plot)
                         
-                        # 5. Waterfall Plot
+                       # 5. Waterfall Plot
                         st.write("### Waterfall Plot")
                         fig, ax = plt.subplots(figsize=(10, 8))
-                        
+
                         if isinstance(shap_values_selected, list):
-                            # Untuk multi-output, ambil output pertama
+                            # Untuk multi-output, ambil output dan expected_value untuk kelas pertama
                             shap.plots._waterfall.waterfall_legacy(
-                                explainer.expected_value[0] if isinstance(explainer.expected_value, list) else explainer.expected_value,
+                                explainer.expected_value[0] if isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value,
                                 shap_values_selected[0][sample_idx, :],
                                 feature_names=X_sample.columns,
                                 show=False,
@@ -2383,13 +2383,13 @@ with tab5:
                             )
                         else:
                             shap.plots._waterfall.waterfall_legacy(
-                                explainer.expected_value if hasattr(explainer, 'expected_value') else 0,
+                                explainer.expected_value if np.isscalar(explainer.expected_value) else explainer.expected_value[0],
                                 shap_values_selected[sample_idx, :],
                                 feature_names=X_sample.columns,
                                 show=False,
                                 max_display=10
                             )
-                        
+
                         plt.tight_layout()
                         st.pyplot(fig)
                         plt.clf()
