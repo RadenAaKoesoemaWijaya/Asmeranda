@@ -2630,7 +2630,7 @@ with tab6:
                     fig = plt.figure(figsize=(10, 6))
                     if st.session_state.problem_type == "Classification":
                         # Use the predicted class index as label
-                        explanation.as_pyplot_figure(plt.gca(), label=predicted)
+                        explanation.as_pyplot_figure(plt.gca(), label=int(predicted))
                     else:
                         explanation.as_pyplot_figure(plt.gca())
                     plt.tight_layout()
