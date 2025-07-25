@@ -137,16 +137,50 @@ def breusch_pagan_test(y_true, y_pred, X):
 with tab1:
     st.header("Unggah Dataset Anda" if st.session_state.language == 'id' else "Upload Your Dataset")
     
-    uploaded_file = st.file_uploader("Pilih file CSV" if st.session_state.language == 'id' else "Choose a CSV file", type="csv")
+    uploaded_file = st.file_uploader(
+        "Pilih file CSV atau ZIP berisi folder train/test" if st.session_state.language == 'id' else "Choose a CSV file or ZIP with train/test folders",
+        type=["csv", "zip"]
+    )
     
     if uploaded_file is not None:
-        try:
-            data = pd.read_csv(uploaded_file)
-            st.session_state.data = data
-            st.success(f"Dataset berhasil dimuat dengan {data.shape[0]} baris dan {data.shape[1]} kolom." if st.session_state.language == 'id' else f"Dataset loaded successfully with {data.shape[0]} rows and {data.shape[1]} columns.")
-            
-            st.subheader("Pratinjau Data" if st.session_state.language == 'id' else "Data Preview")
-            st.dataframe(data.head())
+        import zipfile
+        import tempfile
+        import os
+        if uploaded_file.name.endswith('.zip'):
+            # Proses ZIP: cari file train/test
+            with tempfile.TemporaryDirectory() as tmpdir:
+                zf = zipfile.ZipFile(uploaded_file)
+                zf.extractall(tmpdir)
+                # Cari file train dan test
+                train_path, test_path = None, None
+                for root, dirs, files in os.walk(tmpdir):
+                    for f in files:
+                        if 'train' in f.lower() and f.endswith('.csv'):
+                            train_path = os.path.join(root, f)
+                        if 'test' in f.lower() and f.endswith('.csv'):
+                            test_path = os.path.join(root, f)
+                if train_path and test_path:
+                    train_data = pd.read_csv(train_path)
+                    test_data = pd.read_csv(test_path)
+                    st.session_state.data = pd.concat([train_data, test_data], ignore_index=True)
+                    st.session_state.train_data = train_data
+                    st.session_state.test_data = test_data
+                    st.success(f"Berhasil mendeteksi dan memuat data training ({train_data.shape[0]} baris) dan testing ({test_data.shape[0]} baris) dari ZIP." if st.session_state.language == 'id' else f"Successfully loaded training ({train_data.shape[0]} rows) and testing ({test_data.shape[0]} rows) from ZIP.")
+                    st.dataframe(train_data.head())
+                    st.dataframe(test_data.head())
+                else:
+                    st.error("ZIP tidak berisi file train/test CSV yang valid." if st.session_state.language == 'id' else "ZIP does not contain valid train/test CSV files.")
+        else:
+            # Proses single CSV
+            try:
+                data = pd.read_csv(uploaded_file)
+                st.session_state.data = data
+                st.session_state.train_data = None
+                st.session_state.test_data = None
+                st.success(f"Dataset berhasil dimuat dengan {data.shape[0]} baris dan {data.shape[1]} kolom." if st.session_state.language == 'id' else f"Dataset loaded successfully with {data.shape[0]} rows and {data.shape[1]} columns.")
+                st.dataframe(data.head())
+            except Exception as e:
+                st.error(f"Error: {e}")
             
             st.subheader("Informasi Data" if st.session_state.language == 'id' else "Data Information")
             buffer = io.StringIO()
@@ -165,9 +199,7 @@ with tab1:
             
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
-            
-        except Exception as e:
-            st.error(f"Error: {e}")
+
 
 # Tab 2: Exploratory Data Analysis
 with tab2:
@@ -2525,7 +2557,7 @@ with tab6:
         st.error("LIME tidak terinstal. Silakan instal dengan 'pip install lime'." if st.session_state.language == 'id' else "LIME is not installed. Please install it with 'pip install lime'.")
     elif (
         st.session_state.model is not None
-        and st.session_state.problem_type == "Regression"
+        and st.session_state.problem_type in ["Regression", "Classification"]
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
         st.write("""
@@ -2558,10 +2590,13 @@ with tab6:
                     X_train_selected = st.session_state.X_train[selected_features]
                     X_test_selected = st.session_state.X_test[selected_features]
 
+                    lime_mode = "regression" if st.session_state.problem_type == "Regression" else "classification"
+                    predict_fn = st.session_state.model.predict if lime_mode == "regression" else st.session_state.model.predict_proba
+
                     explainer = lime_tabular.LimeTabularExplainer(
                         X_train_selected.values,
                         feature_names=selected_features,
-                        mode="regression",
+                        mode=lime_mode,
                         random_state=42
                     )
 
@@ -2582,7 +2617,7 @@ with tab6:
 
                     explanation = explainer.explain_instance(
                         sample.values,
-                        st.session_state.model.predict,
+                        predict_fn,
                         num_features=num_features_show
                     )
 
@@ -2605,10 +2640,10 @@ with tab6:
                     st.dataframe(feature_values)
 
                     st.success("Analisis LIME selesai!" if st.session_state.language == 'id' else "LIME analysis completed successfully!")
-    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("LIME hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "LIME is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
+    elif st.session_state.model is not None and st.session_state.problem_type not in ["Regression", "Classification"]:
+        st.warning("LIME hanya tersedia untuk model regresi dan klasifikasi. Untuk model forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "LIME is only available for regression and classification models. For forecasting models, this feature is disabled.")
     else:
-        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
+        st.info("Silakan latih model terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a model in the 'Model Training' tab first.")
 
 # Tab7: Model Interpretation (Partial Dependence Plot)
 with tab7:
@@ -2616,7 +2651,7 @@ with tab7:
 
     if (
         st.session_state.model is not None
-        and st.session_state.problem_type == "Regression"
+        and st.session_state.problem_type in ["Regression", "Classification"]
         and not ('is_timeseries' in locals() and is_timeseries)
     ):
         st.write("""
@@ -2651,7 +2686,7 @@ with tab7:
                         st.success("PDP berhasil dibuat!" if st.session_state.language == 'id' else "PDP created successfully!")
                     except Exception as e:
                         st.error(f"Error saat membuat PDP: {str(e)}" if st.session_state.language == 'id' else f"Error creating PDP: {str(e)}")
-    elif st.session_state.model is not None and st.session_state.problem_type != "Regression":
-        st.warning("PDP hanya tersedia untuk model regresi (prediction). Untuk model klasifikasi atau forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "PDP is only available for regression (prediction) models. For classification or forecasting models, this feature is disabled.")
+    elif st.session_state.model is not None and st.session_state.problem_type not in ["Regression", "Classification"]:
+        st.warning("PDP hanya tersedia untuk model regresi dan klasifikasi. Untuk model forecasting, fitur ini dinonaktifkan." if st.session_state.language == 'id' else "PDP is only available for regression and classification models. For forecasting models, this feature is disabled.")
     else:
-        st.info("Silakan latih model regresi terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a regression model in the 'Model Training' tab first.")
+        st.info("Silakan latih model terlebih dahulu di tab 'Model Training'." if st.session_state.language == 'id' else "Please train a model in the 'Model Training' tab first.")
