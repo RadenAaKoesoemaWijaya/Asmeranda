@@ -682,6 +682,25 @@ with tab3:
 
         all_columns = [col for col in data.columns if col != target_column]
 
+        numerical_cols = [col for col in st.session_state.numerical_columns if col in data.columns]
+        if numerical_cols:
+            st.subheader("Scale Numerical Features" if st.session_state.language == 'id' else "Scale Numerical Features")
+            scaling_method = st.selectbox(
+                "Pilih metode scaling:" if st.session_state.language == 'id' else "Select scaling method:",
+                ["StandardScaler", "MinMaxScaler"],
+                key="scaling_method"
+            )
+            if scaling_method == "StandardScaler":
+                scaler = StandardScaler()
+                scaling_description = "StandardScaler (mean=0, std=1)" if st.session_state.language == 'id' else "StandardScaler (mean=0, std=1)"
+            else:
+                scaler = MinMaxScaler()
+                scaling_description = "MinMaxScaler (range 0-1)" if st.session_state.language == 'id' else "MinMaxScaler (range 0-1)"
+            data[numerical_cols] = scaler.fit_transform(data[numerical_cols])
+            st.session_state.scaler = scaler
+            st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
+            st.info(scaling_description)
+
         # Pilih algoritma seleksi fitur
         feature_selection_method = st.selectbox(
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
@@ -1030,29 +1049,6 @@ with tab3:
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
             st.dataframe(X.head())
-
-            # Scaling numerical features
-            numerical_cols = [col for col in selected_features if col in st.session_state.numerical_columns]
-            if numerical_cols:
-                st.subheader("Scale Numerical Features" if st.session_state.language == 'id' else "Scale Numerical Features")
-                scaling_method = st.selectbox(
-                    "Pilih metode scaling:" if st.session_state.language == 'id' else "Select scaling method:",
-                    ["StandardScaler", "MinMaxScaler"],
-                    key="scaling_method"
-                )
-                
-                if scaling_method == "StandardScaler":
-                    scaler = StandardScaler()
-                    scaling_description = "StandardScaler (mean=0, std=1)" if st.session_state.language == 'id' else "StandardScaler (mean=0, std=1)"
-                else:  # MinMaxScaler
-                    scaler = MinMaxScaler()
-                    scaling_description = "MinMaxScaler (range 0-1)" if st.session_state.language == 'id' else "MinMaxScaler (range 0-1)"
-                
-                X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
-                X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
-                st.session_state.scaler = scaler
-                st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
-                st.info(scaling_description)
 
             # Update session_state setelah encoding/scaling
             st.session_state.X_train = X_train
