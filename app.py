@@ -240,6 +240,31 @@ with tab1:
             data.info(buf=buffer)
             st.text(buffer.getvalue())
             
+            # Tambahkan pemilihan fitur untuk dibuang
+            st.subheader("Pemilihan Fitur" if st.session_state.language == 'id' else "Feature Selection")
+            all_columns = data.columns.tolist()
+            
+            # Gunakan session state untuk menyimpan fitur yang dipilih untuk dibuang
+            if 'columns_to_drop' not in st.session_state:
+                st.session_state.columns_to_drop = []
+            
+            columns_to_drop = st.multiselect(
+                "Pilih kolom yang ingin dibuang:" if st.session_state.language == 'id' else "Select columns to drop:",
+                all_columns,
+                default=st.session_state.columns_to_drop
+            )
+            
+            if columns_to_drop:
+                st.warning(f"Kolom yang akan dibuang: {', '.join(columns_to_drop)}")
+                
+                # Update dataset dengan menghapus kolom yang dipilih
+                data = data.drop(columns=columns_to_drop)
+                st.session_state.data = data
+                st.session_state.columns_to_drop = columns_to_drop
+                
+                st.success(f"Dataset telah diperbarui. Ukuran baru: {data.shape[0]} baris × {data.shape[1]} kolom")
+                st.dataframe(data.head())
+            
             st.subheader("Statistik Data" if st.session_state.language == 'id' else "Data Statistics")
             st.dataframe(data.describe())
             
@@ -260,6 +285,31 @@ with tab1:
             buffer = io.StringIO()
             data.info(buf=buffer)
             st.text(buffer.getvalue())
+            
+            # Tambahkan pemilihan fitur untuk dibuang
+            st.subheader("Pemilihan Fitur" if st.session_state.language == 'id' else "Feature Selection")
+            all_columns = data.columns.tolist()
+            
+            # Gunakan session state untuk menyimpan fitur yang dipilih untuk dibuang
+            if 'columns_to_drop' not in st.session_state:
+                st.session_state.columns_to_drop = []
+            
+            columns_to_drop = st.multiselect(
+                "Pilih kolom yang ingin dibuang:" if st.session_state.language == 'id' else "Select columns to drop:",
+                all_columns,
+                default=st.session_state.columns_to_drop
+            )
+            
+            if columns_to_drop:
+                st.warning(f"Kolom yang akan dibuang: {', '.join(columns_to_drop)}")
+                
+                # Update dataset dengan menghapus kolom yang dipilih
+                data = data.drop(columns=columns_to_drop)
+                st.session_state.data = data
+                st.session_state.columns_to_drop = columns_to_drop
+                
+                st.success(f"Dataset telah diperbarui. Ukuran baru: {data.shape[0]} baris × {data.shape[1]} kolom")
+                st.dataframe(data.head())
             
             st.subheader("Statistik Dataset Gabungan" if st.session_state.language == 'id' else "Combined Dataset Statistics")
             st.dataframe(data.describe())
