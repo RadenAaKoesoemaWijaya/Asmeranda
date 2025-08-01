@@ -2158,6 +2158,16 @@ with tab4:
                         start_time = time.time()
                         model.fit(st.session_state.X_train, st.session_state.y_train)
                         training_time = time.time() - start_time
+                        
+                        # Tambahkan validasi sebelum prediksi
+                        try:
+                            # Test prediksi dengan data dummy untuk memastikan model berfungsi
+                            dummy_data = pd.DataFrame(np.zeros((1, len(st.session_state.X_train.columns))), 
+                                                    columns=st.session_state.X_train.columns)
+                            st.session_state.model.predict(dummy_data)
+                            st.success("Model siap digunakan untuk prediksi" if st.session_state.language == 'id' else "Model ready for prediction")
+                        except Exception as e:
+                            st.error(f"Model error: {str(e)}. Silakan latih ulang model." if st.session_state.language == 'id' else f"Model error: {str(e)}. Please retrain the model.")
 
                         # Jika menggunakan GridSearchCV, tampilkan parameter terbaik
                         if use_grid_search and hasattr(model, "best_params_"):
@@ -2519,23 +2529,31 @@ with tab4:
                             # Lakukan prediksi
                             prediction = st.session_state.model.predict(input_df)
                             
+                            # Tentukan jenis model
+                            model_type = get_model_type(st.session_state.model)
+                            
                             # Tampilkan hasil prediksi
                             st.subheader("Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Result")
-                            if problem_type == "Classification":
+                            
+                            if model_type == "Classification":
                                 st.write(f"Kelas yang diprediksi: {prediction[0]}" if st.session_state.language == 'id' else f"Predicted Class: {prediction[0]}")
                                 
                                 # Jika model memiliki predict_proba, tampilkan probabilitas
                                 if hasattr(st.session_state.model, 'predict_proba'):
-                                    proba = st.session_state.model.predict_proba(input_df)
-                                    proba_df = pd.DataFrame(proba, columns=st.session_state.model.classes_)
-                                    st.write("Probabilitas untuk setiap kelas:" if st.session_state.language == 'id' else "Probabilities for each class:")
-                                    st.dataframe(proba_df)
-                            else:
+                                    try:
+                                        proba = st.session_state.model.predict_proba(input_df)
+                                        proba_df = pd.DataFrame(proba, columns=st.session_state.model.classes_)
+                                        st.write("Probabilitas untuk setiap kelas:" if st.session_state.language == 'id' else "Probabilities for each class:")
+                                        st.dataframe(proba_df)
+                                    except Exception as e:
+                                        st.warning(f"Tidak dapat menghitung probabilitas: {str(e)}" if st.session_state.language == 'id' else f"Cannot calculate probabilities: {str(e)}")
+                            else:  # Regression
                                 st.write(f"Nilai yang diprediksi: {prediction[0]:.4f}" if st.session_state.language == 'id' else f"Predicted Value: {prediction[0]:.4f}")
                             
                             # Buat laporan PDF
                             try:
-                                pdf = create_prediction_report(input_df, prediction, st.session_state.model, problem_type)
+                                model_type = get_model_type(st.session_state.model)
+                                pdf = create_prediction_report(input_df, prediction, st.session_state.model, model_type)
                                 pdf_output = pdf.output(dest='S').encode('latin1')
                                 st.download_button(
                                     label="Download Laporan PDF" if st.session_state.language == 'id' else "Download PDF Report",
@@ -2690,9 +2708,25 @@ with tab4:
                                             # Lakukan prediksi
                                             predictions = st.session_state.model.predict(pred_data)
                                             
+                                            # Tentukan jenis model
+                                            model_type = get_model_type(st.session_state.model)
+                                            
                                             # Tambahkan hasil prediksi ke DataFrame
                                             result_df = pred_data.copy()
-                                            result_df['Prediction'] = predictions
+                                            
+                                            if model_type == "Classification":
+                                                result_df['Predicted_Class'] = predictions
+                                                
+                                                # Jika model memiliki predict_proba, tambahkan probabilitas untuk setiap kelas
+                                                if hasattr(st.session_state.model, 'predict_proba'):
+                                                    try:
+                                                        proba = st.session_state.model.predict_proba(pred_data)
+                                                        for i, class_name in enumerate(st.session_state.model.classes_):
+                                                            result_df[f'Probability_{class_name}'] = proba[:, i]
+                                                    except Exception as e:
+                                                        st.warning(f"Tidak dapat menghitung probabilitas: {str(e)}" if st.session_state.language == 'id' else f"Cannot calculate probabilities: {str(e)}")
+                                            else:  # Regression
+                                                result_df['Predicted_Value'] = predictions
                                             
                                             # Tampilkan hasil
                                             st.subheader("Hasil Prediksi")
@@ -2701,14 +2735,14 @@ with tab4:
                                             # Download hasil
                                             csv = result_df.to_csv(index=False)
                                             st.download_button(
-                                                label="Download Hasil Prediksi (CSV)",
+                                                label="Download Hasil Prediksi (CSV)" if st.session_state.language == 'id' else "Download Prediction Results (CSV)",
                                                 data=csv,
                                                 file_name=f"prediction_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                                 mime="text/csv"
                                             )
                                             
                                         except Exception as e:
-                                            st.error(f"Error saat melakukan prediksi: {str(e)}")
+                                            st.error(f"Error saat melakukan prediksi: {str(e)}" if st.session_state.language == 'id' else f"Error during prediction: {str(e)}")
                         
                
                 # Tambahkan bagian untuk memuat model yang sudah disimpan
@@ -2741,6 +2775,21 @@ with tab4:
 
 # Tab 5: SHAP Model Interpretation
 with tab5:
+    # Tambahkan fungsi untuk menentukan jenis model
+    def get_model_type(model):
+        """Menentukan jenis model (klasifikasi atau regresi) berdasarkan model yang dimuat"""
+        try:
+            # Cek berdasarkan jenis model
+            if hasattr(model, 'predict_proba') and hasattr(model, 'classes_'):
+                return 'Classification'
+            elif hasattr(model, 'predict') and not hasattr(model, 'classes_'):
+                return 'Regression'
+            else:
+                # Fallback ke problem_type dari session state
+                return st.session_state.problem_type
+        except:
+            return st.session_state.problem_type
+            
     if st.session_state.problem_type != 'Regression':
         st.info("Fitur interpretasi SHAP hanya tersedia untuk model regresi." if st.session_state.language == 'id' else "SHAP interpretation is only available for regression models.")
     else:
