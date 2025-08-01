@@ -2554,7 +2554,7 @@ with tab4:
                     uploaded_file = st.file_uploader("Pilih file CSV", type="csv", key="prediction_file")
                     
                     if uploaded_file is not None:
-                        try:
+                        
                             # Baca file CSV
                             pred_data = pd.read_csv(uploaded_file)
                             
@@ -2567,59 +2567,150 @@ with tab4:
                             
                             if missing_features:
                                 st.error(f"Data tidak memiliki fitur yang diperlukan: {', '.join(missing_features)}" if st.session_state.language == 'id' else f"Data is missing required features: {', '.join(missing_features)}")
-                            else:
-                                # Pilih hanya fitur yang digunakan dalam model
-                                pred_data = pred_data[st.session_state.X_train.columns]
-                                
-                                # Preprocessing data
-                                # Encoding untuk fitur kategorikal
-                                for col in [c for c in pred_data.columns if c in st.session_state.categorical_columns]:
-                                    if col in st.session_state.encoders:
-                                        pred_data[col] = st.session_state.encoders[col].transform(pred_data[col].astype(str))
-                                
-                                # Scaling untuk fitur numerikal
-                                num_cols = [c for c in pred_data.columns if c in st.session_state.numerical_columns]
-                                if st.session_state.scaler is not None and num_cols:
-                                    pred_data[num_cols] = st.session_state.scaler.transform(pred_data[num_cols])
-                                
-                                if st.button("Prediksi Batch" if st.session_state.language == 'id' else "Batch Prediction"):
-                                    # Lakukan prediksi
-                                    predictions = st.session_state.model.predict(pred_data)
-                                    
-                                    # Tambahkan hasil prediksi ke DataFrame
-                                    result_df = pred_data.copy()
-                                    result_df['Prediction'] = predictions
-                                    
-                                    # Tampilkan hasil
-                                    st.subheader("Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Results")
-                                    st.dataframe(result_df)
-                                    
-                                    # Buat laporan PDF
-                                try:
-                                    pdf = create_prediction_report(pred_data, predictions, st.session_state.model, problem_type)
-                                    pdf_output = pdf.output(dest='S').encode('latin1')
-                                    st.download_button(
-                                        label="Download Laporan PDF",
-                                        data=pdf_output,
-                                        file_name=f"prediction_report_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                        mime="application/pdf"
-                                    )
-                                except Exception as e:
-                                    st.error(f"Error saat membuat laporan PDF: {str(e)}" if st.session_state.language == 'id' else f"Error creating PDF report: {str(e)}")
-                                    
-                                    # Opsi untuk mengunduh hasil CSV
-                                    csv = result_df.to_csv(index=False)
-                                    st.download_button(
-                                        label="Download Hasil Prediksi (CSV)" if st.session_state.language == 'id' else "Download Prediction Results (CSV)",
-                                        data=csv,
-                                        file_name="prediction_results.csv",
-                                        mime="text/csv",
-                                        key="csv_download"
-                                    )
-                        
-                        except Exception as e:
-                            st.error(f"Error saat memproses file: {str(e)}" if st.session_state.language == 'id' else f"Error processing file: {str(e)}")
                             
+                            # Add detailed debugging information
+                            st.write("**🔍 Informasi Debug Detail:**")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Fitur yang diharapkan model:**")
+                                expected_features = list(st.session_state.X_train.columns)
+                                st.write(expected_features)
+                                
+                            with col2:
+                                st.write("**Fitur yang tersedia dalam data prediksi:**")
+                                available_features = list(pred_data.columns)
+                                st.write(available_features)
+                            
+                            # Show comparison table
+                            comparison_df = pd.DataFrame({
+                                'Expected Features': expected_features,
+                                'Available in CSV': ['✅ Ada' if f in pred_data.columns else '❌ Tidak Ada' for f in expected_features]
+                            })
+                            st.write("**Perbandingan Fitur:**")
+                            st.dataframe(comparison_df)
+                            
+                            # Provide guidance
+                            st.info("""**Cara memperbaiki:**
+                            1. Pastikan file CSV prediksi memiliki semua kolom yang digunakan saat training
+                            2. Periksa nama kolom (case-sensitive)
+                            3. Kolom yang hilang harus ditambahkan ke file CSV prediksi
+                            4. Jika kolom tidak tersedia, pertimbangkan untuk melatih ulang model tanpa kolom tersebut""" if st.session_state.language == 'id' else 
+                            """**How to fix:**
+                            1. Ensure your prediction CSV has all columns used during training
+                            2. Check column names (case-sensitive)
+                            3. Missing columns must be added to the prediction CSV
+                            4. If columns are unavailable, consider retraining the model without these columns""")
+                        
+                            if not st.session_state.model:
+                                # Validasi fitur sebelum prediksi
+                                st.write("**📊 Validasi Fitur:**")
+                                
+                                # Check for missing features
+                                missing_features = [f for f in st.session_state.X_train.columns if f not in pred_data.columns]
+                                
+                                if missing_features:
+                                    st.error(f"Data tidak memiliki fitur yang diperlukan: {', '.join(missing_features)}")
+                                    
+                                    # Add detailed debugging information
+                                    st.write("**🔍 Informasi Debug Detail:**")
+                                    
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.write("**Fitur yang diharapkan model:**")
+                                        expected_features = list(st.session_state.X_train.columns)
+                                        st.write(expected_features)
+                                        
+                                    with col2:
+                                        st.write("**Fitur yang tersedia dalam data prediksi:**")
+                                        available_features = list(pred_data.columns)
+                                        st.write(available_features)
+                                    
+                                    # Show comparison table
+                                    comparison_df = pd.DataFrame({
+                                        'Expected Features': expected_features,
+                                        'Available in CSV': ['✅ Ada' if f in pred_data.columns else '❌ Tidak Ada' for f in expected_features]
+                                    })
+                                    st.write("**Perbandingan Fitur:**")
+                                    st.dataframe(comparison_df)
+                                    
+                                    # Provide guidance
+                                    st.info("""**Cara memperbaiki:**
+                                    1. Pastikan file CSV prediksi memiliki semua kolom yang digunakan saat training
+                                    2. Periksa nama kolom (case-sensitive)
+                                    3. Kolom yang hilang harus ditambahkan ke file CSV prediksi
+                                    4. Jika kolom tidak tersedia, pertimbangkan untuk melatih ulang model tanpa kolom tersebut""")
+                                else:
+                                    # Validasi tipe data
+                                    type_issues = []
+                                    for col in st.session_state.X_train.columns:
+                                        if col in pred_data.columns:
+                                            expected_dtype = st.session_state.X_train[col].dtype
+                                            actual_dtype = pred_data[col].dtype
+                                            if expected_dtype != actual_dtype:
+                                                type_issues.append({
+                                                    'Column': col,
+                                                    'Expected Type': str(expected_dtype),
+                                                    'Actual Type': str(actual_dtype)
+                                                })
+
+                                    if type_issues:
+                                        st.warning("**Peringatan Tipe Data:** Beberapa kolom memiliki tipe data yang berbeda")
+                                        st.dataframe(pd.DataFrame(type_issues))
+                                        
+                                        # Konversi otomatis tipe data
+                                        for issue in type_issues:
+                                            col = issue['Column']
+                                            try:
+                                                pred_data[col] = pred_data[col].astype(st.session_state.X_train[col].dtype)
+                                                st.success(f"Berhasil mengkonversi {col} ke tipe data yang sesuai")
+                                            except Exception as e:
+                                                st.error(f"Gagal mengkonversi {col}: {str(e)}")
+                                    
+                                    # Lanjutkan dengan preprocessing
+                                    pred_data = pred_data[st.session_state.X_train.columns]
+                                    
+                                    # Encoding untuk fitur kategorikal
+                                    for col in [c for c in pred_data.columns if c in st.session_state.categorical_columns]:
+                                        if col in st.session_state.encoders:
+                                            try:
+                                                pred_data[col] = st.session_state.encoders[col].transform(pred_data[col].astype(str))
+                                            except ValueError as e:
+                                                st.error(f"Error encoding {col}: {str(e)}")
+                                                st.write(f"Nilai unik dalam data: {pred_data[col].unique()}")
+                                                st.write(f"Nilai yang diharapkan encoder: {list(st.session_state.encoders[col].classes_)}")
+                                    
+                                    # Scaling untuk fitur numerikal
+                                    num_cols = [c for c in pred_data.columns if c in st.session_state.numerical_columns]
+                                    if st.session_state.scaler is not None and num_cols:
+                                        pred_data[num_cols] = st.session_state.scaler.transform(pred_data[num_cols])
+                                    
+                                    if st.button("Prediksi Batch", key="batch_prediction_btn"):
+                                        try:
+                                            # Lakukan prediksi
+                                            predictions = st.session_state.model.predict(pred_data)
+                                            
+                                            # Tambahkan hasil prediksi ke DataFrame
+                                            result_df = pred_data.copy()
+                                            result_df['Prediction'] = predictions
+                                            
+                                            # Tampilkan hasil
+                                            st.subheader("Hasil Prediksi")
+                                            st.dataframe(result_df)
+                                            
+                                            # Download hasil
+                                            csv = result_df.to_csv(index=False)
+                                            st.download_button(
+                                                label="Download Hasil Prediksi (CSV)",
+                                                data=csv,
+                                                file_name=f"prediction_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                                mime="text/csv"
+                                            )
+                                            
+                                        except Exception as e:
+                                            st.error(f"Error saat melakukan prediksi: {str(e)}")
+                        
+               
                 # Tambahkan bagian untuk memuat model yang sudah disimpan
                 st.subheader("Muat Model yang Sudah Disimpan" if st.session_state.language == 'id' else "Load Saved Model")
                 
