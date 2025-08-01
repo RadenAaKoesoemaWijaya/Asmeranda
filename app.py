@@ -147,29 +147,82 @@ with tab1:
         import tempfile
         import os
         if uploaded_file.name.endswith('.zip'):
-            # Proses ZIP: cari file train/test
+            # Proses ZIP: cari file train/test dalam folder atau file langsung
             with tempfile.TemporaryDirectory() as tmpdir:
                 zf = zipfile.ZipFile(uploaded_file)
                 zf.extractall(tmpdir)
                 # Cari file train dan test
                 train_path, test_path = None, None
+                train_files, test_files = [], []
+                
                 for root, dirs, files in os.walk(tmpdir):
                     for f in files:
-                        if 'train' in f.lower() and f.endswith('.csv'):
-                            train_path = os.path.join(root, f)
-                        if 'test' in f.lower() and f.endswith('.csv'):
-                            test_path = os.path.join(root, f)
+                        if f.endswith('.csv'):
+                            full_path = os.path.join(root, f)
+                            # Cek apakah file ada di folder training atau testing
+                            if 'train' in root.lower() or 'train' in f.lower():
+                                train_files.append(full_path)
+                            elif 'test' in root.lower() or 'test' in f.lower():
+                                test_files.append(full_path)
+                            # Fallback: cek nama file saja
+                            elif 'train' in f.lower():
+                                train_files.append(full_path)
+                            elif 'test' in f.lower():
+                                test_files.append(full_path)
+                
+                # Ambil file pertama dari masing-masing kategori
+                if train_files:
+                    train_path = train_files[0]
+                if test_files:
+                    test_path = test_files[0]
+                
                 if train_path and test_path:
-                    train_data = pd.read_csv(train_path)
-                    test_data = pd.read_csv(test_path)
-                    st.session_state.data = pd.concat([train_data, test_data], ignore_index=True)
-                    st.session_state.train_data = train_data
-                    st.session_state.test_data = test_data
-                    st.success(f"Berhasil mendeteksi dan memuat data training ({train_data.shape[0]} baris) dan testing ({test_data.shape[0]} baris) dari ZIP." if st.session_state.language == 'id' else f"Successfully loaded training ({train_data.shape[0]} rows) and testing ({test_data.shape[0]} rows) from ZIP.")
-                    st.dataframe(train_data.head())
-                    st.dataframe(test_data.head())
+                    try:
+                        train_data = pd.read_csv(train_path)
+                        test_data = pd.read_csv(test_path)
+                        
+                        # Gabungkan dataset training dan testing
+                        combined_data = pd.concat([train_data, test_data], ignore_index=True)
+                        
+                        # Simpan ke session state
+                        st.session_state.data = combined_data
+                        st.session_state.train_data = train_data
+                        st.session_state.test_data = test_data
+                        
+                        st.success(f"Berhasil mendeteksi dan memuat data training ({train_data.shape[0]} baris) dan testing ({test_data.shape[0]} baris) dari ZIP." if st.session_state.language == 'id' else f"Successfully loaded training ({train_data.shape[0]} rows) and testing ({test_data.shape[0]} rows) from ZIP.")
+                        st.info(f"Dataset gabungan: {combined_data.shape[0]} baris dan {combined_data.shape[1]} kolom." if st.session_state.language == 'id' else f"Combined dataset: {combined_data.shape[0]} rows and {combined_data.shape[1]} columns.")
+                        
+                        # Tampilkan preview dataset gabungan
+                        st.subheader("Preview Dataset Gabungan" if st.session_state.language == 'id' else "Combined Dataset Preview")
+                        st.dataframe(combined_data.head())
+                        
+                        # Tampilkan informasi dataset terpisah
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.subheader("Dataset Training" if st.session_state.language == 'id' else "Training Dataset")
+                            st.dataframe(train_data.head())
+                        with col2:
+                            st.subheader("Dataset Testing" if st.session_state.language == 'id' else "Testing Dataset")
+                            st.dataframe(test_data.head())
+                            
+                    except Exception as e:
+                        st.error(f"Error saat membaca file CSV: {e}" if st.session_state.language == 'id' else f"Error reading CSV files: {e}")
+                        
+                elif train_path or test_path:
+                    # Jika hanya ada satu file, gunakan sebagai dataset utama
+                    single_path = train_path or test_path
+                    try:
+                        data = pd.read_csv(single_path)
+                        st.session_state.data = data
+                        st.session_state.train_data = None
+                        st.session_state.test_data = None
+                        st.success(f"Dataset berhasil dimuat dengan {data.shape[0]} baris dan {data.shape[1]} kolom." if st.session_state.language == 'id' else f"Dataset loaded successfully with {data.shape[0]} rows and {data.shape[1]} columns.")
+                        st.dataframe(data.head())
+                    except Exception as e:
+                        st.error(f"Error saat membaca file CSV: {e}" if st.session_state.language == 'id' else f"Error reading CSV files: {e}")
                 else:
                     st.error("ZIP tidak berisi file train/test CSV yang valid." if st.session_state.language == 'id' else "ZIP does not contain valid train/test CSV files.")
+                    st.info("Pastikan ZIP berisi folder 'training' dan 'testing' dengan file CSV, atau file dengan nama yang mengandung 'train' dan 'test'." if st.session_state.language == 'id' else "Make sure ZIP contains 'training' and 'testing' folders with CSV files, or files with names containing 'train' and 'test'.")
         else:
             # Proses single CSV
             try:
@@ -199,7 +252,27 @@ with tab1:
             
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
-
+        
+        # Tambahkan informasi kolom untuk dataset gabungan dari ZIP
+        if uploaded_file.name.endswith('.zip') and st.session_state.data is not None:
+            data = st.session_state.data
+            st.subheader("Informasi Dataset Gabungan" if st.session_state.language == 'id' else "Combined Dataset Information")
+            buffer = io.StringIO()
+            data.info(buf=buffer)
+            st.text(buffer.getvalue())
+            
+            st.subheader("Statistik Dataset Gabungan" if st.session_state.language == 'id' else "Combined Dataset Statistics")
+            st.dataframe(data.describe())
+            
+            # Identify numerical and categorical columns untuk dataset gabungan
+            numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+            categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+            
+            st.session_state.numerical_columns = numerical_cols
+            st.session_state.categorical_columns = categorical_cols
+            
+            st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
+            st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
 
 # Tab 2: Exploratory Data Analysis
 with tab2:
@@ -1024,15 +1097,400 @@ with tab3:
         if not selected_features:
             st.warning("Silahkan pilih fitur terlebih dahulu." if st.session_state.language == 'id' else "Please select at least one feature.")
         else:
-            # Prepare data for modeling
-            X = data[selected_features]
+            # Tampilkan hasil tahap pertama
+            st.success(f"Tahap 1 selesai: {len(selected_features)} fitur terpilih" if st.session_state.language == 'id' else f"Stage 1 completed: {selected_features} features selected")
+            st.write(f"Fitur terpilih tahap 1: {', '.join(selected_features)}" if st.session_state.language == 'id' else f"Stage 1 selected features: {', '.join(selected_features)}")
+            
+            # TAHAP KEDUA FEATURE SELECTION
+            st.subheader("Tahap 2: Seleksi Fitur Lanjutan" if st.session_state.language == 'id' else "Stage 2: Advanced Feature Selection")
+            
+            # Checkbox untuk mengaktifkan tahap kedua
+            enable_second_stage = st.checkbox("Aktifkan tahap kedua seleksi fitur" if st.session_state.language == 'id' else "Enable second stage feature selection", value=False)
+            
+            if enable_second_stage:
+                # Gunakan hasil tahap pertama sebagai input tahap kedua
+                all_columns_stage2 = selected_features
+                
+                # Pilih algoritma seleksi fitur tahap kedua
+                feature_selection_method_stage2 = st.selectbox(
+                    "Metode seleksi fitur tahap 2:" if st.session_state.language == 'id' else "Feature selection method stage 2:",
+                    [
+                        "Manual",
+                        "Mutual Information",
+                        "Pearson Correlation",
+                        "Recursive Feature Elimination (RFE)",
+                        "LASSO",
+                        "Gradient Boosting Importance",
+                        "Random Forest Importance",
+                        "Ensemble Feature Selection",
+                        "Multi-Stage Feature Selection"
+                    ],
+                    key="feature_selection_stage2"
+                )
+
+                selected_features_stage2 = all_columns_stage2  # Default
+
+                if feature_selection_method_stage2 == "Manual":
+                    selected_features_stage2 = st.multiselect(
+                        "Pilih fitur untuk model (tahap 2):" if st.session_state.language == 'id' else "Select features to include in the model (stage 2):",
+                        all_columns_stage2,
+                        default=all_columns_stage2,
+                        key="manual_selection_stage2"
+                    )
+                elif feature_selection_method_stage2 == "Mutual Information":
+                    if problem_type == "Regression":
+                        mi = mutual_info_regression(data[all_columns_stage2], data[target_column])
+                    else:
+                        mi = mutual_info_classif(data[all_columns_stage2], data[target_column])
+                    mi_df = pd.DataFrame({"Feature": all_columns_stage2, "Mutual Information": mi})
+                    mi_df = mi_df.sort_values("Mutual Information", ascending=False)
+                    st.dataframe(mi_df)
+                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_mi_stage2")
+                    selected_features_stage2 = mi_df.head(top_n)["Feature"].tolist()
+                elif feature_selection_method_stage2 == "Pearson Correlation":
+                    numeric_columns = data[all_columns_stage2].select_dtypes(include=[np.number]).columns.tolist()
+                    if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
+                        st.error("Target kolom harus numerik untuk Pearson Correlation.")
+                        corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
+                    else:
+                        corr = data[numeric_columns].corrwith(data[target_column]).abs()
+                    corr_df = pd.DataFrame({"Feature": numeric_columns, "Correlation": corr})
+                    corr_df = corr_df.sort_values("Correlation", ascending=False)
+                    st.dataframe(corr_df)
+                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_corr_stage2")
+                    selected_features_stage2 = corr_df.head(top_n)["Feature"].tolist()
+                elif feature_selection_method_stage2 == "Recursive Feature Elimination (RFE)":
+                    from sklearn.feature_selection import RFE
+                    # --- Tambahkan encoding untuk fitur kategorikal sebelum RFE ---
+                    X_rfe = data[all_columns_stage2].copy()
+                    for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
+                        le = LabelEncoder()
+                        X_rfe[col] = le.fit_transform(X_rfe[col].astype(str))
+                    if problem_type == "Regression":
+                        estimator = LinearRegression()
+                    else:
+                        estimator = LogisticRegression(max_iter=500)
+                    n_features_rfe = st.slider("Jumlah fitur RFE (tahap 2):" if st.session_state.language == 'id' else "Number of RFE features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="rfe_features_stage2")
+                    rfe = RFE(estimator, n_features_to_select=n_features_rfe)
+                    rfe.fit(X_rfe, data[target_column])
+                    rfe_df = pd.DataFrame({"Feature": all_columns_stage2, "Selected": rfe.support_})
+                    st.dataframe(rfe_df)
+                    selected_features_stage2 = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
+                elif feature_selection_method_stage2 == "LASSO":
+                    from sklearn.linear_model import Lasso, LogisticRegression
+                    alpha_lasso = st.slider("Alpha LASSO (tahap 2):" if st.session_state.language == 'id' else "LASSO Alpha (stage 2):", 0.001, 1.0, 0.01, key="alpha_lasso_stage2")
+                    if problem_type == "Regression":
+                        lasso = Lasso(alpha=alpha_lasso, max_iter=1000)
+                    else:
+                        lasso = LogisticRegression(penalty='l1', solver='liblinear', max_iter=500, C=1/alpha_lasso)
+                    lasso.fit(data[all_columns_stage2], data[target_column])
+                    coef = lasso.coef_ if hasattr(lasso, "coef_") else lasso.coef_
+                    if coef.ndim > 1:
+                        coef = coef[0]
+                    lasso_df = pd.DataFrame({"Feature": all_columns_stage2, "Coefficient": coef})
+                    lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
+                    st.dataframe(lasso_df)
+                    selected_features_stage2 = lasso_df["Feature"].tolist()
+                elif feature_selection_method_stage2 == "Gradient Boosting Importance":
+                    from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+                    if problem_type == "Regression":
+                        model = GradientBoostingRegressor(random_state=42)
+                    else:
+                        model = GradientBoostingClassifier(random_state=42)
+                    model.fit(data[all_columns_stage2], data[target_column])
+                    importances = model.feature_importances_
+                    gb_df = pd.DataFrame({"Feature": all_columns_stage2, "Importance": importances})
+                    gb_df = gb_df.sort_values("Importance", ascending=False)
+                    st.dataframe(gb_df)
+                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_gb_stage2")
+                    selected_features_stage2 = gb_df.head(top_n)["Feature"].tolist()
+                elif feature_selection_method_stage2 == "Random Forest Importance":
+                    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                    if problem_type == "Regression":
+                        model = RandomForestRegressor(random_state=42)
+                    else:
+                        model = RandomForestClassifier(random_state=42)
+                    model.fit(data[all_columns_stage2], data[target_column])
+                    importances = model.feature_importances_
+                    rf_df = pd.DataFrame({"Feature": all_columns_stage2, "Importance": importances})
+                    rf_df = rf_df.sort_values("Importance", ascending=False)
+                    st.dataframe(rf_df)
+                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_rf_stage2")
+                    selected_features_stage2 = rf_df.head(top_n)["Feature"].tolist()
+
+                elif feature_selection_method_stage2 == "Ensemble Feature Selection":
+                    st.info("Pilih dua metode seleksi fitur untuk digabungkan (tahap 2)." if st.session_state.language == 'id' else "Select two feature selection methods to combine (stage 2).")
+                    method1_stage2 = st.selectbox("Metode pertama (tahap 2):" if st.session_state.language == 'id' else "First method (stage 2):", [
+                        "Mutual Information",
+                        "Pearson Correlation",
+                        "Recursive Feature Elimination (RFE)",
+                        "LASSO",
+                        "Gradient Boosting Importance",
+                        "Random Forest Importance"
+                    ], key="ensemble_method1_stage2")
+                    method2_stage2 = st.selectbox("Metode kedua (tahap 2):" if st.session_state.language == 'id' else "Second method (stage 2):", [
+                        "Mutual Information",
+                        "Pearson Correlation",
+                        "Recursive Feature Elimination (RFE)",
+                        "LASSO",
+                        "Gradient Boosting Importance",
+                        "Random Forest Importance"
+                    ], key="ensemble_method2_stage2")
+
+                    combine_type_stage2 = st.radio("Gabungkan hasil dengan (tahap 2):" if st.session_state.language == 'id' else "Combine results with (stage 2):", ["Intersection", "Union"], index=0, key="combine_type_stage2")
+
+                    def get_features_by_method_stage2(method, features_list):
+                        if method == "Mutual Information":
+                            if problem_type == "Regression":
+                                mi = mutual_info_regression(data[features_list], data[target_column])
+                            else:
+                                mi = mutual_info_classif(data[features_list], data[target_column])
+                            mi_df = pd.DataFrame({"Feature": features_list, "Mutual Information": mi})
+                            mi_df = mi_df.sort_values("Mutual Information", ascending=False)
+                            top_n = st.slider(f"Top N fitur ({method}, tahap 2):" if st.session_state.language == 'id' else f"Top N features ({method}, stage 2):", 1, len(features_list), min(5, len(features_list)), key=f"topn_{method}_stage2")
+                            return set(mi_df.head(top_n)["Feature"].tolist())
+                        elif method == "Pearson Correlation":
+                            numeric_columns = data[features_list].select_dtypes(include=[np.number]).columns.tolist()
+                            if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
+                                corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
+                            else:
+                                corr = data[numeric_columns].corrwith(data[target_column]).abs()
+                            corr_df = pd.DataFrame({"Feature": numeric_columns, "Correlation": corr})
+                            corr_df = corr_df.sort_values("Correlation", ascending=False)
+                            top_n = st.slider(f"Top N fitur ({method}, tahap 2):" if st.session_state.language == 'id' else f"Top N features ({method}, stage 2):", 1, len(features_list), min(5, len(features_list)), key=f"topn_{method}_stage2")
+                            return set(corr_df.head(top_n)["Feature"].tolist())
+                        elif method == "Recursive Feature Elimination (RFE)":
+                            from sklearn.feature_selection import RFE
+                            from sklearn.linear_model import LinearRegression, LogisticRegression
+                            X_rfe = data[features_list].copy()
+                            for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
+                                le = LabelEncoder()
+                                X_rfe[col] = le.fit_transform(X_rfe[col].astype(str))
+                            if problem_type == "Regression":
+                                estimator = LinearRegression()
+                            else:
+                                estimator = LogisticRegression(max_iter=500)
+                            n_features_rfe = st.slider(f"Jumlah fitur RFE ({method}, tahap 2):" if st.session_state.language == 'id' else f"Number of RFE features ({method}, stage 2):", 1, len(features_list), min(5, len(features_list)), key=f"rfe_{method}_stage2")
+                            rfe = RFE(estimator, n_features_to_select=n_features_rfe)
+                            rfe.fit(X_rfe, data[target_column])
+                            rfe_df = pd.DataFrame({"Feature": features_list, "Selected": rfe.support_})
+                            return set(rfe_df[rfe_df["Selected"]]["Feature"].tolist())
+                        elif method == "LASSO":
+                            from sklearn.linear_model import Lasso, LogisticRegression
+                            alpha_lasso = st.slider(f"Alpha LASSO ({method}, tahap 2):" if st.session_state.language == 'id' else f"LASSO Alpha ({method}, stage 2):", 0.001, 1.0, 0.01, key=f"alpha_{method}_stage2")
+                            if problem_type == "Regression":
+                                lasso = Lasso(alpha=alpha_lasso, max_iter=1000)
+                            else:
+                                lasso = LogisticRegression(penalty='l1', solver='liblinear', max_iter=500, C=1/alpha_lasso)
+                            lasso.fit(data[features_list], data[target_column])
+                            coef = lasso.coef_ if hasattr(lasso, "coef_") else lasso.coef_
+                            if coef.ndim > 1:
+                                coef = coef[0]
+                            lasso_df = pd.DataFrame({"Feature": features_list, "Coefficient": coef})
+                            lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
+                            return set(lasso_df["Feature"].tolist())
+                        elif method == "Gradient Boosting Importance":
+                            from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+                            if problem_type == "Regression":
+                                model = GradientBoostingRegressor(random_state=42)
+                            else:
+                                model = GradientBoostingClassifier(random_state=42)
+                            model.fit(data[features_list], data[target_column])
+                            importances = model.feature_importances_
+                            gb_df = pd.DataFrame({"Feature": features_list, "Importance": importances})
+                            gb_df = gb_df.sort_values("Importance", ascending=False)
+                            top_n = st.slider(f"Top N fitur ({method}, tahap 2):" if st.session_state.language == 'id' else f"Top N features ({method}, stage 2):", 1, len(features_list), min(5, len(features_list)), key=f"topn_{method}_stage2")
+                            return set(gb_df.head(top_n)["Feature"].tolist())
+                        elif method == "Random Forest Importance":
+                            from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                            if problem_type == "Regression":
+                                model = RandomForestRegressor(random_state=42)
+                            else:
+                                model = RandomForestClassifier(random_state=42)
+                            model.fit(data[features_list], data[target_column])
+                            importances = model.feature_importances_
+                            rf_df = pd.DataFrame({"Feature": features_list, "Importance": importances})
+                            rf_df = rf_df.sort_values("Importance", ascending=False)
+                            top_n = st.slider(f"Top N fitur ({method}, tahap 2):" if st.session_state.language == 'id' else f"Top N features ({method}, stage 2):", 1, len(features_list), min(5, len(features_list)), key=f"topn_{method}_stage2")
+                            return set(rf_df.head(top_n)["Feature"].tolist())
+                        else:
+                            return set(features_list)
+
+                    features1_stage2 = get_features_by_method_stage2(method1_stage2, all_columns_stage2)
+                    features2_stage2 = get_features_by_method_stage2(method2_stage2, all_columns_stage2)
+
+                    if combine_type_stage2 == "Intersection":
+                        selected_features_stage2 = list(features1_stage2 & features2_stage2)
+                    else:
+                        selected_features_stage2 = list(features1_stage2 | features2_stage2)
+
+                    st.write(f"Fitur hasil gabungan tahap 2: {selected_features_stage2}" if st.session_state.language == 'id' else f"Combined features stage 2: {selected_features_stage2}")
+
+                elif feature_selection_method_stage2 == "Multi-Stage Feature Selection":
+                    st.subheader("Multi-Stage Feature Selection (Tahap 2)" if st.session_state.language == 'id' else "Multi-Stage Feature Selection (Stage 2)")
+                    st.info("Metode ini menggunakan pendekatan 3 tahap: Information Gain → Random Forest Feature Importance → RFE (pada hasil tahap 1)" if st.session_state.language == 'id' else 
+                           "This method uses a 3-stage approach: Information Gain → Random Forest Feature Importance → RFE (on stage 1 results)")
+                    
+                    from sklearn.feature_selection import RFE, SelectKBest
+                    from sklearn.ensemble import RandomForestClassifier
+                    
+                    # Persiapkan data untuk feature selection tahap 2
+                    X_fs_stage2 = data[all_columns_stage2].copy()
+                    for col in X_fs_stage2.select_dtypes(include=['object', 'category']).columns:
+                        le = LabelEncoder()
+                        X_fs_stage2[col] = le.fit_transform(X_fs_stage2[col].astype(str))
+                    
+                    # Tampilkan parameter untuk setiap tahap
+                    st.write("Tahap 1: Information Gain (pada hasil tahap 1)" if st.session_state.language == 'id' else "Stage 1: Information Gain (on stage 1 results)")
+                    ig_percent_stage2 = st.slider("Persentase fitur yang dipertahankan setelah Information Gain (%, tahap 2)" if st.session_state.language == 'id' else 
+                                          "Percentage of features to keep after Information Gain (%, stage 2)", 10, 90, 40, key="ig_percent_stage2")
+                    
+                    st.write("Tahap 2: Random Forest Feature Importance (tahap 2)" if st.session_state.language == 'id' else "Stage 2: Random Forest Feature Importance (stage 2)")
+                    rf_percent_stage2 = st.slider("Persentase fitur yang dipertahankan setelah Random Forest (%, tahap 2)" if st.session_state.language == 'id' else 
+                                          "Percentage of features to keep after Random Forest (%, stage 2)", 10, 90, 50, key="rf_percent_stage2")
+                    
+                    st.write("Tahap 3: Recursive Feature Elimination (tahap 2)" if st.session_state.language == 'id' else "Stage 3: Recursive Feature Elimination (stage 2)")
+                    final_features_stage2 = st.slider("Jumlah fitur akhir (tahap 2)" if st.session_state.language == 'id' else "Final number of features (stage 2)", 
+                                              1, min(10, len(all_columns_stage2)), min(5, len(all_columns_stage2)), key="final_features_stage2")
+                    
+                    # Tahap 1: Seleksi Fitur dengan Information Gain (SelectKBest + mutual_info_classif)
+                    n_features_after_ig_stage2 = max(1, int(X_fs_stage2.shape[1] * ig_percent_stage2 / 100))
+                    
+                    if problem_type == "Regression":
+                        selector_ig_stage2 = SelectKBest(score_func=mutual_info_regression, k=n_features_after_ig_stage2)
+                    else:
+                        selector_ig_stage2 = SelectKBest(score_func=mutual_info_classif, k=n_features_after_ig_stage2)
+                        
+                    X_train_ig_stage2 = selector_ig_stage2.fit_transform(X_fs_stage2, data[target_column])
+                    
+                    # Dapatkan nama fitur yang terpilih
+                    selected_features_ig_mask_stage2 = selector_ig_stage2.get_support()
+                    selected_features_ig_names_stage2 = X_fs_stage2.columns[selected_features_ig_mask_stage2]
+                    
+                    # Tampilkan hasil tahap 1
+                    st.write(f"Fitur terpilih setelah Information Gain tahap 2 ({n_features_after_ig_stage2}):" if st.session_state.language == 'id' else 
+                            f"Selected features after Information Gain stage 2 ({n_features_after_ig_stage2}):")
+                    st.write(", ".join(selected_features_ig_names_stage2))
+                    
+                    # Tahap 2: Seleksi Fitur dengan Feature Importance dari Random Forest
+                    n_features_after_rf_fi_stage2 = max(1, int(len(selected_features_ig_names_stage2) * rf_percent_stage2 / 100))
+                    
+                    # Latih Random Forest pada data yang sudah difilter IG
+                    if problem_type == "Regression":
+                        rf_model_for_importance_stage2 = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                    else:
+                        rf_model_for_importance_stage2 = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+                        
+                    rf_model_for_importance_stage2.fit(X_fs_stage2[selected_features_ig_names_stage2], data[target_column])
+                    
+                    # Dapatkan feature importance
+                    feature_importances_rf_stage2 = pd.Series(rf_model_for_importance_stage2.feature_importances_, index=selected_features_ig_names_stage2)
+                    sorted_importances_rf_stage2 = feature_importances_rf_stage2.sort_values(ascending=False)
+                    
+                    # Pilih fitur-fitur teratas berdasarkan importance
+                    top_features_rf_names_stage2 = sorted_importances_rf_stage2.head(n_features_after_rf_fi_stage2).index.tolist()
+                    
+                    # Tampilkan hasil tahap 2
+                    st.write(f"Fitur terpilih setelah Random Forest Feature Importance tahap 2 ({n_features_after_rf_fi_stage2}):" if st.session_state.language == 'id' else 
+                            f"Selected features after Random Forest Feature Importance stage 2 ({n_features_after_rf_fi_stage2}):")
+                    st.write(", ".join(top_features_rf_names_stage2))
+                    
+                    # Tahap 3: Seleksi Fitur dengan Recursive Feature Elimination (RFE) + Random Forest
+                    n_features_final_stage2 = min(final_features_stage2, len(top_features_rf_names_stage2))
+                    
+                    # Pastikan jumlah fitur akhir minimal 2 untuk RFE
+                    if len(top_features_rf_names_stage2) < 2:
+                        # Jika fitur kurang dari 2, gunakan semua fitur yang tersisa tanpa RFE
+                        final_selected_features_names_stage2 = top_features_rf_names_stage2
+                        st.warning("Jumlah fitur setelah tahap 2 kurang dari 2. RFE membutuhkan minimal 2 fitur. Menggunakan semua fitur dari tahap 2." if st.session_state.language == 'id' else 
+                                  "Number of features after stage 2 is less than 2. RFE requires at least 2 features. Using all features from stage 2.")
+                    else:
+                        # Gunakan Random Forest Classifier/Regressor sebagai estimator untuk RFE
+                        if problem_type == "Regression":
+                            estimator_rfe_stage2 = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                        else:
+                            estimator_rfe_stage2 = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+                        
+                        # Pastikan n_features_final minimal 2
+                        n_features_final_stage2 = max(2, n_features_final_stage2)
+                        
+                        selector_rfe_stage2 = RFE(estimator=estimator_rfe_stage2, n_features_to_select=n_features_final_stage2, step=1, verbose=0)
+                        
+                        # Lakukan RFE pada data yang sudah difilter oleh RF Feature Importance
+                        selector_rfe_stage2.fit(X_fs_stage2[top_features_rf_names_stage2], data[target_column])
+                        
+                        # Dapatkan nama fitur akhir yang terpilih
+                        selected_features_rfe_mask_stage2 = selector_rfe_stage2.get_support()
+                        final_selected_features_names_stage2 = np.array(top_features_rf_names_stage2)[selected_features_rfe_mask_stage2].tolist()
+                    
+                    # Tampilkan hasil akhir
+                    st.write(f"Fitur akhir terpilih setelah RFE tahap 2 ({n_features_final_stage2}):" if st.session_state.language == 'id' else 
+                            f"Final selected features after RFE stage 2 ({n_features_final_stage2}):")
+                    st.write(", ".join(final_selected_features_names_stage2))
+                    
+                    # Tampilkan perbandingan jumlah fitur di setiap tahap
+                    st.subheader("Ringkasan Seleksi Fitur Tahap 2" if st.session_state.language == 'id' else "Feature Selection Summary Stage 2")
+                    summary_data_stage2 = {
+                        "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal (dari tahap 1)" if st.session_state.language == 'id' else "Initial (from stage 1)", 
+                                                                               "Information Gain", 
+                                                                               "Random Forest", 
+                                                                               "RFE"],
+                        "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns_stage2), 
+                                                                                                 n_features_after_ig_stage2, 
+                                                                                                 n_features_after_rf_fi_stage2, 
+                                                                                                 n_features_final_stage2]
+                    }
+                    st.table(pd.DataFrame(summary_data_stage2))
+                    
+                    # Set fitur yang terpilih untuk digunakan dalam model
+                    selected_features_stage2 = final_selected_features_names_stage2
+                
+                # Tampilkan hasil tahap kedua
+                if selected_features_stage2:
+                    st.success(f"Tahap 2 selesai: {len(selected_features_stage2)} fitur terpilih" if st.session_state.language == 'id' else f"Stage 2 completed: {len(selected_features_stage2)} features selected")
+                    st.write(f"Fitur terpilih tahap 2: {', '.join(selected_features_stage2)}" if st.session_state.language == 'id' else f"Stage 2 selected features: {', '.join(selected_features_stage2)}")
+                    
+                    # Gunakan hasil tahap kedua sebagai fitur final
+                    final_selected_features = selected_features_stage2
+                else:
+                    st.warning("Tidak ada fitur yang terpilih di tahap 2. Menggunakan hasil tahap 1." if st.session_state.language == 'id' else "No features selected in stage 2. Using stage 1 results.")
+                    final_selected_features = selected_features
+            else:
+                # Jika tahap kedua tidak diaktifkan, gunakan hasil tahap pertama
+                final_selected_features = selected_features
+            
+            # Tampilkan ringkasan akhir
+            st.subheader("Ringkasan Seleksi Fitur Akhir" if st.session_state.language == 'id' else "Final Feature Selection Summary")
+            if enable_second_stage:
+                comparison_data = {
+                    "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
+                                                                           "Tahap 1" if st.session_state.language == 'id' else "Stage 1", 
+                                                                           "Tahap 2" if st.session_state.language == 'id' else "Stage 2"],
+                    "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
+                                                                                             len(selected_features), 
+                                                                                             len(final_selected_features)]
+                }
+            else:
+                comparison_data = {
+                    "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
+                                                                           "Tahap 1" if st.session_state.language == 'id' else "Stage 1"],
+                    "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
+                                                                                             len(selected_features)]
+                }
+                final_selected_features = selected_features
+            
+            st.table(pd.DataFrame(comparison_data))
+            st.write(f"Fitur akhir yang akan digunakan: {', '.join(final_selected_features)}" if st.session_state.language == 'id' else f"Final features to be used: {', '.join(final_selected_features)}")
+            
+            # Prepare data for modeling dengan fitur akhir
+            X = data[final_selected_features]
             y = data[target_column]
                         
             # Train-test split
             st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
             
-            test_size = st.slider("Ukuran set pengujian (persen):", 10, 20, 50) if st.session_state.language == 'id' else st.slider("Test set size (%):", 10, 20, 50) / 100
-            random_state = st.number_input("Status acak:", 0, 100, 42) if st.session_state.language == 'id' else st.number_input("Random state:", 0, 100, 42)
+            test_size = st.slider("Ukuran set pengujian (persen):" if st.session_state.language == 'id' else "Test set size (%):", 10, 50, 20) / 100
+            random_state = st.number_input("Status acak:" if st.session_state.language == 'id' else "Random state:", 0, 100, 42)
             
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state
