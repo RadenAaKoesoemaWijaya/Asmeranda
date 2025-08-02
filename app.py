@@ -1067,10 +1067,26 @@ with tab3:
                     mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
                     mi_df = mi_df.sort_values("Mutual Information", ascending=False)
                     
-                    # Tambahan: Ambang batas untuk ensemble
-                    min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.25, 0.01, 
-                                            key=f"threshold_{method}")
-                    filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
+                    # Opsi pemilihan fitur: threshold atau top N
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection mode:",
+                        ["Ambang batas" if st.session_state.language == 'id' else "Threshold", 
+                         "Top N fitur" if st.session_state.language == 'id' else "Top N features"],
+                        key=f"mode_{method}"
+                    )
+                    
+                    if selection_mode == "Ambang batas" or selection_mode == "Threshold":
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.25, 0.01, 
+                                                key=f"threshold_{method}")
+                        filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
+                    else:
+                        # Mode top N features
+                        max_n = len(all_columns)
+                        top_n = st.slider(f"Jumlah fitur teratas {method}:", 1, max_n, min(10, max_n),
+                                        key=f"topn_{method}")
+                        filtered_df = mi_df.head(top_n)
+                    
                     return set(filtered_df["Feature"].tolist())
                 elif method == "Pearson Correlation":
                     corr = data[all_columns].corrwith(data[target_column]).abs()
@@ -1104,6 +1120,7 @@ with tab3:
                     return set(lasso_df["Feature"].tolist())
                 elif method == "Gradient Boosting Importance":
                     from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+                    
                     if problem_type == "Regression":
                         model = GradientBoostingRegressor(random_state=42)
                     else:
@@ -1112,14 +1129,40 @@ with tab3:
                     importances = model.feature_importances_
                     gb_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
                     gb_df = gb_df.sort_values("Importance", ascending=False)
-                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
-                    return set(gb_df.head(top_n)["Feature"].tolist())
+                    
+                    # Opsi pemilihan fitur: top N atau ambang batas minimum
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection mode:",
+                        ["Top N fitur" if st.session_state.language == 'id' else "Top N features",
+                         "Ambang batas" if st.session_state.language == 'id' else "Threshold"],
+                        key=f"mode_{method}"
+                    )
+                    
+                    if selection_mode == "Top N fitur" or selection_mode == "Top N features":
+                        # Mode top N features
+                        top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
+                        filtered_df = gb_df.head(top_n)
+                    else:
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.1, 0.01, 
+                                                key=f"threshold_{method}")
+                        filtered_df = gb_df[gb_df["Importance"] >= min_threshold]
+                    
+                    return set(filtered_df["Feature"].tolist())
                 elif method == "Random Forest Importance":
                     from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
                     
                     # Tambahan: Jumlah pohon untuk ensemble
                     n_estimators = st.number_input(f"Jumlah pohon {method}:", 10, 1000, 100, 10,
                                                 key=f"trees_{method}")
+                    
+                    # Opsi pemilihan fitur: threshold atau top N
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection mode:",
+                        ["Ambang batas" if st.session_state.language == 'id' else "Threshold", 
+                         "Top N fitur" if st.session_state.language == 'id' else "Top N features"],
+                        key=f"mode_{method}"
+                    )
                     
                     if problem_type == "Regression":
                         model = RandomForestRegressor(n_estimators=n_estimators, random_state=42)
@@ -1131,10 +1174,18 @@ with tab3:
                     rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
                     rf_df = rf_df.sort_values("Importance", ascending=False)
                     
-                    # Tambahan: Ambang batas untuk ensemble
-                    min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.2, 0.01,
-                                            key=f"threshold_{method}")
-                    filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
+                    if selection_mode == "Ambang batas" or selection_mode == "Threshold":
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.2, 0.01,
+                                                key=f"threshold_{method}")
+                        filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
+                    else:
+                        # Mode top N features
+                        max_n = len(all_columns)
+                        top_n = st.slider(f"Jumlah fitur teratas {method}:", 1, max_n, min(10, max_n),
+                                        key=f"topn_{method}")
+                        filtered_df = rf_df.head(top_n)
+                    
                     return set(filtered_df["Feature"].tolist())
                 else:
                     return set(all_columns)
@@ -1319,8 +1370,26 @@ with tab3:
                     mi_df = pd.DataFrame({"Feature": all_columns_stage2, "Mutual Information": mi})
                     mi_df = mi_df.sort_values("Mutual Information", ascending=False)
                     st.dataframe(mi_df)
-                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_mi_stage2")
-                    selected_features_stage2 = mi_df.head(top_n)["Feature"].tolist()
+                    
+                    # Opsi pemilihan fitur: top N atau ambang batas minimum
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur (tahap 2):" if st.session_state.language == 'id' else "Feature selection mode (stage 2):",
+                        ["Top N fitur" if st.session_state.language == 'id' else "Top N features",
+                         "Ambang batas" if st.session_state.language == 'id' else "Threshold"],
+                        key="mode_mi_stage2"
+                    )
+                    
+                    if selection_mode == "Top N fitur" or selection_mode == "Top N features":
+                        # Mode top N features
+                        top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 
+                                        1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_mi_stage2")
+                        selected_features_stage2 = mi_df.head(top_n)["Feature"].tolist()
+                    else:
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider("Ambang batas minimum (tahap 2):" if st.session_state.language == 'id' else "Minimum threshold (stage 2):", 
+                                                0.0, 1.0, 0.25, 0.01, key="threshold_mi_stage2")
+                        filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
+                        selected_features_stage2 = filtered_df["Feature"].tolist()
                 elif feature_selection_method_stage2 == "Pearson Correlation":
                     numeric_columns = data[all_columns_stage2].select_dtypes(include=[np.number]).columns.tolist()
                     if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
@@ -1376,8 +1445,26 @@ with tab3:
                     gb_df = pd.DataFrame({"Feature": all_columns_stage2, "Importance": importances})
                     gb_df = gb_df.sort_values("Importance", ascending=False)
                     st.dataframe(gb_df)
-                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_gb_stage2")
-                    selected_features_stage2 = gb_df.head(top_n)["Feature"].tolist()
+                    
+                    # Opsi pemilihan fitur: top N atau ambang batas minimum
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur (tahap 2):" if st.session_state.language == 'id' else "Feature selection mode (stage 2):",
+                        ["Top N fitur" if st.session_state.language == 'id' else "Top N features",
+                         "Ambang batas" if st.session_state.language == 'id' else "Threshold"],
+                        key="mode_gb_stage2"
+                    )
+                    
+                    if selection_mode == "Top N fitur" or selection_mode == "Top N features":
+                        # Mode top N features
+                        top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 
+                                        1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_gb_stage2")
+                        selected_features_stage2 = gb_df.head(top_n)["Feature"].tolist()
+                    else:
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider("Ambang batas minimum (tahap 2):" if st.session_state.language == 'id' else "Minimum threshold (stage 2):", 
+                                                0.0, 1.0, 0.1, 0.01, key="threshold_gb_stage2")
+                        filtered_df = gb_df[gb_df["Importance"] >= min_threshold]
+                        selected_features_stage2 = filtered_df["Feature"].tolist()
                 elif feature_selection_method_stage2 == "Random Forest Importance":
                     from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
                     if problem_type == "Regression":
@@ -1389,8 +1476,26 @@ with tab3:
                     rf_df = pd.DataFrame({"Feature": all_columns_stage2, "Importance": importances})
                     rf_df = rf_df.sort_values("Importance", ascending=False)
                     st.dataframe(rf_df)
-                    top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_rf_stage2")
-                    selected_features_stage2 = rf_df.head(top_n)["Feature"].tolist()
+                    
+                    # Opsi pemilihan fitur: top N atau ambang batas minimum
+                    selection_mode = st.radio(
+                        "Mode seleksi fitur (tahap 2):" if st.session_state.language == 'id' else "Feature selection mode (stage 2):",
+                        ["Top N fitur" if st.session_state.language == 'id' else "Top N features",
+                         "Ambang batas" if st.session_state.language == 'id' else "Threshold"],
+                        key="mode_rf_stage2"
+                    )
+                    
+                    if selection_mode == "Top N fitur" or selection_mode == "Top N features":
+                        # Mode top N features
+                        top_n = st.slider("Top N features (tahap 2):" if st.session_state.language == 'id' else "Top N features (stage 2):", 
+                                        1, len(all_columns_stage2), min(5, len(all_columns_stage2)), key="topn_rf_stage2")
+                        selected_features_stage2 = rf_df.head(top_n)["Feature"].tolist()
+                    else:
+                        # Mode threshold-based filtering
+                        min_threshold = st.slider("Ambang batas minimum (tahap 2):" if st.session_state.language == 'id' else "Minimum threshold (stage 2):", 
+                                                0.0, 1.0, 0.1, 0.01, key="threshold_rf_stage2")
+                        filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
+                        selected_features_stage2 = filtered_df["Feature"].tolist()
 
                 elif feature_selection_method_stage2 == "Ensemble Feature Selection":
                     st.info("Pilih dua metode seleksi fitur untuk digabungkan (tahap 2)." if st.session_state.language == 'id' else "Select two feature selection methods to combine (stage 2).")
@@ -1618,40 +1723,6 @@ with tab3:
                     
                     # Set fitur yang terpilih untuk digunakan dalam model
                     selected_features_stage2 = final_selected_features_names_stage2
-                
-                # Tampilkan hasil tahap kedua
-                if selected_features_stage2:
-                    st.success(f"Tahap 2 selesai: {len(selected_features_stage2)} fitur terpilih" if st.session_state.language == 'id' else f"Stage 2 completed: {len(selected_features_stage2)} features selected")
-                    st.write(f"Fitur terpilih tahap 2: {', '.join(selected_features_stage2)}" if st.session_state.language == 'id' else f"Stage 2 selected features: {', '.join(selected_features_stage2)}")
-                    
-                    # Gunakan hasil tahap kedua sebagai fitur final
-                    final_selected_features = selected_features_stage2
-                else:
-                    st.warning("Tidak ada fitur yang terpilih di tahap 2. Menggunakan hasil tahap 1." if st.session_state.language == 'id' else "No features selected in stage 2. Using stage 1 results.")
-                    final_selected_features = selected_features
-            else:
-                # Jika tahap kedua tidak diaktifkan, gunakan hasil tahap pertama
-                final_selected_features = selected_features
-            
-            # Tampilkan ringkasan akhir
-            st.subheader("Ringkasan Seleksi Fitur Akhir" if st.session_state.language == 'id' else "Final Feature Selection Summary")
-            if enable_second_stage:
-                comparison_data = {
-                    "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
-                                                                           "Tahap 1" if st.session_state.language == 'id' else "Stage 1", 
-                                                                           "Tahap 2" if st.session_state.language == 'id' else "Stage 2"],
-                    "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
-                                                                                             len(selected_features), 
-                                                                                             len(final_selected_features)]
-                }
-            else:
-                comparison_data = {
-                    "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
-                                                                           "Tahap 1" if st.session_state.language == 'id' else "Stage 1"],
-                    "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
-                                                                                             len(selected_features)]
-                }
-                final_selected_features = selected_features
             
             st.table(pd.DataFrame(comparison_data))
             st.write(f"Fitur akhir yang akan digunakan: {', '.join(final_selected_features)}" if st.session_state.language == 'id' else f"Final features to be used: {', '.join(final_selected_features)}")
