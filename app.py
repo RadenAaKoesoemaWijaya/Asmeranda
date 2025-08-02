@@ -608,6 +608,38 @@ with tab3:
                 
                 st.success("Penanganan outlier selesai" if st.session_state.language == 'id' else "Outlier handling completed")
         
+        # Handle Duplicate Data
+        st.subheader("Penanganan Data Duplikat" if st.session_state.language == 'id' else "Handle Duplicate Data")
+        
+        # Check for duplicate rows
+        duplicate_count = data.duplicated().sum()
+        
+        if duplicate_count > 0:
+            st.warning(f"Ditemukan {duplicate_count} baris duplikat dalam dataset" if st.session_state.language == 'id' else f"Found {duplicate_count} duplicate rows in the dataset")
+            
+            # Show preview of duplicate rows
+            duplicate_rows = data[data.duplicated(keep=False)].sort_values(by=data.columns.tolist())
+            st.write("Preview baris duplikat:" if st.session_state.language == 'id' else "Preview of duplicate rows:")
+            st.dataframe(duplicate_rows.head(10))
+            
+            # Options for handling duplicates
+            handle_duplicates = st.checkbox("Hapus data duplikat" if st.session_state.language == 'id' else "Remove duplicate data", value=True)
+            
+            if handle_duplicates:
+                # Store original data count
+                original_count = len(data)
+                
+                # Remove duplicate rows
+                data = data.drop_duplicates()
+                
+                # Calculate removed duplicates
+                removed_count = original_count - len(data)
+                
+                st.success(f"Berhasil menghapus {removed_count} baris duplikat" if st.session_state.language == 'id' else f"Successfully removed {removed_count} duplicate rows")
+                st.info(f"Jumlah data: {original_count} → {len(data)}" if st.session_state.language == 'id' else f"Data count: {original_count} → {len(data)}")
+        else:
+            st.success("Tidak ditemukan data duplikat dalam dataset" if st.session_state.language == 'id' else "No duplicate data found in the dataset")
+
         # Feature selection
         st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
 
@@ -849,15 +881,37 @@ with tab3:
                 default=all_columns
             )
         elif feature_selection_method == "Mutual Information":
-            if problem_type == "Regression":
-                mi = mutual_info_regression(data[all_columns], data[target_column])
-            else:
-                mi = mutual_info_classif(data[all_columns], data[target_column])
-            mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
-            mi_df = mi_df.sort_values("Mutual Information", ascending=False)
-            st.dataframe(mi_df)
-            top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
-            selected_features = mi_df.head(top_n)["Feature"].tolist()
+                    if problem_type == "Regression":
+                        mi = mutual_info_regression(data[all_columns], data[target_column])
+                    else:
+                        mi = mutual_info_classif(data[all_columns], data[target_column])
+                    mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
+                    mi_df = mi_df.sort_values("Mutual Information", ascending=False)
+                    
+                    # Tambahan: Slider untuk ambang batas minimum
+                    min_threshold = st.slider("Ambang batas minimum Mutual Information:", 0.0, 1.0, 0.25, 0.01, 
+                                             help="Fitur dengan nilai Mutual Information di bawah ambang ini akan dihilangkan")
+                    
+                    # Filter berdasarkan ambang batas
+                    filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
+                    
+                    st.dataframe(mi_df)
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    top_features = mi_df.head(30)  # Tampilkan 15 fitur teratas
+                    ax.barh(top_features['Feature'], top_features['Mutual Information'])
+                    ax.set_xlabel('Mutual Information Score')
+                    ax.set_title('Top 30 Features by Mutual Information')
+                    ax.invert_yaxis()  # Fitur dengan score tertinggi di atas
+                    st.pyplot(fig)
+                    
+                    # Pilih fitur berdasarkan ambang batas atau top N
+                    use_threshold = st.checkbox("Gunakan ambang batas", value=True)
+                    if use_threshold:
+                        selected_features = filtered_df["Feature"].tolist()
+                        st.info(f"{len(selected_features)} fitur terpilih dengan ambang batas {min_threshold}")
+                    else:
+                        top_n = st.slider("Top N fitur:", 1, len(all_columns), min(10, len(all_columns)))
+                        selected_features = mi_df.head(top_n)["Feature"].tolist()
         elif feature_selection_method == "Pearson Correlation":
             numeric_columns = data[all_columns].select_dtypes(include=[np.number]).columns.tolist()
             if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
@@ -870,9 +924,15 @@ with tab3:
             st.dataframe(corr_df)
             top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
             selected_features = corr_df.head(top_n)["Feature"].tolist()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            top_features = corr_df.head(30)
+            ax.barh(top_features['Feature'], top_features['Correlation'])
+            ax.set_xlabel('Absolute Correlation')
+            ax.set_title('Top 30 Features by Pearson Correlation')
+            ax.invert_yaxis()
+            st.pyplot(fig)
         elif feature_selection_method == "Recursive Feature Elimination (RFE)":
             from sklearn.feature_selection import RFE
-            # --- Tambahkan encoding untuk fitur kategorikal sebelum RFE ---
             X_rfe = data[all_columns].copy()
             for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
                 le = LabelEncoder()
@@ -886,6 +946,13 @@ with tab3:
             rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
             st.dataframe(rfe_df)
             selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
+            selected_count = rfe_df['Selected'].sum()
+            fig, ax = plt.subplots(figsize=(8, 6))
+            rfe_df['Selected'].value_counts().plot(kind='bar', ax=ax)
+            ax.set_xticklabels(['Not Selected', 'Selected'], rotation=0)
+            ax.set_ylabel('Count')
+            ax.set_title(f'RFE Selection Results ({selected_count} features selected)')
+            st.pyplot(fig)
         elif feature_selection_method == "LASSO":
             from sklearn.linear_model import Lasso, LogisticRegression
             if problem_type == "Regression":
@@ -900,6 +967,13 @@ with tab3:
             lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
             st.dataframe(lasso_df)
             selected_features = lasso_df["Feature"].tolist()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            top_features = lasso_df.head(15)
+            ax.barh(top_features['Feature'], abs(top_features['Coefficient']))
+            ax.set_xlabel('Absolute Coefficient Value')
+            ax.set_title('Top 15 Features by LASSO Coefficient')
+            ax.invert_yaxis()
+            st.pyplot(fig)
         elif feature_selection_method == "Gradient Boosting Importance":
             from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
             if problem_type == "Regression":
@@ -913,19 +987,55 @@ with tab3:
             st.dataframe(gb_df)
             top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
             selected_features = gb_df.head(top_n)["Feature"].tolist()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            top_features = gb_df.head(30)
+            ax.barh(top_features['Feature'], top_features['Importance'])
+            ax.set_xlabel('Importance Score')
+            ax.set_title('Top 30 Features by Gradient Boosting Importance')
+            ax.invert_yaxis()
+            st.pyplot(fig)
         elif feature_selection_method == "Random Forest Importance":
-            from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-            if problem_type == "Regression":
-                model = RandomForestRegressor(random_state=42)
-            else:
-                model = RandomForestClassifier(random_state=42)
-            model.fit(data[all_columns], data[target_column])
-            importances = model.feature_importances_
-            rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
-            rf_df = rf_df.sort_values("Importance", ascending=False)
-            st.dataframe(rf_df)
-            top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
-            selected_features = rf_df.head(top_n)["Feature"].tolist()
+                    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                    
+                    # Tambahan: Input untuk jumlah pohon
+                    n_estimators = st.number_input("Jumlah pohon Random Forest:", min_value=10, max_value=1000, value=100, step=10,
+                                                   help="Semakin banyak pohon, semakin akurat tetapi lebih lambat")
+                    
+                    if problem_type == "Regression":
+                        model = RandomForestRegressor(n_estimators=n_estimators, random_state=42)
+                    else:
+                        model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
+                    
+                    model.fit(data[all_columns], data[target_column])
+                    importances = model.feature_importances_
+                    rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
+                    rf_df = rf_df.sort_values("Importance", ascending=False)
+                    
+                    # Tambahan: Slider untuk ambang batas minimum
+                    min_threshold = st.slider("Ambang batas minimum Importance:", 0.0, 1.0, 0.2, 0.01,
+                                             help="Fitur dengan nilai Importance di bawah ambang ini akan dihilangkan")
+                    
+                    # Filter berdasarkan ambang batas
+                    filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
+                    
+                    st.dataframe(rf_df)
+                    
+                    # Pilih fitur berdasarkan ambang batas atau top N
+                    use_threshold = st.checkbox("Gunakan ambang batas", value=True)
+                    if use_threshold:
+                        selected_features = filtered_df["Feature"].tolist()
+                        st.info(f"{len(selected_features)} fitur terpilih dengan ambang batas {min_threshold}")
+                    else:
+                        top_n = st.slider("Top N fitur:", 1, len(all_columns), min(10, len(all_columns)))
+                        selected_features = rf_df.head(top_n)["Feature"].tolist()
+
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    top_features = rf_df.head(30)
+                    ax.barh(top_features['Feature'], top_features['Importance'])
+                    ax.set_xlabel('Importance Score')
+                    ax.set_title('Top 30 Features by Random Forest Importance')
+                    ax.invert_yaxis()
+                    st.pyplot(fig)
 
         elif feature_selection_method == "Ensemble Feature Selection":
             st.info("Pilih dua metode seleksi fitur untuk digabungkan." if st.session_state.language == 'id' else "Select two feature selection methods to combine.")
@@ -956,8 +1066,12 @@ with tab3:
                         mi = mutual_info_classif(data[all_columns], data[target_column])
                     mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
                     mi_df = mi_df.sort_values("Mutual Information", ascending=False)
-                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
-                    return set(mi_df.head(top_n)["Feature"].tolist())
+                    
+                    # Tambahan: Ambang batas untuk ensemble
+                    min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.25, 0.01, 
+                                            key=f"threshold_{method}")
+                    filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
+                    return set(filtered_df["Feature"].tolist())
                 elif method == "Pearson Correlation":
                     corr = data[all_columns].corrwith(data[target_column]).abs()
                     corr_df = pd.DataFrame({"Feature": all_columns, "Correlation": corr})
@@ -1002,16 +1116,26 @@ with tab3:
                     return set(gb_df.head(top_n)["Feature"].tolist())
                 elif method == "Random Forest Importance":
                     from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+                    
+                    # Tambahan: Jumlah pohon untuk ensemble
+                    n_estimators = st.number_input(f"Jumlah pohon {method}:", 10, 1000, 100, 10,
+                                                key=f"trees_{method}")
+                    
                     if problem_type == "Regression":
-                        model = RandomForestRegressor(random_state=42)
+                        model = RandomForestRegressor(n_estimators=n_estimators, random_state=42)
                     else:
-                        model = RandomForestClassifier(random_state=42)
+                        model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
+                    
                     model.fit(data[all_columns], data[target_column])
                     importances = model.feature_importances_
                     rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
                     rf_df = rf_df.sort_values("Importance", ascending=False)
-                    top_n = st.slider(f"Top N fitur ({method}):", 1, len(all_columns), min(10, len(all_columns)), key=f"topn_{method}")
-                    return set(rf_df.head(top_n)["Feature"].tolist())
+                    
+                    # Tambahan: Ambang batas untuk ensemble
+                    min_threshold = st.slider(f"Ambang batas minimum {method}:", 0.0, 1.0, 0.2, 0.01,
+                                            key=f"threshold_{method}")
+                    filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
+                    return set(filtered_df["Feature"].tolist())
                 else:
                     return set(all_columns)
 
@@ -1554,6 +1678,39 @@ with tab3:
             
             st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
             
+            # Display class distribution table for classification problems
+            if st.session_state.problem_type == "Classification":
+                st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
+                
+                # Create distribution table
+                train_counts = pd.Series(y_train).value_counts().sort_index()
+                test_counts = pd.Series(y_test).value_counts().sort_index()
+                
+                distribution_df = pd.DataFrame({
+                    'Label': train_counts.index,
+                    'Jumlah Data Training': train_counts.values,
+                    'Jumlah Data Testing': test_counts.values,
+                    'Total': train_counts.values + test_counts.values
+                })
+                
+                # Add percentages
+                total_samples = len(y_train) + len(y_test)
+                distribution_df['Persentase Training (%)'] = (distribution_df['Jumlah Data Training'] / len(y_train) * 100).round(2)
+                distribution_df['Persentase Testing (%)'] = (distribution_df['Jumlah Data Testing'] / len(y_test) * 100).round(2)
+                distribution_df['Persentase Total (%)'] = (distribution_df['Total'] / total_samples * 100).round(2)
+                
+                st.dataframe(distribution_df)
+                
+                # Display summary statistics
+                st.write(f"**Total sampel:** {total_samples}")
+                st.write(f"**Training set:** {len(y_train)} sampel ({len(y_train)/total_samples*100:.1f}%)")
+                st.write(f"**Testing set:** {len(y_test)} sampel ({len(y_test)/total_samples*100:.1f}%)")
+                
+                # Display class imbalance information
+                if len(train_counts) > 1:
+                    imbalance_ratio = train_counts.max() / train_counts.min()
+                    st.write(f"**Rasio ketidakseimbangan kelas (training):** {imbalance_ratio:.2f}")
+            
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
             st.dataframe(X.head())
@@ -1614,6 +1771,27 @@ with tab4:
                     "Metrik evaluasi:",
                     ["accuracy", "precision", "recall", "f1", "roc_auc"]
                 )
+                
+                # Display fold distribution for classification
+                st.write("**Distribisi Data per Fold:**" if st.session_state.language == 'id' else "**Data Distribution per Fold:**")
+                
+                kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+                fold_info = []
+                
+                for fold_idx, (train_idx, val_idx) in enumerate(kf.split(X)):
+                    y_fold_train = y.iloc[train_idx]
+                    y_fold_val = y.iloc[val_idx]
+                    
+                    fold_counts = pd.Series(y_fold_val).value_counts().sort_index()
+                    fold_info.append({
+                        'Fold': f'Fold {fold_idx + 1}',
+                        'Training Samples': len(train_idx),
+                        'Validation Samples': len(val_idx),
+                        **{f'Class {label}': count for label, count in fold_counts.items()}
+                    })
+                
+                fold_df = pd.DataFrame(fold_info)
+                st.dataframe(fold_df)
             else:  # Regression
                 cv_scoring = st.selectbox(
                     "Metrik evaluasi:",
@@ -1819,6 +1997,273 @@ with tab4:
 
         else:
             # Non-time series data - Classification or Regression
+            # 3D Visualization Section
+            st.subheader("Visualisasi 3D Data" if st.session_state.language == 'id' else "3D Data Visualization")
+            
+            # Add checkbox for 3D visualization
+            show_3d_viz = st.checkbox("Tampilkan visualisasi 3D PCA/t-SNE" if st.session_state.language == 'id' else "Show 3D PCA/t-SNE visualization", value=False)
+            
+            if show_3d_viz:
+                try:
+                    from sklearn.decomposition import PCA
+                    from sklearn.manifold import TSNE
+                    import plotly.express as px
+                    import plotly.graph_objects as go
+                    
+                    # Prepare data for visualization
+                    X_train_viz = st.session_state.X_train.copy()
+                    X_test_viz = st.session_state.X_test.copy()
+                    y_train_viz = st.session_state.y_train
+                    y_test_viz = st.session_state.y_test
+                    
+                    # Combine train and test data for consistent visualization
+                    X_combined = pd.concat([X_train_viz, X_test_viz])
+                    y_combined = pd.concat([y_train_viz, y_test_viz])
+                    
+                    # Create dataset labels
+                    dataset_labels = ['Train'] * len(X_train_viz) + ['Test'] * len(X_test_viz)
+                    
+                    # Select visualization method
+                    viz_method = st.selectbox(
+                        "Pilih metode visualisasi:" if st.session_state.language == 'id' else "Select visualization method:",
+                        ["PCA", "t-SNE"]
+                    )
+                    
+                    # Parameters for t-SNE
+                    if viz_method == "t-SNE":
+                        perplexity = st.slider(
+                            "Perplexity:" if st.session_state.language == 'id' else "Perplexity:",
+                            5, 50, 30
+                        )
+                        learning_rate = st.slider(
+                            "Learning rate:" if st.session_state.language == 'id' else "Learning rate:",
+                            10, 1000, 200
+                        )
+                        n_iter = st.slider(
+                            "Number of iterations:" if st.session_state.language == 'id' else "Number of iterations:",
+                            250, 2000, 1000
+                        )
+                    
+                    if st.button("Generate 3D Visualization" if st.session_state.language == 'id' else "Generate 3D Visualization"):
+                        with st.spinner("Membuat visualisasi 3D..." if st.session_state.language == 'id' else "Creating 3D visualization..."):
+                            
+                            if viz_method == "PCA":
+                                # Apply PCA
+                                pca = PCA(n_components=3)
+                                X_3d = pca.fit_transform(X_combined)
+                                
+                                # Calculate explained variance
+                                explained_var = pca.explained_variance_ratio_
+                                
+                                st.write(f"**PCA Explained Variance:**")
+                                st.write(f"PC1: {explained_var[0]:.2%}")
+                                st.write(f"PC2: {explained_var[1]:.2%}")
+                                st.write(f"PC3: {explained_var[2]:.2%}")
+                                st.write(f"Total: {sum(explained_var):.2%}")
+                                
+                            else:  # t-SNE
+                                # Apply t-SNE
+                                tsne = TSNE(
+                                    n_components=3,
+                                    perplexity=min(perplexity, len(X_combined) - 1),
+                                    learning_rate=learning_rate,
+                                    n_iter=n_iter,
+                                    random_state=42
+                                )
+                                X_3d = tsne.fit_transform(X_combined)
+                                
+                                st.write(f"**t-SNE Parameters:**")
+                                st.write(f"Perplexity: {perplexity}")
+                                st.write(f"Learning rate: {learning_rate}")
+                                st.write(f"Iterations: {n_iter}")
+                            
+                            # Create DataFrame for visualization
+                            viz_df = pd.DataFrame({
+                                'X': X_3d[:, 0],
+                                'Y': X_3d[:, 1],
+                                'Z': X_3d[:, 2],
+                                'Target': y_combined.values if hasattr(y_combined, 'values') else y_combined,
+                                'Dataset': dataset_labels
+                            })
+                            
+                            # Create color mapping for categorical data
+                            if problem_type == "Classification":
+                                # Create color mapping for categorical targets
+                                from sklearn.preprocessing import LabelEncoder
+                                le = LabelEncoder()
+                                viz_df['Target_Numeric'] = le.fit_transform(viz_df['Target'])
+                                
+                                # Get unique classes and create color mapping
+                                unique_classes = le.classes_
+                                n_classes = len(unique_classes)
+                                
+                                # Create color palette based on number of classes
+                                if n_classes <= 10:
+                                    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+                                else:
+                                    # Use a continuous colorscale for many classes
+                                    colors = None
+                                    
+                                # Filter data for train and test
+                                train_data = viz_df[viz_df['Dataset'] == 'Train']
+                                test_data = viz_df[viz_df['Dataset'] == 'Test']
+                            
+                            # Create 3D scatter plot
+                            fig = go.Figure()
+                            
+                            if problem_type == "Classification":
+                                # Color mapping for classification
+                                if colors and n_classes <= 10:
+                                    # Use discrete colors for small number of classes
+                                    for i, class_name in enumerate(unique_classes):
+                                        class_train = train_data[train_data['Target'] == class_name]
+                                        if len(class_train) > 0:
+                                            fig.add_trace(go.Scatter3d(
+                                                x=class_train['X'],
+                                                y=class_train['Y'],
+                                                z=class_train['Z'],
+                                                mode='markers',
+                                                name=f'Train - {class_name}',
+                                                marker=dict(
+                                                    size=4,
+                                                    color=colors[i % len(colors)],
+                                                    opacity=0.7
+                                                ),
+                                                text=[f"Train - {class_name}"] * len(class_train),
+                                                hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Class: %{text}<extra></extra>'
+                                            ))
+                                        
+                                        class_test = test_data[test_data['Target'] == class_name]
+                                        if len(class_test) > 0:
+                                            fig.add_trace(go.Scatter3d(
+                                                x=class_test['X'],
+                                                y=class_test['Y'],
+                                                z=class_test['Z'],
+                                                mode='markers',
+                                                name=f'Test - {class_name}',
+                                                marker=dict(
+                                                    size=4,
+                                                    color=colors[i % len(colors)],
+                                                    opacity=0.8,
+                                                    symbol='diamond'
+                                                ),
+                                                text=[f"Test - {class_name}"] * len(class_test),
+                                                hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Class: %{text}<extra></extra>'
+                                            ))
+                                else:
+                                    # Use continuous colorscale for many classes
+                                    fig.add_trace(go.Scatter3d(
+                                        x=train_data['X'],
+                                        y=train_data['Y'],
+                                        z=train_data['Z'],
+                                        mode='markers',
+                                        name='Training Data',
+                                        marker=dict(
+                                            size=4,
+                                            color=train_data['Target_Numeric'],
+                                            colorscale='Viridis',
+                                            opacity=0.7
+                                        ),
+                                        text=[f"Train - {t}" for t in train_data['Target']],
+                                        hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
+                                    ))
+                                    
+                                    fig.add_trace(go.Scatter3d(
+                                        x=test_data['X'],
+                                        y=test_data['Y'],
+                                        z=test_data['Z'],
+                                        mode='markers',
+                                        name='Testing Data',
+                                        marker=dict(
+                                            size=4,
+                                            color=test_data['Target_Numeric'],
+                                            colorscale='Plasma',
+                                            opacity=0.8,
+                                            symbol='diamond'
+                                        ),
+                                        text=[f"Test - {t}" for t in test_data['Target']],
+                                        hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
+                                    ))
+                            else:
+                                # For regression, use the original approach
+                                # Add train data
+                                train_data = viz_df[viz_df['Dataset'] == 'Train']
+                                fig.add_trace(go.Scatter3d(
+                                    x=train_data['X'],
+                                    y=train_data['Y'],
+                                    z=train_data['Z'],
+                                    mode='markers',
+                                    name='Training Data',
+                                    marker=dict(
+                                        size=4,
+                                        color=train_data['Z'],
+                                        colorscale='Blues',
+                                        opacity=0.7
+                                    ),
+                                    text=[f"Train - Target: {t}" for t in train_data['Target']],
+                                    hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
+                                ))
+                                
+                                # Add test data
+                                test_data = viz_df[viz_df['Dataset'] == 'Test']
+                                fig.add_trace(go.Scatter3d(
+                                    x=test_data['X'],
+                                    y=test_data['Y'],
+                                    z=test_data['Z'],
+                                    mode='markers',
+                                    name='Testing Data',
+                                    marker=dict(
+                                        size=4,
+                                        color=test_data['Z'],
+                                        colorscale='Reds',
+                                        opacity=0.8,
+                                        symbol='diamond'
+                                    ),
+                                    text=[f"Test - Target: {t}" for t in test_data['Target']],
+                                    hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
+                                ))
+                            
+                            # Update layout
+                            fig.update_layout(
+                                title=f"3D {viz_method} Visualization - {problem_type} Data" if st.session_state.language == 'id' else f"Visualisasi 3D {viz_method} - Data {problem_type}",
+                                scene=dict(
+                                    xaxis_title=f"{viz_method} 1",
+                                    yaxis_title=f"{viz_method} 2",
+                                    zaxis_title=f"{viz_method} 3"
+                                ),
+                                width=800,
+                                height=600,
+                                margin=dict(l=0, r=0, b=0, t=40)
+                            )
+                            
+                            # Display the plot
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Add summary statistics
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Training Data:**")
+                                st.write(f"Samples: {len(X_train_viz)}")
+                                st.write(f"Features: {X_train_viz.shape[1]}")
+                            with col2:
+                                st.write("**Testing Data:**")
+                                st.write(f"Samples: {len(X_test_viz)}")
+                                st.write(f"Features: {X_test_viz.shape[1]}")
+                            
+                            # Add download option
+                            csv = viz_df.to_csv(index=False)
+                            st.download_button(
+                                label="Download 3D Coordinates CSV" if st.session_state.language == 'id' else "Download 3D Coordinates CSV",
+                                data=csv,
+                                file_name=f"3d_{viz_method.lower()}_coordinates.csv",
+                                mime="text/csv"
+                            )
+                            
+                except ImportError as e:
+                    st.error(f"Library yang diperlukan tidak tersedia: {str(e)}. Silakan instal dengan: pip install scikit-learn plotly" if st.session_state.language == 'id' else f"Required library not available: {str(e)}. Please install with: pip install scikit-learn plotly")
+                except Exception as e:
+                    st.error(f"Error saat membuat visualisasi: {str(e)}" if st.session_state.language == 'id' else f"Error creating visualization: {str(e)}")
+            
             st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
             # Tambahkan opsi untuk menggunakan GridSearchCV
