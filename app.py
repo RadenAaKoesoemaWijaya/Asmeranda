@@ -2659,7 +2659,7 @@ with tab4:
                             # Test prediksi dengan data dummy untuk memastikan model berfungsi
                             dummy_data = pd.DataFrame(np.zeros((1, len(st.session_state.X_train.columns))), 
                                                     columns=st.session_state.X_train.columns)
-                            st.session_state.model.predict(dummy_data)
+                            model.predict(dummy_data)  # Use local 'model' instead of st.session_state.model
                             st.success("Model siap digunakan untuk prediksi" if st.session_state.language == 'id' else "Model ready for prediction")
                         except Exception as e:
                             st.error(f"Model error: {str(e)}. Silakan latih ulang model." if st.session_state.language == 'id' else f"Model error: {str(e)}. Please retrain the model.")
