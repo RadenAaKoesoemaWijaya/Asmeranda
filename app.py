@@ -2493,7 +2493,7 @@ with tab4:
                                 power_t = st.slider("Power t:", 0.1, 0.9, 0.5)
                                 
                         with col5:
-                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.001, format="%.4f")
+                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.0001, format="%.4f")
                             learning_rate = st.selectbox("Learning rate schedule:", ["constant", "invscaling", "adaptive"])
                             
                         col6, col7 = st.columns(2)
@@ -2787,7 +2787,7 @@ with tab4:
                                 power_t = st.slider("Power t:", 0.1, 0.9, 0.5)
                                 
                         with col5:
-                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.001, format="%.4f")
+                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.0001, format="%.4f")
                             learning_rate = st.selectbox("Learning rate schedule:", ["constant", "invscaling", "adaptive"])
                             
                         col6, col7 = st.columns(2)
