@@ -26,6 +26,86 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
 
+# Tambahkan di bagian awal file setelah import statements
+ALGORITHM_EXPLANATIONS = {
+    'id': {
+        'missing_handling': {
+            'drop': "Menghapus baris dengan nilai hilang - cocok untuk data dengan sedikit missing values (<5%)",
+            'mean': "Mengisi dengan rata-rata - untuk data numerik yang terdistribusi normal",
+            'median': "Mengisi dengan median - untuk data numerik dengan outlier",
+            'mode': "Mengisi dengan modus - untuk data kategorikal",
+            'zero': "Mengisi dengan 0 - untuk data numerik dengan missing yang mungkin berarti tidak ada",
+            'new_category': "Mengisi dengan kategori baru 'Unknown' - untuk data kategorikal"
+        },
+        'outlier_methods': {
+            'iqr': "IQR (Interquartile Range): Mengidentifikasi outlier berdasarkan kuartil Q1 dan Q3",
+            'zscore': "Z-Score: Mengidentifikasi outlier berdasarkan standar deviasi dari rata-rata",
+            'winsorization': "Winsorization: Membatasi nilai ekstrem pada percentil tertentu"
+        },
+        'scaling_methods': {
+            'standard': "StandardScaler: Standarisasi dengan mean=0, std=1 - untuk distribusi normal",
+            'minmax': "MinMaxScaler: Normalisasi ke range [0,1] - untuk distribusi tidak diketahui",
+            'robust': "RobustScaler: Tahan terhadap outlier - untuk data dengan outlier",
+            'none': "Tidak ada scaling - untuk algoritma tree-based"
+        },
+        'feature_selection': {
+            'mutual_info': "Mutual Information: Mengukur hubungan non-linear antara fitur dan target",
+            'pearson': "Pearson Correlation: Mengukur hubungan linear antara fitur numerik dan target",
+            'rfe': "RFE (Recursive Feature Elimination): Memilih fitur berdasarkan model yang dilatih",
+            'lasso': "LASSO: Memilih fitur dengan regularisasi L1 untuk menghilangkan fitur tidak penting",
+            'gb_importance': "Gradient Boosting Importance: Menggunakan feature importance dari model Gradient Boosting",
+            'rf_importance': "Random Forest Importance: Menggunakan feature importance dari model Random Forest",
+            'ensemble': "Ensemble: Menggabungkan hasil dari dua metode seleksi fitur",
+            'multi_stage': "Multi-Stage: Pendekatan 3 tahap untuk seleksi fitur yang lebih akurat"
+        },
+        'balancing_methods': {
+            'ros': "Random Over Sampling: Menambah sampel kelas minoritas dengan duplikasi",
+            'rus': "Random Under Sampling: Mengurangi sampel kelas mayoritas",
+            'smote': "SMOTE: Membuat sampel sintetis berdasarkan tetangga terdekat",
+            'smoteenn': "SMOTEENN: Kombinasi SMOTE dengan Edited Nearest Neighbors",
+            'smotetomek': "SMOTETomek: Kombinasi SMOTE dengan Tomek Links"
+        }
+    },
+    'en': {
+        'missing_handling': {
+            'drop': "Remove rows with missing values - suitable for data with few missing values (<5%)",
+            'mean': "Fill with mean - for normally distributed numerical data",
+            'median': "Fill with median - for numerical data with outliers",
+            'mode': "Fill with mode - for categorical data",
+            'zero': "Fill with 0 - for numerical data where missing might mean absence",
+            'new_category': "Fill with new category 'Unknown' - for categorical data"
+        },
+        'outlier_methods': {
+            'iqr': "IQR (Interquartile Range): Identify outliers based on Q1 and Q3 quartiles",
+            'zscore': "Z-Score: Identify outliers based on standard deviation from mean",
+            'winsorization': "Winsorization: Limit extreme values at certain percentiles"
+        },
+        'scaling_methods': {
+            'standard': "StandardScaler: Standardization with mean=0, std=1 - for normal distributions",
+            'minmax': "MinMaxScaler: Normalization to range [0,1] - for unknown distributions",
+            'robust': "RobustScaler: Robust to outliers - for data with outliers",
+            'none': "No scaling - for tree-based algorithms"
+        },
+        'feature_selection': {
+            'mutual_info': "Mutual Information: Measure non-linear relationship between features and target",
+            'pearson': "Pearson Correlation: Measure linear relationship between numerical features and target",
+            'rfe': "RFE (Recursive Feature Elimination): Select features based on trained model",
+            'lasso': "LASSO: Select features with L1 regularization to eliminate unimportant features",
+            'gb_importance': "Gradient Boosting Importance: Using feature importance from Gradient Boosting model",
+            'rf_importance': "Random Forest Importance: Using feature importance from Random Forest model",
+            'ensemble': "Ensemble: Combine results from two feature selection methods",
+            'multi_stage': "Multi-Stage: 3-stage approach for more accurate feature selection"
+        },
+        'balancing_methods': {
+            'ros': "Random Over Sampling: Increase minority class samples by duplication",
+            'rus': "Random Under Sampling: Reduce majority class samples",
+            'smote': "SMOTE: Create synthetic samples based on nearest neighbors",
+            'smoteenn': "SMOTEENN: Combination of SMOTE with Edited Nearest Neighbors",
+            'smotetomek': "SMOTETomek: Combination of SMOTE with Tomek Links"
+        }
+    }
+}
+
 try:
     import lime
     from lime import lime_tabular
@@ -443,6 +523,71 @@ with tab2:
     else:
         st.info("Silakan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
 
+# Tambahkan helper function untuk penjelasan algoritma
+from sklearn.feature_selection import RFE, SelectKBest, mutual_info_regression, mutual_info_classif
+from sklearn.linear_model import Lasso, LogisticRegression
+
+def get_feature_selection_explanation(method, language='id'):
+    explanations = {
+        'id': {
+            'information_gain': """\            **Information Gain**: Mengukur penurunan entropi saat fitur digunakan untuk memprediksi target.
+            - Parameter k: Jumlah fitur terbaik yang dipilih
+            - Semakin tinggi information gain, semakin penting fitur tersebut
+            """,
+            'random_forest_importance': """\            **Random Forest Feature Importance**: Menggunakan random forest untuk menghitung importance score.
+            - n_estimators: Jumlah pohon (default=100)
+            - max_depth: Kedalaman maksimum pohon untuk mencegah overfitting
+            - Fitur dengan importance score tinggi dipilih
+            """,
+            'rfe': """\            **Recursive Feature Elimination (RFE)**: Secara rekursif menghapus fitur dengan importance terendah.
+            - n_features_to_select: Jumlah fitur akhir yang diinginkan
+            - step: Berapa banyak fitur yang dihapus setiap iterasi
+            - Menggunakan model estimator untuk mengevaluasi fitur
+            """,
+            'mutual_info': """\            **Mutual Information**: Mengukur ketergantungan mutual antara fitur dan target.
+            - Parameter k: Jumlah fitur dengan mutual information tertinggi
+            - Tidak memerlukan asumsi distribusi data
+            """,
+            'pearson_correlation': """\            **Pearson Correlation**: Mengukur korelasi linear antara fitur dan target.
+            - Range: -1 hingga 1 (1 = korelasi positif kuat, -1 = korelasi negatif kuat)
+            - Hanya untuk hubungan linear
+            """,
+            'lasso': """\            **LASSO Regression**: Menggunakan regularisasi L1 untuk feature selection.
+            - alpha: Parameter regularisasi (semakin tinggi semakin banyak fitur yang di-nol-kan)
+            - Fitur dengan koefisien != 0 dipilih
+            """
+        },
+        'en': {
+            'information_gain': """\            **Information Gain**: Measures the reduction in entropy when a feature is used to predict the target.
+            - Parameter k: Number of best features to select
+            - Higher information gain means more important feature
+            """,
+            'random_forest_importance': """\            **Random Forest Feature Importance**: Uses random forest to compute importance scores.
+            - n_estimators: Number of trees (default=100)
+            - max_depth: Maximum tree depth to prevent overfitting
+            - Features with high importance scores are selected
+            """,
+            'rfe': """\            **Recursive Feature Elimination (RFE)**: Recursively removes the least important features.
+            - n_features_to_select: Desired number of final features
+            - step: How many features to remove at each iteration
+            - Uses model estimator to evaluate features
+            """,
+            'mutual_info': """\            **Mutual Information**: Measures mutual dependence between features and target.
+            - Parameter k: Number of features with highest mutual information
+            - Does not require data distribution assumptions
+            """,
+            'pearson_correlation': """\            **Pearson Correlation**: Measures linear correlation between features and target.
+            - Range: -1 to 1 (1 = strong positive correlation, -1 = strong negative correlation)
+            - Only for linear relationships
+            """,
+            'lasso': """\            **LASSO Regression**: Uses L1 regularization for feature selection.
+            - alpha: Regularization parameter (higher alpha means more features zeroed out)
+            - Features with coefficients != 0 are selected
+            """
+        }
+    }
+    return explanations[language].get(method, "Metode tidak dikenal")
+
 # Tab 3: Preprocessing
 with tab3:
     st.header("Pemrosesan Data Awal" if st.session_state.language == 'id' else "Data Preprocessing")
@@ -467,6 +612,16 @@ with tab3:
         
         st.subheader("Atasi Nilai Hilang" if st.session_state.language == 'id' else "Handle Missing Values")
         
+        with st.expander("ℹ️ Penjelasan Metode Handling Missing Values"):
+            st.markdown("""
+            **Penjelasan Metode:**
+            - **Drop rows**: Menghapus baris dengan missing values. Cocok untuk missing <5%.
+            - **Mean**: Mengisi dengan rata-rata. Untuk data numerik terdistribusi normal.
+            - **Median**: Mengisi dengan median. Tahan terhadap outlier.
+            - **Mode**: Mengisi dengan nilai yang paling sering muncul. Untuk data kategorikal.
+            - **Zero**: Mengisi dengan 0. Untuk data yang memang memiliki nilai default 0.
+            - **New category**: Membuat kategori baru untuk missing values. Untuk data kategorikal.
+            """)
         # Display columns with missing values
         missing_cols = data.columns[data.isnull().any()].tolist()
         
@@ -856,6 +1011,10 @@ with tab3:
             st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
             st.info(scaling_description)
 
+        if st.checkbox("Tampilkan penjelasan algoritma", key="feature_selection_explanation"):
+            explanation = get_feature_selection_explanation(feature_selection_method, st.session_state.language)
+            st.markdown(explanation)
+
         # Pilih algoritma seleksi fitur
         feature_selection_method = st.selectbox(
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
@@ -871,7 +1030,7 @@ with tab3:
                 "Multi-Stage Feature Selection" # Tambahkan opsi baru ini
             ]
         )
-
+        
         selected_features = all_columns  # Default
 
         if feature_selection_method == "Manual":
@@ -1721,9 +1880,347 @@ with tab3:
             st.session_state.y_train = y_train
             st.session_state.y_test = y_test
 
-            
     else:
         st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
+
+# Tambahkan fungsi penjelasan algoritma
+def get_algorithm_explanation(algorithm, language='id'):
+    explanations = {
+        'id': {
+            'random_forest': """
+            **Random Forest**: Ensemble learning menggunakan multiple decision trees.
+            
+            **Parameter Utama:**
+            - n_estimators: Jumlah pohon (semakin banyak semakin akurat, tapi lambat)
+            - max_depth: Kedalaman maksimum pohon untuk mencegah overfitting
+            - min_samples_split: Minimum sample untuk split node
+            - min_samples_leaf: Minimum sample di leaf node
+            
+            **Kelebihan:** Tahan terhadap outlier, tidak perlu scaling
+            **Kekurangan:** Sulit diinterpretasi, bisa overfit dengan data kecil
+            """,
+            'gradient_boosting': """
+            **Gradient Boosting**: Membangun model secara sequential, memperbaiki error sebelumnya.
+            
+            **Parameter Utama:**
+            - n_estimators: Jumlah boosting stages
+            - learning_rate: Kecepatan pembelajaran (trade-off dengan n_estimators)
+            - max_depth: Kedalaman pohon base learner
+            - subsample: Fraksi data untuk setiap iterasi
+            
+            **Kelebihan:** Sangat akurat, handle non-linear relationships
+            **Kekurangan:** Risk overfitting, sensitive ke outlier
+            """,
+            'svm': """
+            **Support Vector Machine**: Mencari hyperplane optimal untuk klasifikasi/regresi.
+            
+            **Parameter Utama:**
+            - C: Regularization parameter (trade-off margin dan error)
+            - kernel: Tipe kernel ('linear', 'rbf', 'poly')
+            - gamma: Kernel coefficient untuk 'rbf' dan 'poly'
+            
+            **Kelebihan:** Efektif di high-dimensional space
+            **Kekurangan:** Tidak cocok untuk dataset besar, perlu scaling
+            """,
+            'logistic_regression': """
+            **Logistic Regression**: Model probabilistik untuk klasifikasi biner/multi-class.
+            
+            **Parameter Utama:**
+            - C: Inverse of regularization strength
+            - penalty: Tipe regularization ('l1', 'l2', 'elasticnet')
+            - max_iter: Maximum iterations untuk konvergensi
+            
+            **Kelebihan:** Output probabilistik, mudah diinterpretasi
+            **Kekurangan:** Asumsi linearity, sensitive ke outlier
+            """,
+            'linear_regression': """
+            **Linear Regression**: Model regresi dengan hubungan linear antara fitur dan target.
+            
+            **Parameter Utama:**
+            - fit_intercept: Apakah menghitung intercept
+            - normalize: Normalisasi fitur sebelum regresi
+            
+            **Kelebihan:** Simple, mudah diinterpretasi
+            **Kekurangan:** Asumsi linearity, sensitive ke outlier dan multicollinearity
+            """,
+            'bagging_regressor': """
+            **Bagging Regressor**: Ensemble learning yang menggabungkan multiple regressor dengan bootstrap sampling.
+            
+            **Parameter Utama:**
+            - base_estimator: Regressor dasar (default RandomForest)
+            - n_estimators: Jumlah regressor dalam ensemble
+            - max_samples: Jumlah sampel untuk setiap bootstrap
+            - max_features: Jumlah fitur untuk setiap bootstrap
+            - bootstrap: Apakah menggunakan sampling dengan pengembalian
+            
+            **Kelebihan:** Mengurangi variance, tahan terhadap overfitting
+            **Kekurangan:** Membutuhkan lebih banyak komputasi, bisa lambat untuk dataset besar
+            """,
+            'voting_regressor': """
+            **Voting Regressor**: Menggabungkan beberapa model regresi dan menggunakan rata-rata prediksi mereka.
+            
+            **Parameter Utama:**
+            - estimators: List dari (nama, model) tuples
+            - weights: Bobot untuk setiap model (optional)
+            
+            **Kelebihan:** Menggabungkan kekuatan model yang berbeda, meningkatkan akurasi
+            **Kekurangan:** Membutuhkan tuning untuk memilih model yang tepat, bisa overfit jika model terlalu kompleks
+            """,
+            'stacking_regressor': """
+            **Stacking Regressor**: Menggunakan model meta untuk menggabungkan prediksi dari beberapa model base.
+            
+            **Parameter Utama:**
+            - estimators: List dari (nama, model) tuples untuk base learners
+            - final_estimator: Model untuk menggabungkan prediksi
+            - passthrough: Apakah menyertakan fitur asli ke final estimator
+            
+            **Kelebihan:** Sangat fleksibel, bisa menggabungkan model yang sangat berbeda
+            **Kekurangan:** Kompleks, risk overfitting, membutuhkan validasi silang yang baik
+            """,
+            'knn_regressor': """
+            **KNN Regressor**: Menggunakan rata-rata dari tetangga terdekat untuk prediksi nilai kontinu.
+            
+            **Parameter Utama:**
+            - n_neighbors: Jumlah tetangga yang dipertimbangkan
+            - weights: Bobot tetangga ('uniform' atau 'distance')
+            - algorithm: Algoritma untuk pencarian tetangga
+            - metric: Metrik jarak untuk pencarian
+            
+            **Kelebihan:** Simple, tidak ada asumsi tentang distribusi data
+            **Kekurangan:** Sensitif terhadap dimensionalitas, bisa lambat untuk dataset besar
+            """,
+            'mlp_regressor': """
+            **MLP Regressor**: Neural network dengan multiple hidden layers untuk regresi.
+            
+            **Parameter Utama:**
+            - hidden_layer_sizes: Tuple dari ukuran hidden layers
+            - activation: Fungsi aktivasi ('relu', 'tanh', 'logistic')
+            - solver: Optimizer ('adam', 'sgd', 'lbfgs')
+            - learning_rate_init: Learning rate awal
+            - max_iter: Iterasi maksimum
+            
+            **Kelebihan:** Sangat fleksibel, bisa menangkap hubungan kompleks
+            **Kekurangan:** Banyak hyperparameter, risk overfitting, membutuhkan scaling
+            """,
+            'knn': """
+            **K-Nearest Neighbors**: Mengklasifikasikan berdasarkan mayoritas tetangga terdekat.
+            
+            **Parameter Utama:**
+            - n_neighbors: Jumlah tetangga yang dipertimbangkan
+            - weights: Bobot tetangga ('uniform', 'distance')
+            - metric: Jarak metric ('euclidean', 'manhattan')
+            
+            **Kelebihan:** Simple, tidak ada training phase
+            **Kekurangan:** Lambat prediksi, sensitive ke dimensionalitas
+            """,
+            'neural_network': """
+            **Neural Network**: Model deep learning dengan multiple hidden layers.
+            
+            **Parameter Utama:**
+            - hidden_layer_sizes: Ukuran hidden layers
+            - activation: Fungsi aktivasi ('relu', 'tanh', 'logistic')
+            - learning_rate_init: Initial learning rate
+            - max_iter: Maximum iterations
+            
+            **Kelebihan:** Model kompleks non-linear
+            **Kekurangan:** Risk overfitting, perlu tuning parameter
+            """,
+            'decision_tree': """
+            **Decision Tree**: Model tree-based untuk klasifikasi/regresi.
+            
+            **Parameter Utama:**
+            - max_depth: Kedalaman maksimum tree
+            - min_samples_split: Minimum samples untuk split
+            - min_samples_leaf: Minimum samples di leaf
+            - criterion: Kriteria split ('gini', 'entropy', 'mse')
+            
+            **Kelebihan:** Mudah diinterpretasi, tidak perlu scaling
+            **Kekurangan:** Risk overfitting, unstable
+            """
+        },
+        'en': {
+            'random_forest': """
+            **Random Forest**: Ensemble learning using multiple decision trees.
+            
+            **Key Parameters:**
+            - n_estimators: Number of trees (more trees = more accurate but slower)
+            - max_depth: Maximum tree depth to prevent overfitting
+            - min_samples_split: Minimum samples to split a node
+            - min_samples_leaf: Minimum samples in leaf node
+            
+            **Advantages:** Robust to outliers, no scaling needed
+            **Disadvantages:** Difficult to interpret, can overfit with small data
+            """,
+            'gradient_boosting': """
+            **Gradient Boosting**: Builds models sequentially, correcting previous errors.
+            
+            **Key Parameters:**
+            - n_estimators: Number of boosting stages
+            - learning_rate: Learning speed (trade-off with n_estimators)
+            - max_depth: Base learner tree depth
+            - subsample: Fraction of data for each iteration
+            
+            **Advantages:** Very accurate, handles non-linear relationships
+            **Disadvantages:** Risk of overfitting, sensitive to outliers
+            """,
+            'svm': """
+            **Support Vector Machine**: Finds optimal hyperplane for classification/regression.
+            
+            **Key Parameters:**
+            - C: Regularization parameter (trade-off margin and error)
+            - kernel: Kernel type ('linear', 'rbf', 'poly')
+            - gamma: Kernel coefficient for 'rbf' and 'poly'
+            
+            **Advantages:** Effective in high-dimensional space
+            **Disadvantages:** Not suitable for large datasets, needs scaling
+            """,
+            'logistic_regression': """
+            **Logistic Regression**: Probabilistic model for binary/multi-class classification.
+            
+            **Key Parameters:**
+            - C: Inverse of regularization strength
+            - penalty: Regularization type ('l1', 'l2', 'elasticnet')
+            - max_iter: Maximum iterations for convergence
+            
+            **Advantages:** Probabilistic output, easy to interpret
+            **Disadvantages:** Linearity assumption, sensitive to outliers
+            """,
+            'linear_regression': """
+            **Linear Regression**: Regression model with linear relationship between features and target.
+            
+            **Key Parameters:**
+            - fit_intercept: Whether to calculate intercept
+            - normalize: Normalize features before regression
+            
+            **Advantages:** Simple, easy to interpret
+            **Disadvantages:** Linearity assumption, sensitive to outliers and multicollinearity
+            """,
+            'bagging_regressor': """
+            **Bagging Regressor**: Ensemble learning that combines multiple regressors using bootstrap sampling.
+            
+            **Key Parameters:**
+            - base_estimator: Base regressor (default RandomForest)
+            - n_estimators: Number of regressors in ensemble
+            - max_samples: Number of samples for each bootstrap
+            - max_features: Number of features for each bootstrap
+            - bootstrap: Whether to use sampling with replacement
+            
+            **Advantages:** Reduces variance, robust to overfitting
+            **Disadvantages:** Requires more computation, can be slow for large datasets
+            """,
+            'voting_regressor': """
+            **Voting Regressor**: Combines several regression models and uses the average of their predictions.
+            
+            **Key Parameters:**
+            - estimators: List of (name, model) tuples
+            - weights: Weights for each model (optional)
+            
+            **Advantages:** Combines strengths of different models, improves accuracy
+            **Disadvantages:** Requires tuning to select appropriate models, can overfit if models are too complex
+            """,
+            'stacking_regressor': """
+            **Stacking Regressor**: Uses a meta-model to combine predictions from several base models.
+            
+            **Key Parameters:**
+            - estimators: List of (name, model) tuples for base learners
+            - final_estimator: Model to combine predictions
+            - passthrough: Whether to include original features to final estimator
+            
+            **Advantages:** Very flexible, can combine very different models
+            **Disadvantages:** Complex, risk of overfitting, requires good cross-validation
+            """,
+            'knn_regressor': """
+            **KNN Regressor**: Uses average of nearest neighbors for continuous value prediction.
+            
+            **Key Parameters:**
+            - n_neighbors: Number of neighbors to consider
+            - weights: Neighbor weights ('uniform' or 'distance')
+            - algorithm: Algorithm for neighbor search
+            - metric: Distance metric for search
+            
+            **Advantages:** Simple, no assumptions about data distribution
+            **Disadvantages:** Sensitive to dimensionality, can be slow for large datasets
+            """,
+            'mlp_regressor': """
+            **MLP Regressor**: Neural network with multiple hidden layers for regression.
+            
+            **Key Parameters:**
+            - hidden_layer_sizes: Tuple of hidden layer sizes
+            - activation: Activation function ('relu', 'tanh', 'logistic')
+            - solver: Optimizer ('adam', 'sgd', 'lbfgs')
+            - learning_rate_init: Initial learning rate
+            - max_iter: Maximum iterations
+            
+            **Advantages:** Very flexible, can capture complex relationships
+            **Disadvantages:** Many hyperparameters, risk of overfitting, requires scaling
+            """,
+            'knn': """
+            **K-Nearest Neighbors**: Classifies based on majority of nearest neighbors.
+            
+            **Key Parameters:**
+            - n_neighbors: Number of neighbors to consider
+            - weights: Neighbor weights ('uniform', 'distance')
+            - metric: Distance metric ('euclidean', 'manhattan')
+            
+            **Advantages:** Simple, no training phase
+            **Disadvantages:** Slow prediction, sensitive to dimensionality
+            """,
+            'neural_network': """
+            **Neural Network**: Deep learning model with multiple hidden layers.
+            
+            **Key Parameters:**
+            - hidden_layer_sizes: Hidden layer sizes
+            - activation: Activation function ('relu', 'tanh', 'logistic')
+            - learning_rate_init: Initial learning rate
+            - max_iter: Maximum iterations
+            
+            **Advantages:** Complex non-linear models
+            **Disadvantages:** Risk of overfitting, needs parameter tuning
+            """,
+            'decision_tree': """
+            **Decision Tree**: Tree-based model for classification/regression.
+            
+            **Key Parameters:**
+            - max_depth: Maximum tree depth
+            - min_samples_split: Minimum samples to split
+            - min_samples_leaf: Minimum samples in leaf
+            - criterion: Split criterion ('gini', 'entropy', 'mse')
+            
+            **Advantages:** Easy to interpret, no scaling needed
+            **Disadvantages:** Risk of overfitting, unstable
+            """
+        }
+    }
+    return explanations[language].get(algorithm, "Algoritma tidak dikenal")
+
+# Penjelasan cross-validation
+def get_cv_explanation(language='id'):
+    if language == 'id':
+        return """
+        **Cross-Validation**: Teknik validasi model untuk menghindari overfitting.
+        
+        **Metode:**
+        - **K-Fold**: Membagi data ke k lipatan, training di k-1, test di 1
+        - **Stratified**: Memastikan distribusi class tetap seimbang
+        - **Time Series**: Untuk data temporal, menggunakan urutan waktu
+        
+        **Parameter:**
+        - cv: Jumlah lipatan (biasanya 5 atau 10)
+        - scoring: Metrik evaluasi ('accuracy', 'f1', 'r2', dll)
+        """
+    else:
+        return """
+        **Cross-Validation**: Model validation technique to avoid overfitting.
+        
+        **Methods:**
+        - **K-Fold**: Split data into k folds, train on k-1, test on 1
+        - **Stratified**: Ensures balanced class distribution
+        - **Time Series**: For temporal data, using time order
+        
+        **Parameters:**
+        - cv: Number of folds (usually 5 or 10)
+        - scoring: Evaluation metric ('accuracy', 'f1', 'r2', etc.)
+        """
 
 # Tab 4: Feature Engineering and Model Training
 with tab4:
@@ -1756,12 +2253,15 @@ with tab4:
             is_timeseries = st.checkbox("Data ini adalah data deret waktu (time series)", value=False)
         
         # Add K-Fold Cross Validation option
-        use_kfold = st.checkbox("Gunakan K-Fold Cross Validation" if st.session_state.language == 'id' else "Use K-Fold Cross Validation", value=False)
-        
-        if use_kfold:
-            from sklearn.model_selection import KFold, cross_val_score, cross_val_predict
+            use_kfold = st.checkbox("Gunakan K-Fold Cross Validation" if st.session_state.language == 'id' else "Use K-Fold Cross Validation", value=False)
             
-            st.subheader("Lakukan K-Fold Cross Validation" if st.session_state.language == 'id' else "Perform K-Fold Cross Validation")
+            if use_kfold:
+                with st.expander("ℹ️ Penjelasan Cross-Validation" if st.session_state.language == 'id' else "ℹ️ Cross-Validation Explanation"):
+                    st.markdown(get_cv_explanation(st.session_state.language))
+                
+                from sklearn.model_selection import KFold, cross_val_score, cross_val_predict
+                
+                st.subheader("Lakukan K-Fold Cross Validation" if st.session_state.language == 'id' else "Perform K-Fold Cross Validation")
             
             n_splits = st.slider("Jumlah fold (K):" if st.session_state.language == 'id' else "Number of folds (K):", 2, 10, 5)
             cv_scoring = None
@@ -2470,6 +2970,22 @@ with tab4:
                 if model_type == "Random Forest":
                     n_estimators = st.slider("Jumlah pepohonan:" if st.session_state.language == 'id' else "Number of Trees:", 10, 500, 100)
                     max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
+                    min_samples_split = st.slider("Minimum samples split:" if st.session_state.language == 'id' else "Minimum samples split:", 2, 20, 2)
+                    min_samples_leaf = st.slider("Minimum samples leaf:" if st.session_state.language == 'id' else "Minimum samples leaf:", 1, 10, 1)
+                    
+                    st.info(f"""
+                    **Parameter yang digunakan:**
+                    - n_estimators: {n_estimators} (Semakin tinggi semakin akurat tapi lambat)
+                    - max_depth: {max_depth} (Mencegah overfitting)
+                    - min_samples_split: {min_samples_split} (Minimum samples untuk split node)
+                    - min_samples_leaf: {min_samples_leaf} (Minimum samples di leaf node)
+                    """ if st.session_state.language == 'id' else f"""
+                    **Parameters used:**
+                    - n_estimators: {n_estimators} (Higher = more accurate but slower)
+                    - max_depth: {max_depth} (Prevents overfitting)
+                    - min_samples_split: {min_samples_split} (Minimum samples to split node)
+                    - min_samples_leaf: {min_samples_leaf} (Minimum samples in leaf node)
+                    """)
                     
                     base_model = RandomForestRegressor(random_state=42)
                     
@@ -2477,14 +2993,16 @@ with tab4:
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'max_depth': [5, 10, 15] if max_depth == 10 else [max(1, max_depth-5), max_depth, min(50, max_depth+5)],
-                            'min_samples_split': [2, 5, 10],
-                            'min_samples_leaf': [1, 2, 4]
+                            'min_samples_split': [min_samples_split-1, min_samples_split, min_samples_split+1],
+                            'min_samples_leaf': [min_samples_leaf-1, min_samples_leaf, min_samples_leaf+1]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     else:
                         model = RandomForestRegressor(
                             n_estimators=n_estimators,
                             max_depth=max_depth,
+                            min_samples_split=min_samples_split,
+                            min_samples_leaf=min_samples_leaf,
                             random_state=42
                         )
                         
@@ -2646,6 +3164,13 @@ with tab4:
             
             model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):" if st.session_state.language == 'id' else "Nama model (bebas, gunakan huruf/angka/underscore):", value=f"")
 
+            selected_model = st.selectbox("Pilih model:" if st.session_state.language == 'id' else "Select model:", list(model_options.keys()))
+            algorithm_key = model_options[selected_model]
+
+            if st.checkbox("Tampilkan penjelasan algoritma", key="model_explanation"):
+                explanation = get_algorithm_explanation(algorithm_key, st.session_state.language)
+                st.markdown(explanation)
+            
             # Train model button
             if model is not None and st.button("Train Model"):
                 with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
