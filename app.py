@@ -2509,45 +2509,6 @@ with tab4:
                             max_iter = st.slider("Maximum iterations:", 100, 2000, 200)
                             tol = st.slider("Tolerance:", 1e-6, 1e-2, 1e-4, format="%.1e")
                     
-                    # Visualisasi arsitektur
-                    if st.checkbox("🔍 Lihat Arsitektur Jaringan" if st.session_state.language == 'id' else "🔍 View Network Architecture"):
-                        
-                        X = st.session_state.X_train
-                        y = st.session_state.y_train
-
-                        if 'neurons_list' not in locals():
-                            neurons_list = list(hidden_layer_sizes)
-
-                        try:
-                            # Hitung jumlah kelas unik
-                            unique_classes = len(np.unique(y))
-                            
-                            st.graphviz_chart(f"""
-                            digraph G {{
-                                rankdir=LR
-                                node [shape=circle, style=filled, fillcolor=lightblue]
-                                
-                                // Input layer
-                                subgraph cluster_input {{
-                                    label="Input Layer ({len(X.columns)} neurons)"
-                                    style=dashed
-                                    {'; '.join([f'input{i} [label="{col}"]' for i, col in enumerate(X.columns[:5])])}
-                                    {'...' if len(X.columns) > 5 else ''}
-                                }}
-                                
-                                // Hidden layers
-                                {' '.join([f'h{i} [label="Hidden {i+1}\\n({neurons_list[i]} neurons)"]' for i in range(num_hidden_layers)])}
-                                
-                                // Output layer
-                                output [label="Output Layer\\n({unique_classes} classes)\\nSoftmax", fillcolor=lightgreen]
-                                
-                                // Connections
-                                {' -> '.join(['input0'] + [f'h{i}' for i in range(num_hidden_layers)] + ['output'])}
-                            }}
-                            """)
-                        except Exception as e:
-                            st.error(f"Error visualizing network: {str(e)}")
-                    
                     # Create comprehensive parameters
                     mlp_params = {
                         'hidden_layer_sizes': hidden_layer_sizes,
@@ -2841,42 +2802,6 @@ with tab4:
                         with col7:
                             max_iter = st.slider("Maximum iterations:", 100, 2000, 200)
                             tol = st.slider("Tolerance:", 1e-6, 1e-2, 1e-4, format="%.1e")
-                    
-                    # Visualisasi arsitektur
-                    if st.checkbox("🔍 Lihat Arsitektur Jaringan" if st.session_state.language == 'id' else "🔍 View Network Architecture"):
-                        
-                            X = st.session_state.X_train
-                            y = st.session_state.y_train
-
-                            if 'neurons_list' not in locals():
-                                neurons_list = list(hidden_layer_sizes)
-
-                            try:
-                                st.graphviz_chart(f"""
-                                digraph G {{
-                                    rankdir=LR
-                                    node [shape=circle, style=filled, fillcolor=lightblue]
-                                    
-                                    // Input layer
-                                    subgraph cluster_input {{
-                                        label="Input Layer ({len(X.columns)} neurons)"
-                                        style=dashed
-                                        {'; '.join([f'input{i} [label="{col}"]' for i, col in enumerate(X.columns[:5])])}
-                                        {'...' if len(X.columns) > 5 else ''}
-                                    }}
-                                    
-                                    // Hidden layers
-                                    {' '.join([f'h{i} [label="Hidden {i+1}\\n({neurons_list[i]} neurons)"]' for i in range(num_hidden_layers)])}
-                                    
-                                    // Output layer
-                                    output [label="Output Layer\\n({len(np.unique(y))} classes)", fillcolor=lightgreen]
-                                    
-                                    // Connections
-                                    {' -> '.join(['input0'] + [f'h{i}' for i in range(num_hidden_layers)] + ['output'])}
-                                }}
-                                """)
-                            except Exception as e:
-                                st.error(f"Error visualizing network: {str(e)}")
                     
                     # Create comprehensive parameters
                     mlp_params = {
