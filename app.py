@@ -2424,7 +2424,7 @@ with tab4:
                         )
                         
                 elif model_type == "MLP (Neural Network)":
-                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'id' else "Hidden layer sizes (pisahkan dengan koma):", "100,50")
+                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'id' else "Hidden layer sizes (pisahkan dengan koma):", "128,128")
                     hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
                     activation = st.selectbox("Activation function:" if st.session_state.language == 'id' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
                     solver = st.selectbox("Solver:" if st.session_state.language == 'id' else "Solver:", ["adam", "sgd", "lbfgs"])
@@ -2614,32 +2614,173 @@ with tab4:
                             algorithm=algorithm
                         )
                 elif model_type == "MLP Regressor":
-                    from sklearn.neural_network import MLPRegressor
-                    hidden_layer_sizes = st.text_input("Hidden layer sizes (comma-separated):" if st.session_state.language == 'id' else "Ukuran hidden layer (pisahkan dengan koma):", "100,50")
-                    hidden_layer_sizes = tuple(int(x) for x in hidden_layer_sizes.split(","))
-                    activation = st.selectbox("Activation function:" if st.session_state.language == 'id' else "Fungsi aktivasi:", ["relu", "tanh", "logistic"])
-                    solver = st.selectbox("Solver:" if st.session_state.language == 'id' else "Solver:", ["adam", "sgd", "lbfgs"])
-                    alpha = st.slider("Alpha (L2 penalty):" if st.session_state.language == 'id' else "Alpha (L2 penalty):", 0.0001, 0.01, 0.0001, format="%.4f")
-                    max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 200)
-                    base_model = MLPRegressor(random_state=42)
+                    st.subheader("Konfigurasi Neural Network Regresi Lengkap" if st.session_state.language == 'id' else "Complete Neural Network Regression Configuration")
+                    
+                    # Tambahkan penjelasan teori di bagian atas
+                    with st.expander("📚 Penjelasan Teori Neural Network" if st.session_state.language == 'id' else "📚 Neural Network Theory Explanation"):
+                        st.markdown("""
+                        ### 🧠 **Fungsi Aktivasi**
+                        - **ReLU**: f(x) = max(0,x) - Cocok untuk hidden layers, mengatasi vanishing gradient
+                        - **Sigmoid**: f(x) = 1/(1+e^(-x)) - Cocok untuk output binary classification
+                        - **Tanh**: f(x) = (e^x - e^(-x))/(e^x + e^(-x)) - Range [-1,1], lebih stabil dari sigmoid
+                        - **Identity**: f(x) = x - Untuk output regression
+                        
+                        ### 🏗️ **Arsitektur Jaringan**
+                        - **Feedforward Neural Network (FNN)**: Informasi mengalir satu arah (input → hidden → output)
+                        - **Parameter yang dikonfigurasi**: Hidden layers, neurons per layer, activation function
+                        
+                        ### ⚡ **Optimizer & Learning**
+                        - **Adam**: Kombinasi momentum dan adaptive learning rate, efisien untuk data besar
+                        - **SGD**: Stochastic Gradient Descent dengan momentum untuk konvergensi lebih stabil
+                        - **L-BFGS**: Optimizer kuasi-Newton untuk dataset kecil/medium
+                        
+                        ### 🛡️ **Regularization & Overfitting Prevention**
+                        - **L2 Regularization (alpha)**: Menghindari overfitting dengan menjaga bobot tetap kecil
+                        - **Early Stopping**: Menghentikan training saat validasi tidak membaik
+                        - **Dropout**: (Tidak tersedia di MLPClassifier scikit-learn)
+                        
+                        ### 📊 **Hyperparameter Penting**
+                        - **Learning Rate**: Kontrol kecepatan pembelajaran (0.001-0.1)
+                        - **Batch Size**: Jumlah sampel per update (16-512)
+                        - **Epochs**: Jumlah iterasi seluruh dataset (max_iter)
+                        - **Hidden Layers**: Kompleksitas model (1-5 layers)
+                        """)
+                    
+                    # Architecture Configuration
+                    st.write("**Arsitektur Jaringan Regresi:**" if st.session_state.language == 'id' else "**Regression Network Architecture:**")
+                    
+                    # Hidden layers configuration
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 5, 2)
+                    with col2:
+                        neurons_per_layer = st.text_input("Neurons per layer:", "100,50")
+                        try:
+                            neurons_list = [int(x.strip()) for x in neurons_per_layer.split(",")]
+                            if len(neurons_list) < num_hidden_layers:
+                                neurons_list.extend([neurons_list[-1]] * (num_hidden_layers - len(neurons_list)))
+                            elif len(neurons_list) > num_hidden_layers:
+                                neurons_list = neurons_list[:num_hidden_layers]
+                            hidden_layer_sizes = tuple(neurons_list)
+                        except:
+                            hidden_layer_sizes = (100, 50)
+                    with col3:
+                        activation = st.selectbox("Activation function:", 
+                                                ["relu", "tanh", "logistic", "identity"],
+                                                help="ReLU: max(0,x) | Sigmoid: 1/(1+e^-x) | Tanh: (e^x-e^-x)/(e^x+e^-x) | Identity: x")
+                    
+                    # Advanced parameters
+                    with st.expander("Advanced Parameters"):
+                        col4, col5 = st.columns(2)
+                        with col4:
+                            solver = st.selectbox("Optimizer:", ["adam", "sgd", "lbfgs"])
+                            
+                            if solver == "adam":
+                                beta_1 = st.slider("Beta 1:", 0.8, 0.999, 0.9, format="%.3f")
+                                beta_2 = st.slider("Beta 2:", 0.9, 0.9999, 0.999, format="%.4f")
+                                epsilon = st.slider("Epsilon:", 1e-8, 1e-3, 1e-8, format="%.1e")
+                            elif solver == "sgd":
+                                momentum = st.slider("Momentum:", 0.0, 0.9, 0.9)
+                                power_t = st.slider("Power t:", 0.1, 0.9, 0.5)
+                                
+                        with col5:
+                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.001, format="%.4f")
+                            learning_rate = st.selectbox("Learning rate schedule:", ["constant", "invscaling", "adaptive"])
+                            
+                        col6, col7 = st.columns(2)
+                        with col6:
+                            alpha = st.slider("L2 regularization (alpha):", 0.00001, 0.1, 0.0001, format="%.5f")
+                            batch_size = st.selectbox("Batch size:", ["auto", 16, 32, 64, 128, 256])
+                            if batch_size == "auto":
+                                actual_batch_size = min(200, len(st.session_state.X_train))
+                            else:
+                                actual_batch_size = batch_size
+                                
+                        with col7:
+                            max_iter = st.slider("Maximum iterations:", 100, 2000, 200)
+                            tol = st.slider("Tolerance:", 1e-6, 1e-2, 1e-4, format="%.1e")
+                    
+                    # Visualisasi arsitektur
+                    if st.checkbox("🔍 Lihat Arsitektur Jaringan" if st.session_state.language == 'id' else "🔍 View Network Architecture"):
+                        
+                            X = st.session_state.X_train
+                            y = st.session_state.y_train
+
+                            if 'neurons_list' not in locals():
+                                neurons_list = list(hidden_layer_sizes)
+
+                            try:
+                                st.graphviz_chart(f"""
+                                digraph G {{
+                                    rankdir=LR
+                                    node [shape=circle, style=filled, fillcolor=lightblue]
+                                    
+                                    // Input layer
+                                    subgraph cluster_input {{
+                                        label="Input Layer ({len(X.columns)} neurons)"
+                                        style=dashed
+                                        {'; '.join([f'input{i} [label="{col}"]' for i, col in enumerate(X.columns[:5])])}
+                                        {'...' if len(X.columns) > 5 else ''}
+                                    }}
+                                    
+                                    // Hidden layers
+                                    {' '.join([f'h{i} [label="Hidden {i+1}\\n({neurons_list[i]} neurons)"]' for i in range(num_hidden_layers)])}
+                                    
+                                    // Output layer
+                                    output [label="Output Layer\\n({len(np.unique(y))} classes)", fillcolor=lightgreen]
+                                    
+                                    // Connections
+                                    {' -> '.join(['input0'] + [f'h{i}' for i in range(num_hidden_layers)] + ['output'])}
+                                }}
+                                """)
+                            except Exception as e:
+                                st.error(f"Error visualizing network: {str(e)}")
+                    
+                    # Create comprehensive parameters
+                    mlp_params = {
+                        'hidden_layer_sizes': hidden_layer_sizes,
+                        'activation': activation,
+                        'solver': solver,
+                        'alpha': alpha,
+                        'learning_rate_init': learning_rate_init,
+                        'learning_rate': learning_rate,
+                        'max_iter': max_iter,
+                        'tol': tol,
+                        'batch_size': actual_batch_size,
+                        'random_state': 42
+                    }
+                    
+                    # Add solver-specific parameters
+                    if solver == "adam":
+                        mlp_params.update({
+                            'beta_1': beta_1,
+                            'beta_2': beta_2,
+                            'epsilon': epsilon
+                        })
+                    elif solver == "sgd":
+                        mlp_params.update({
+                            'momentum': momentum,
+                            'power_t': power_t if learning_rate == "invscaling" else 0.5
+                        })
+                    
+                    base_model = MLPRegressor()
+                    
                     if use_grid_search:
                         param_grid = {
-                            'hidden_layer_sizes': [(100,), (100,50), (50,50,50)],
+                            'hidden_layer_sizes': [
+                                (50,), (100,), (200,),
+                                (50, 50), (100, 50), (100, 100),
+                                (100, 50, 25)
+                            ],
                             'activation': ['relu', 'tanh', 'logistic'],
-                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'solver': ['adam', 'sgd'],
                             'alpha': [0.0001, 0.001, 0.01],
+                            'learning_rate_init': [0.001, 0.01, 0.1],
                             'max_iter': [200, 500, 1000]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     else:
-                        model = MLPRegressor(
-                            hidden_layer_sizes=hidden_layer_sizes,
-                            activation=activation,
-                            solver=solver,
-                            alpha=alpha,
-                            max_iter=max_iter,
-                            random_state=42
-                        )
+                        model = MLPRegressor(**mlp_params)
                 else:
                     st.error("Silahkan pilih model regresi." if st.session_state.language == 'id' else "Please select a valid regression model.")
                     model = None
