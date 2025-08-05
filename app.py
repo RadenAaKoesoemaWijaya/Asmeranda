@@ -1165,8 +1165,17 @@ with tab3:
             selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
             selected_count = rfe_df['Selected'].sum()
             fig, ax = plt.subplots(figsize=(8, 6))
-            rfe_df['Selected'].value_counts().plot(kind='bar', ax=ax)
-            ax.set_xticklabels(['Not Selected', 'Selected'], rotation=0)
+            value_counts = rfe_df['Selected'].value_counts()
+            value_counts.plot(kind='bar', ax=ax)
+            
+            # Gunakan label yang sesuai dengan data yang ada
+            labels = []
+            if False in value_counts.index:
+                labels.append('Not Selected')
+            if True in value_counts.index:
+                labels.append('Selected')
+            ax.set_xticklabels(labels, rotation=0)
+            
             ax.set_ylabel('Count')
             ax.set_title(f'RFE Selection Results ({selected_count} features selected)')
             st.pyplot(fig)
