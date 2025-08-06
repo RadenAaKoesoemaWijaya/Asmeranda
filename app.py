@@ -640,12 +640,20 @@ with tab3:
         else:
             st.success("Tidak ditemukan data duplikat dalam dataset" if st.session_state.language == 'id' else "No duplicate data found in the dataset")
 
-        # Feature selection
-        st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
-
-        # Pindahkan encoding sebelum imbalanced dataset handling
-        categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
-        if categorical_cols:
+with tab4:
+    st.header("Rekayasa Fitur" if st.session_state.language == 'id' else "Feature Engineering")
+    
+    # Validasi apakah data sudah dimuat
+    if st.session_state.data is None:
+        st.error("Silakan unggah dataset terlebih dahulu di tab 'Data Upload'" if st.session_state.language == 'id' else "Please upload a dataset first in the 'Data Upload' tab")
+        st.stop()
+    
+    # Gunakan st.session_state.data dengan aman
+    data = st.session_state.data.copy()  # Create a working copy
+    
+    # Pindahkan encoding sebelum imbalanced dataset handling
+    categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
+    if categorical_cols:
             st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
             encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
             if encoding_method == "Label Encoding":
@@ -664,9 +672,8 @@ with tab3:
                 # Kembalikan target column
                 data[target_column] = target_series
                 st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
-
-        # Tambahkan penanganan imbalanced dataset setelah encoding dan hanya untuk klasifikasi
-        if problem_type == "Classification":
+    # Tambahkan penanganan imbalanced dataset setelah encoding dan hanya untuk klasifikasi
+    if problem_type == "Classification":
             st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
             
             # Tampilkan distribusi kelas
@@ -835,10 +842,78 @@ with tab3:
                 elif not IMB_AVAILABLE:
                     st.warning("Pustaka imbalanced-learn tidak tersedia. Silakan install dengan 'pip install imbalanced-learn'" if st.session_state.language == 'id' else "The imbalanced-learn library is not available. Please install it with 'pip install imbalanced-learn'")
 
-        all_columns = [col for col in data.columns if col != target_column]
 
-        numerical_cols = [col for col in st.session_state.numerical_columns if col in data.columns]
-        if numerical_cols:
+        # Prepare data for modeling dengan fitur akhir
+            X = data[all_columns]  # Gunakan semua kolom sebelum feature selection
+            y = data[target_column]
+
+
+        # Train-test split
+            st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
+
+            test_size = st.slider("Ukuran set pengujian (persen):" if st.session_state.language == 'id' else "Test set size (%):", 10, 50, 20) / 100
+            random_state = st.number_input("Status acak:" if st.session_state.language == 'id' else "Random state:", 0, 100, 42)
+
+            X_train_full, X_test_full, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=random_state
+            )
+
+            st.success(f"Data dibagi menjadi {X_train_full.shape[0]} sampel training dan {X_test_full.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train_full.shape[0]} training samples and {X_test_full.shape[0]} testing samples.")
+
+            # Display class distribution table for classification problems
+            if st.session_state.problem_type == "Classification":
+                st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
+                
+                # Create distribution table
+                train_counts = pd.Series(y_train).value_counts().sort_index()
+                test_counts = pd.Series(y_test).value_counts().sort_index()
+                
+                distribution_df = pd.DataFrame({
+                    'Label': train_counts.index,
+                    'Jumlah Data Training': train_counts.values,
+                    'Jumlah Data Testing': test_counts.values,
+                    'Total': train_counts.values + test_counts.values
+                })
+                
+                # Add percentages
+                total_samples = len(y_train) + len(y_test)
+                distribution_df['Persentase Training (%)'] = (distribution_df['Jumlah Data Training'] / len(y_train) * 100).round(2)
+                distribution_df['Persentase Testing (%)'] = (distribution_df['Jumlah Data Testing'] / len(y_test) * 100).round(2)
+                distribution_df['Persentase Total (%)'] = (distribution_df['Total'] / total_samples * 100).round(2)
+                
+                st.dataframe(distribution_df)
+                
+                # Display summary statistics
+                st.write(f"**Total sampel:** {total_samples}")
+                st.write(f"**Training set:** {len(y_train)} sampel ({len(y_train)/total_samples*100:.1f}%)")
+                st.write(f"**Testing set:** {len(y_test)} sampel ({len(y_test)/total_samples*100:.1f}%)")
+                
+                # Display class imbalance information
+                if len(train_counts) > 1:
+                    imbalance_ratio = train_counts.max() / train_counts.min()
+                    st.write(f"**Rasio ketidakseimbangan kelas (training):** {imbalance_ratio:.2f}")
+            
+                    # Display processed data
+                    st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
+                    st.dataframe(X.head())
+
+                    # Update session_state setelah encoding/scaling
+                    st.session_state.X_train = X_train_full  # Perbaiki dari X_train menjadi X_train_full
+                    st.session_state.X_test = X_test_full   # Perbaiki dari X_test menjadi X_test_full
+                    st.session_state.y_train = y_train
+                    st.session_state.y_test = y_test
+                else:
+                    st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
+
+# Feature selection
+    st.header("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
+    
+    st.subheader("Seleksi Fitur (hanya menggunakan data training)" if st.session_state.language == 'id' else "Feature Selection (using training data only)")
+
+    all_columns = [col for col in data.columns if col != target_column]
+
+    numerical_cols = [col for col in st.session_state.numerical_columns if col in data.columns]
+    if numerical_cols:
             st.subheader("Scale Numerical Features" if st.session_state.language == 'id' else "Scale Numerical Features")
             scaling_method = st.selectbox(
                 "Pilih metode scaling:" if st.session_state.language == 'id' else "Select scaling method:",
@@ -856,8 +931,8 @@ with tab3:
             st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
             st.info(scaling_description)
 
-        # Pilih algoritma seleksi fitur
-        feature_selection_method = st.selectbox(
+    # Pilih algoritma seleksi fitur
+    feature_selection_method = st.selectbox(
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
             [
                 "Manual",
@@ -868,402 +943,313 @@ with tab3:
                 "Gradient Boosting Importance",
                 "Random Forest Importance",
                 "Ensemble Feature Selection",
-                "Multi-Stage Feature Selection",
                 "Genetic Algorithm (PyGAD)"
             ]
         )
 
-        selected_features = all_columns
+    selected_features = all_columns
 
-        if feature_selection_method == "Manual":
-            selected_features = st.multiselect(
-                "Pilih fitur untuk model:" if st.session_state.language == 'id' else "Select features to include in the model:",
-                all_columns,
-                default=all_columns
-            )
-        
-        elif feature_selection_method == "Genetic Algorithm (PyGAD)":
-            st.subheader("Genetic Algorithm Feature Selection (PyGAD)" if st.session_state.language == 'id' else "Genetic Algorithm Feature Selection (PyGAD)")
-            st.info("Menggunakan algoritma genetik PyGAD untuk seleksi fitur otomatis" if st.session_state.language == 'id' else "Using PyGAD genetic algorithm for automatic feature selection")
-            
-            # Parameters for PyGAD
-            col1, col2 = st.columns(2)
-            with col1:
-                ga_population_size = st.number_input(
-                    "Ukuran populasi:" if st.session_state.language == 'id' else "Population size:",
-                    min_value=10, max_value=200, value=50, step=5,
-                    help="Jumlah kromosom dalam populasi" if st.session_state.language == 'id' else "Number of chromosomes in population"
-                )
-                ga_generations = st.number_input(
-                    "Jumlah generasi:" if st.session_state.language == 'id' else "Number of generations:",
-                    min_value=10, max_value=500, value=100, step=10,
-                    help="Maksimum iterasi algoritma genetik" if st.session_state.language == 'id' else "Maximum genetic algorithm iterations"
-                )
-                ga_mutation_rate = st.slider(
-                    "Tingkat mutasi:" if st.session_state.language == 'id' else "Mutation rate:",
-                    0.01, 0.3, 0.1, 0.01,
-                    help="Probabilitas mutasi gen" if st.session_state.language == 'id' else "Gene mutation probability"
-                )
-            
-            with col2:
-                ga_crossover_rate = st.slider(
-                    "Tingkat crossover:" if st.session_state.language == 'id' else "Crossover rate:",
-                    0.1, 0.9, 0.7, 0.1,
-                    help="Probabilitas crossover antar kromosom" if st.session_state.language == 'id' else "Crossover probability between chromosomes"
-                )
-                ga_elite_size = st.number_input(
-                    "Ukuran elit:" if st.session_state.language == 'id' else "Elite size:",
-                    min_value=1, max_value=20, value=5, step=1,
-                    help="Jumlah kromosom terbaik yang dilestarikan" if st.session_state.language == 'id' else "Number of best chromosomes to preserve"
-                )
-                target_features = st.number_input(
-                    "Target jumlah fitur:" if st.session_state.language == 'id' else "Target number of features:",
-                    min_value=1, max_value=len(all_columns), value=min(10, len(all_columns)), step=1
-                )
-            
-            # Prepare data for PyGAD
-            X_ga = data[all_columns].copy()
-            y_ga = data[target_column].copy()
-            
-            # Handle categorical variables
-            for col in X_ga.select_dtypes(include=['object', 'category']).columns:
-                le = LabelEncoder()
-                X_ga[col] = le.fit_transform(X_ga[col].astype(str))
-            
-            # Standardize features
-            scaler = StandardScaler()
-            X_ga_scaled = scaler.fit_transform(X_ga)
-            
-            if st.button("Jalankan Algoritma Genetik" if st.session_state.language == 'id' else "Run Genetic Algorithm"):
-                try:
-                    import pygad
-                    
-                    # Define fitness function
-                    def fitness_func(ga_instance, solution, solution_idx):
-                        # Get selected features based on binary solution
-                        selected_indices = np.where(solution == 1)[0]
+    if feature_selection_method == "Mutual Information":
+        if problem_type == "Regression":
+            mi = mutual_info_regression(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
+        else:
+            mi = mutual_info_classif(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
+        mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
+        mi_df = mi_df.sort_values("Mutual Information", ascending=False)
+        st.dataframe(mi_df)
+        top_n = st.slider("Top N features:" if st.session_state.language == 'id' else "Top N features:", 1, len(all_columns), min(5, len(all_columns)))
+        selected_features = mi_df.head(top_n)["Feature"].tolist()
+
+    elif feature_selection_method == "Pearson Correlation":
+        numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()  # Gunakan X_train_full
+        if y_train.dtype not in [np.float64, np.int64, np.float32, np.int32]:  # Gunakan y_train
+            st.error("Target kolom harus numerik untuk Pearson Correlation.")
+            corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
+        else:
+            corr = X_train_full[numeric_columns].corrwith(y_train).abs()  # Gunakan X_train_full dan y_train
+        corr_df = pd.DataFrame({"Feature": numeric_columns, "Correlation": corr})
+        corr_df = corr_df.sort_values("Correlation", ascending=False)
+        st.dataframe(corr_df)
+        top_n = st.slider("Top N features:" if st.session_state.language == 'id' else "Top N features:", 1, len(all_columns), min(5, len(all_columns)))
+        selected_features = corr_df.head(top_n)["Feature"].tolist()
+
+    elif feature_selection_method == "Recursive Feature Elimination (RFE)":
+        from sklearn.feature_selection import RFE
+        # --- Tambahkan encoding untuk fitur kategorikal sebelum RFE ---
+        X_rfe = X_train_full[all_columns].copy()  # Gunakan X_train_full
+        for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
+            le = LabelEncoder()
+            X_rfe[col] = le.fit_transform(X_rfe[col].astype(str))
+        if problem_type == "Regression":
+            estimator = LinearRegression()
+        else:
+            estimator = LogisticRegression(max_iter=500)
+        n_features_rfe = st.slider("Jumlah fitur RFE:" if st.session_state.language == 'id' else "Number of RFE features:", 1, len(all_columns), min(5, len(all_columns)))
+        rfe = RFE(estimator, n_features_to_select=n_features_rfe)
+        rfe.fit(X_rfe, y_train)  # Gunakan y_train
+        rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
+        st.dataframe(rfe_df)
+        selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
+
+    elif feature_selection_method == "LASSO":
+        from sklearn.linear_model import Lasso, LogisticRegression
+        alpha_lasso = st.slider("Alpha LASSO:" if st.session_state.language == 'id' else "LASSO Alpha:", 0.001, 1.0, 0.01)
+        if problem_type == "Regression":
+            lasso = Lasso(alpha=alpha_lasso, max_iter=1000)
+        else:
+            lasso = LogisticRegression(penalty='l1', solver='liblinear', max_iter=500, C=1/alpha_lasso)
+        lasso.fit(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
+        coef = lasso.coef_ if hasattr(lasso, "coef_") else lasso.coef_
+        if coef.ndim > 1:
+            coef = coef[0]
+        lasso_df = pd.DataFrame({"Feature": all_columns, "Coefficient": coef})
+        lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
+        st.dataframe(lasso_df)
+        selected_features = lasso_df["Feature"].tolist()
+
+    elif feature_selection_method == "Gradient Boosting Importance":
+        from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+        if problem_type == "Regression":
+            model = GradientBoostingRegressor(random_state=42)
+        else:
+            model = GradientBoostingClassifier(random_state=42)
+        model.fit(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
+        importances = model.feature_importances_
+        gb_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
+        gb_df = gb_df.sort_values("Importance", ascending=False)
+        st.dataframe(gb_df)
+        top_n = st.slider("Top N features:" if st.session_state.language == 'id' else "Top N features:", 1, len(all_columns), min(5, len(all_columns)))
+        selected_features = gb_df.head(top_n)["Feature"].tolist()
+
+    elif feature_selection_method == "Random Forest Importance":
+        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        if problem_type == "Regression":
+            model = RandomForestRegressor(random_state=42)
+        else:
+            model = RandomForestClassifier(random_state=42)
+        model.fit(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
+        importances = model.feature_importances_
+        rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
+        rf_df = rf_df.sort_values("Importance", ascending=False)
+        st.dataframe(rf_df)
+        top_n = st.slider("Top N features:" if st.session_state.language == 'id' else "Top N features:", 1, len(all_columns), min(5, len(all_columns)))
+        selected_features = rf_df.head(top_n)["Feature"].tolist()
+
+    elif feature_selection_method == "Genetic Algorithm (PyGAD)":
+        st.subheader("Genetic Algorithm Feature Selection (PyGAD)" if st.session_state.language == 'id' else "Genetic Algorithm Feature Selection (PyGAD)")
+        st.info("Menggunakan algoritma genetik PyGAD untuk seleksi fitur otomatis" if st.session_state.language == 'id' else "Using PyGAD genetic algorithm for automatic feature selection")
+        # Parameters for PyGAD
+        col1, col2 = st.columns(2)
+        with col1:
+                    ga_population_size = st.number_input(
+                        "Ukuran populasi:" if st.session_state.language == 'id' else "Population size:",
+                        min_value=10, max_value=200, value=50, step=5,
+                        help="Jumlah kromosom dalam populasi" if st.session_state.language == 'id' else "Number of chromosomes in population"
+                    )
+                    ga_generations = st.number_input(
+                        "Jumlah generasi:" if st.session_state.language == 'id' else "Number of generations:",
+                        min_value=10, max_value=500, value=100, step=10,
+                        help="Maksimum iterasi algoritma genetik" if st.session_state.language == 'id' else "Maximum genetic algorithm iterations"
+                    )
+                    ga_mutation_rate = st.slider(
+                        "Tingkat mutasi:" if st.session_state.language == 'id' else "Mutation rate:",
+                        0.01, 0.3, 0.1, 0.01,
+                        help="Probabilitas mutasi gen" if st.session_state.language == 'id' else "Gene mutation probability"
+                    )
+                
+        with col2:
+                    ga_crossover_rate = st.slider(
+                        "Tingkat crossover:" if st.session_state.language == 'id' else "Crossover rate:",
+                        0.1, 0.9, 0.7, 0.1,
+                        help="Probabilitas crossover antar kromosom" if st.session_state.language == 'id' else "Crossover probability between chromosomes"
+                    )
+                    ga_elite_size = st.number_input(
+                        "Ukuran elit:" if st.session_state.language == 'id' else "Elite size:",
+                        min_value=1, max_value=20, value=5, step=1,
+                        help="Jumlah kromosom terbaik yang dilestarikan" if st.session_state.language == 'id' else "Number of best chromosomes to preserve"
+                    )
+                    target_features = st.number_input(
+                        "Target jumlah fitur:" if st.session_state.language == 'id' else "Target number of features:",
+                        min_value=1, max_value=len(all_columns), value=min(10, len(all_columns)), step=1
+                    )
+                
+        # Prepare data for PyGAD
+        X_ga = X_train_full[all_columns].copy()
+        y_ga = y_train.copy()
+                
+        # Handle categorical variables
+        for col in X_ga.select_dtypes(include=['object', 'category']).columns:
+            le = LabelEncoder()
+            X_ga[col] = le.fit_transform(X_ga[col])
+                
+        # Standardize features
+        scaler = StandardScaler()
+        X_ga_scaled = scaler.fit_transform(X_ga)
+
+        if st.button("Jalankan Algoritma Genetik" if st.session_state.language == 'id' else "Run Genetic Algorithm"):
+                    try:
+                        import pygad
                         
-                        if len(selected_indices) == 0:
-                            return 0.0
-                        
-                        # Limit to target number of features
-                        if len(selected_indices) > target_features:
-                            # Select top features based on importance
+                        # Define fitness function
+                        def fitness_func(ga_instance, solution, solution_idx):
+                            # Get selected features based on binary solution
+                            selected_indices = np.where(solution == 1)[0]
+                            
+                            if len(selected_indices) == 0:
+                                return 0.0
+                            
+                            # Limit to target number of features
+                            if len(selected_indices) > target_features:
+                                # Select top features based on importance
+                                if problem_type == "Regression":
+                                    from sklearn.ensemble import RandomForestRegressor
+                                    temp_model = RandomForestRegressor(n_estimators=50, random_state=42)
+                                    temp_model.fit(X_ga_scaled, y_ga)
+                                    importances = temp_model.feature_importances_
+                                    top_indices = np.argsort(importances)[-target_features:]
+                                    selected_indices = np.intersect1d(selected_indices, top_indices)
+                                else:
+                                    from sklearn.ensemble import RandomForestClassifier
+                                    temp_model = RandomForestClassifier(n_estimators=50, random_state=42)
+                                    temp_model.fit(X_ga_scaled, y_ga)
+                                    importances = temp_model.feature_importances_
+                                    top_indices = np.argsort(importances)[-target_features:]
+                                    selected_indices = np.intersect1d(selected_indices, top_indices)
+                            
+                            if len(selected_indices) == 0:
+                                return 0.0
+                            
+                            # Get selected features
+                            X_selected = X_ga_scaled[:, selected_indices]
+                            
+                            # Use cross-validation to evaluate fitness
                             if problem_type == "Regression":
                                 from sklearn.ensemble import RandomForestRegressor
-                                temp_model = RandomForestRegressor(n_estimators=50, random_state=42)
-                                temp_model.fit(X_ga_scaled, y_ga)
-                                importances = temp_model.feature_importances_
-                                top_indices = np.argsort(importances)[-target_features:]
-                                selected_indices = np.intersect1d(selected_indices, top_indices)
+                                model = RandomForestRegressor(n_estimators=50, random_state=42)
+                                scores = cross_val_score(model, X_selected, y_ga, cv=3, 
+                                                    scoring='neg_mean_squared_error')
+                                fitness = -np.mean(scores)  # Negative MSE, so higher is better
                             else:
                                 from sklearn.ensemble import RandomForestClassifier
-                                temp_model = RandomForestClassifier(n_estimators=50, random_state=42)
-                                temp_model.fit(X_ga_scaled, y_ga)
-                                importances = temp_model.feature_importances_
-                                top_indices = np.argsort(importances)[-target_features:]
-                                selected_indices = np.intersect1d(selected_indices, top_indices)
+                                model = RandomForestClassifier(n_estimators=50, random_state=42)
+                                scores = cross_val_score(model, X_selected, y_ga, cv=3, 
+                                                    scoring='accuracy')
+                                fitness = np.mean(scores)
+                            
+                            # Penalty for too many features
+                            penalty = abs(len(selected_indices) - target_features) * 0.01
+                            return max(0, fitness - penalty)
                         
-                        if len(selected_indices) == 0:
-                            return 0.0
+                        # Initialize PyGAD
+                        gene_space = [0, 1]  # Binary genes
                         
-                        # Get selected features
-                        X_selected = X_ga_scaled[:, selected_indices]
-                        
-                        # Use cross-validation to evaluate fitness
-                        if problem_type == "Regression":
-                            from sklearn.ensemble import RandomForestRegressor
-                            model = RandomForestRegressor(n_estimators=50, random_state=42)
-                            scores = cross_val_score(model, X_selected, y_ga, cv=3, 
-                                                   scoring='neg_mean_squared_error')
-                            fitness = -np.mean(scores)  # Negative MSE, so higher is better
-                        else:
-                            from sklearn.ensemble import RandomForestClassifier
-                            model = RandomForestClassifier(n_estimators=50, random_state=42)
-                            scores = cross_val_score(model, X_selected, y_ga, cv=3, 
-                                                   scoring='accuracy')
-                            fitness = np.mean(scores)
-                        
-                        # Penalty for too many features
-                        penalty = abs(len(selected_indices) - target_features) * 0.01
-                        return max(0, fitness - penalty)
-                    
-                    # Initialize PyGAD
-                    gene_space = [0, 1]  # Binary genes
-                    
-                    ga_instance = pygad.GA(
-                        num_generations=ga_generations,
-                        num_parents_mating=ga_population_size // 2,
-                        fitness_func=fitness_func,
-                        sol_per_pop=ga_population_size,
-                        num_genes=len(all_columns),
-                        gene_space=gene_space,
-                        init_range_low=0,
-                        init_range_high=2,
-                        parent_selection_type="tournament",
-                        K_tournament=3,
-                        crossover_type="single_point",
-                        crossover_probability=ga_crossover_rate,
-                        mutation_type="random",
-                        mutation_probability=ga_mutation_rate,
-                        keep_elitism=ga_elite_size,
-                        random_seed=42,
-                        suppress_warnings=True
-                    )
-                    
-                    # Progress bar
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    def on_generation(ga_instance):
-                        generation = ga_instance.generations_completed
-                        max_generations = ga_instance.num_generations
-                        progress = generation / max_generations
-                        progress_bar.progress(progress)
-                        
-                        best_fitness = ga_instance.best_solution()[1]
-                        status_text.text(
-                            f"Generasi {generation}/{max_generations} - Fitness terbaik: {best_fitness:.4f}" 
-                            if st.session_state.language == 'id' 
-                            else f"Generation {generation}/{max_generations} - Best fitness: {best_fitness:.4f}"
+                        ga_instance = pygad.GA(
+                            num_generations=ga_generations,
+                            num_parents_mating=ga_population_size // 2,
+                            fitness_func=fitness_func,
+                            sol_per_pop=ga_population_size,
+                            num_genes=len(all_columns),
+                            gene_space=gene_space,
+                            init_range_low=0,
+                            init_range_high=2,
+                            parent_selection_type="tournament",
+                            K_tournament=3,
+                            crossover_type="single_point",
+                            crossover_probability=ga_crossover_rate,
+                            mutation_type="random",
+                            mutation_probability=ga_mutation_rate,
+                            keep_elitism=ga_elite_size,
+                            random_seed=42,
+                            suppress_warnings=True
                         )
-                    
-                    ga_instance.on_generation = on_generation
-                    
-                    # Run genetic algorithm
-                    with st.spinner("Menjalankan algoritma genetik..." if st.session_state.language == 'id' else "Running genetic algorithm..."):
-                        ga_instance.run()
-                    
-                    # Get results
-                    solution, solution_fitness, solution_idx = ga_instance.best_solution()
-                    selected_indices = np.where(solution == 1)[0]
-                    selected_features = [all_columns[i] for i in selected_indices]
-                    
-                    # Display results
-                    st.success(f"Algoritma genetik selesai!" if st.session_state.language == 'id' else "Genetic algorithm completed!")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Jumlah fitur terpilih" if st.session_state.language == 'id' else "Selected features count", 
-                                len(selected_features))
-                        st.metric("Fitness terbaik" if st.session_state.language == 'id' else "Best fitness", 
-                                f"{solution_fitness:.4f}")
-                    
-                    with col2:
-                        st.metric("Total fitur" if st.session_state.language == 'id' else "Total features", 
-                                len(all_columns))
-                        st.metric("Persentase fitur terpilih" if st.session_state.language == 'id' else "Feature selection ratio", 
-                                f"{len(selected_features)/len(all_columns)*100:.1f}%")
-                    
-                    # Display selected features
-                    st.write("**Fitur yang dipilih algoritma genetik:**" if st.session_state.language == 'id' else "**Features selected by genetic algorithm:**")
-                    st.write(selected_features)
-                    
-                    # Feature importance visualization
-                    if len(selected_features) > 0:
-                        st.write("**Visualisasi seleksi fitur:**" if st.session_state.language == 'id' else "**Feature selection visualization:**")
                         
-                        # Create a dataframe with selection status
-                        selection_df = pd.DataFrame({
-                            'Feature': all_columns,
-                            'Selected': [1 if i in selected_indices else 0 for i in range(len(all_columns))]
-                        })
+                        # Progress bar
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
                         
-                        # Plot selection status
-                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                        def on_generation(ga_instance):
+                            generation = ga_instance.generations_completed
+                            max_generations = ga_instance.num_generations
+                            progress = generation / max_generations
+                            progress_bar.progress(progress)
+                            
+                            best_fitness = ga_instance.best_solution()[1]
+                            status_text.text(
+                                f"Generasi {generation}/{max_generations} - Fitness terbaik: {best_fitness:.4f}" 
+                                if st.session_state.language == 'id' 
+                                else f"Generation {generation}/{max_generations} - Best fitness: {best_fitness:.4f}"
+                            )
                         
-                        # Bar plot of selected vs not selected
-                        selection_counts = selection_df['Selected'].value_counts()
-                        colors = ['#ff9999', '#66b3ff']
-                        ax1.pie(selection_counts.values, labels=['Not Selected', 'Selected'], 
-                               colors=colors, autopct='%1.1f%%', startangle=90)
-                        ax1.set_title('Distribusi Seleksi Fitur' if st.session_state.language == 'id' else 'Feature Selection Distribution')
+                        ga_instance.on_generation = on_generation
                         
-                        # Fitness evolution plot
-                        ax2.plot(ga_instance.best_solutions_fitness, 'b-', linewidth=2)
-                        ax2.set_xlabel('Generasi' if st.session_state.language == 'id' else 'Generation')
-                        ax2.set_ylabel('Fitness' if st.session_state.language == 'id' else 'Fitness')
-                        ax2.set_title('Evolusi Fitness Algoritma Genetik' if st.session_state.language == 'id' else 'Genetic Algorithm Fitness Evolution')
-                        ax2.grid(True, alpha=0.3)
+                        # Run genetic algorithm
+                        with st.spinner("Menjalankan algoritma genetik..." if st.session_state.language == 'id' else "Running genetic algorithm..."):
+                            ga_instance.run()
                         
-                        st.pyplot(fig)
-                    
-                    # Clean up
-                    progress_bar.empty()
-                    status_text.empty()
-                    
-                except ImportError:
-                    st.error("PyGAD tidak terinstal. Silakan install dengan: pip install pygad" if st.session_state.language == 'id' else 
-                            "PyGAD not installed. Please install with: pip install pygad")
-                    selected_features = all_columns
-
-        elif feature_selection_method == "Mutual Information":
-                    if problem_type == "Regression":
-                        mi = mutual_info_regression(data[all_columns], data[target_column])
-                    else:
-                        mi = mutual_info_classif(data[all_columns], data[target_column])
-                    mi_df = pd.DataFrame({"Feature": all_columns, "Mutual Information": mi})
-                    mi_df = mi_df.sort_values("Mutual Information", ascending=False)
-                    
-                    # Tambahan: Slider untuk ambang batas minimum
-                    min_threshold = st.slider("Ambang batas minimum Mutual Information:", 0.0, 1.0, 0.25, 0.01, 
-                                             help="Fitur dengan nilai Mutual Information di bawah ambang ini akan dihilangkan")
-                    
-                    # Filter berdasarkan ambang batas
-                    filtered_df = mi_df[mi_df["Mutual Information"] >= min_threshold]
-                    
-                    st.dataframe(mi_df)
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    top_features = mi_df.head(30)  # Tampilkan 15 fitur teratas
-                    ax.barh(top_features['Feature'], top_features['Mutual Information'])
-                    ax.set_xlabel('Mutual Information Score')
-                    ax.set_title('Top 30 Features by Mutual Information')
-                    ax.invert_yaxis()  # Fitur dengan score tertinggi di atas
-                    st.pyplot(fig)
-                    
-                    # Pilih fitur berdasarkan ambang batas atau top N
-                    use_threshold = st.checkbox("Gunakan ambang batas", value=True)
-                    if use_threshold:
-                        selected_features = filtered_df["Feature"].tolist()
-                        st.info(f"{len(selected_features)} fitur terpilih dengan ambang batas {min_threshold}")
-                    else:
-                        top_n = st.slider("Top N fitur:", 1, len(all_columns), min(10, len(all_columns)))
-                        selected_features = mi_df.head(top_n)["Feature"].tolist()
-        elif feature_selection_method == "Pearson Correlation":
-            numeric_columns = data[all_columns].select_dtypes(include=[np.number]).columns.tolist()
-            if data[target_column].dtype not in [np.float64, np.int64, np.float32, np.int32]:
-                st.error("Target kolom harus numerik untuk Pearson Correlation.")
-                corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
-            else:
-                corr = data[numeric_columns].corrwith(data[target_column]).abs()
-            corr_df = pd.DataFrame({"Feature": numeric_columns, "Correlation": corr})
-            corr_df = corr_df.sort_values("Correlation", ascending=False)
-            st.dataframe(corr_df)
-            top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
-            selected_features = corr_df.head(top_n)["Feature"].tolist()
-            fig, ax = plt.subplots(figsize=(10, 6))
-            top_features = corr_df.head(30)
-            ax.barh(top_features['Feature'], top_features['Correlation'])
-            ax.set_xlabel('Absolute Correlation')
-            ax.set_title('Top 30 Features by Pearson Correlation')
-            ax.invert_yaxis()
-            st.pyplot(fig)
-        elif feature_selection_method == "Recursive Feature Elimination (RFE)":
-            from sklearn.feature_selection import RFE
-            X_rfe = data[all_columns].copy()
-            for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
-                le = LabelEncoder()
-                X_rfe[col] = le.fit_transform(X_rfe[col].astype(str))
-            if problem_type == "Regression":
-                estimator = LinearRegression()
-            else:
-                estimator = LogisticRegression(max_iter=500)
-            rfe = RFE(estimator, n_features_to_select=min(10, len(all_columns)))
-            rfe.fit(X_rfe, data[target_column])
-            rfe_df = pd.DataFrame({"Feature": all_columns, "Selected": rfe.support_})
-            st.dataframe(rfe_df)
-            selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
-            selected_count = rfe_df['Selected'].sum()
-            fig, ax = plt.subplots(figsize=(8, 6))
-            value_counts = rfe_df['Selected'].value_counts()
-            value_counts.plot(kind='bar', ax=ax)
-            
-            # Gunakan label yang sesuai dengan data yang ada
-            labels = []
-            if False in value_counts.index:
-                labels.append('Not Selected')
-            if True in value_counts.index:
-                labels.append('Selected')
-            ax.set_xticklabels(labels, rotation=0)
-            
-            ax.set_ylabel('Count')
-            ax.set_title(f'RFE Selection Results ({selected_count} features selected)')
-            st.pyplot(fig)
-        elif feature_selection_method == "LASSO":
-            from sklearn.linear_model import Lasso, LogisticRegression
-            if problem_type == "Regression":
-                lasso = Lasso(alpha=0.01, max_iter=1000)
-            else:
-                lasso = LogisticRegression(penalty='l1', solver='liblinear', max_iter=500)
-            lasso.fit(data[all_columns], data[target_column])
-            coef = lasso.coef_ if hasattr(lasso, "coef_") else lasso.coef_
-            if coef.ndim > 1:
-                coef = coef[0]
-            lasso_df = pd.DataFrame({"Feature": all_columns, "Coefficient": coef})
-            lasso_df = lasso_df[lasso_df["Coefficient"] != 0].sort_values("Coefficient", ascending=False)
-            st.dataframe(lasso_df)
-            selected_features = lasso_df["Feature"].tolist()
-            fig, ax = plt.subplots(figsize=(10, 6))
-            top_features = lasso_df.head(15)
-            ax.barh(top_features['Feature'], abs(top_features['Coefficient']))
-            ax.set_xlabel('Absolute Coefficient Value')
-            ax.set_title('Top 15 Features by LASSO Coefficient')
-            ax.invert_yaxis()
-            st.pyplot(fig)
-        elif feature_selection_method == "Gradient Boosting Importance":
-            from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
-            if problem_type == "Regression":
-                model = GradientBoostingRegressor(random_state=42)
-            else:
-                model = GradientBoostingClassifier(random_state=42)
-            model.fit(data[all_columns], data[target_column])
-            importances = model.feature_importances_
-            gb_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
-            gb_df = gb_df.sort_values("Importance", ascending=False)
-            st.dataframe(gb_df)
-            top_n = st.slider("Top N features:", 1, len(all_columns), min(10, len(all_columns)))
-            selected_features = gb_df.head(top_n)["Feature"].tolist()
-            fig, ax = plt.subplots(figsize=(10, 6))
-            top_features = gb_df.head(30)
-            ax.barh(top_features['Feature'], top_features['Importance'])
-            ax.set_xlabel('Importance Score')
-            ax.set_title('Top 30 Features by Gradient Boosting Importance')
-            ax.invert_yaxis()
-            st.pyplot(fig)
-        elif feature_selection_method == "Random Forest Importance":
-                    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-                    
-                    # Tambahan: Input untuk jumlah pohon
-                    n_estimators = st.number_input("Jumlah pohon Random Forest:", min_value=10, max_value=1000, value=100, step=10,
-                                                   help="Semakin banyak pohon, semakin akurat tetapi lebih lambat")
-                    
-                    if problem_type == "Regression":
-                        model = RandomForestRegressor(n_estimators=n_estimators, random_state=42)
-                    else:
-                        model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
-                    
-                    model.fit(data[all_columns], data[target_column])
-                    importances = model.feature_importances_
-                    rf_df = pd.DataFrame({"Feature": all_columns, "Importance": importances})
-                    rf_df = rf_df.sort_values("Importance", ascending=False)
-                    
-                    # Tambahan: Slider untuk ambang batas minimum
-                    min_threshold = st.slider("Ambang batas minimum Importance:", 0.0, 1.0, 0.2, 0.01,
-                                             help="Fitur dengan nilai Importance di bawah ambang ini akan dihilangkan")
-                    
-                    # Filter berdasarkan ambang batas
-                    filtered_df = rf_df[rf_df["Importance"] >= min_threshold]
-                    
-                    st.dataframe(rf_df)
-                    
-                    # Pilih fitur berdasarkan ambang batas atau top N
-                    use_threshold = st.checkbox("Gunakan ambang batas", value=True)
-                    if use_threshold:
-                        selected_features = filtered_df["Feature"].tolist()
-                        st.info(f"{len(selected_features)} fitur terpilih dengan ambang batas {min_threshold}")
-                    else:
-                        top_n = st.slider("Top N fitur:", 1, len(all_columns), min(10, len(all_columns)))
-                        selected_features = rf_df.head(top_n)["Feature"].tolist()
-
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    top_features = rf_df.head(30)
-                    ax.barh(top_features['Feature'], top_features['Importance'])
-                    ax.set_xlabel('Importance Score')
-                    ax.set_title('Top 30 Features by Random Forest Importance')
-                    ax.invert_yaxis()
-                    st.pyplot(fig)
-
-        elif feature_selection_method == "Ensemble Feature Selection":
+                        # Get results
+                        solution, solution_fitness, solution_idx = ga_instance.best_solution()
+                        selected_indices = np.where(solution == 1)[0]
+                        selected_features = [all_columns[i] for i in selected_indices]
+                        
+                        # Display results
+                        st.success(f"Algoritma genetik selesai!" if st.session_state.language == 'id' else "Genetic algorithm completed!")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Jumlah fitur terpilih" if st.session_state.language == 'id' else "Selected features count", 
+                                    len(selected_features))
+                            st.metric("Fitness terbaik" if st.session_state.language == 'id' else "Best fitness", 
+                                    f"{solution_fitness:.4f}")
+                        
+                        with col2:
+                            st.metric("Total fitur" if st.session_state.language == 'id' else "Total features", 
+                                    len(all_columns))
+                            st.metric("Persentase fitur terpilih" if st.session_state.language == 'id' else "Feature selection ratio", 
+                                    f"{len(selected_features)/len(all_columns)*100:.1f}%")
+                        
+                        # Display selected features
+                        st.write("**Fitur yang dipilih algoritma genetik:**" if st.session_state.language == 'id' else "**Features selected by genetic algorithm:**")
+                        st.write(selected_features)
+                        
+                        # Feature importance visualization
+                        if len(selected_features) > 0:
+                            st.write("**Visualisasi seleksi fitur:**" if st.session_state.language == 'id' else "**Feature selection visualization:**")
+                            
+                            # Create a dataframe with selection status
+                            selection_df = pd.DataFrame({
+                                'Feature': all_columns,
+                                'Selected': [1 if i in selected_indices else 0 for i in range(len(all_columns))]
+                            })
+                            
+                            # Plot selection status
+                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                            
+                            # Bar plot of selected vs not selected
+                            selection_counts = selection_df['Selected'].value_counts()
+                            colors = ['#ff9999', '#66b3ff']
+                            ax1.pie(selection_counts.values, labels=['Not Selected', 'Selected'], 
+                                colors=colors, autopct='%1.1f%%', startangle=90)
+                            ax1.set_title('Distribusi Seleksi Fitur' if st.session_state.language == 'id' else 'Feature Selection Distribution')
+                            
+                            # Fitness evolution plot
+                            ax2.plot(ga_instance.best_solutions_fitness, 'b-', linewidth=2)
+                            ax2.set_xlabel('Generasi' if st.session_state.language == 'id' else 'Generation')
+                            ax2.set_ylabel('Fitness' if st.session_state.language == 'id' else 'Fitness')
+                            ax2.set_title('Evolusi Fitness Algoritma Genetik' if st.session_state.language == 'id' else 'Genetic Algorithm Fitness Evolution')
+                            ax2.grid(True, alpha=0.3)
+                            
+                            st.pyplot(fig)
+                        
+                        # Clean up
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                    except ImportError:
+                        st.error("PyGAD tidak terinstal. Silakan install dengan: pip install pygad" if st.session_state.language == 'id' else 
+                                "PyGAD not installed. Please install with: pip install pygad")
+                        selected_features = all_columns
+                
+    elif feature_selection_method == "Ensemble Feature Selection":
             st.info("Pilih dua metode seleksi fitur untuk digabungkan." if st.session_state.language == 'id' else "Select two feature selection methods to combine.")
             method1 = st.selectbox("Metode pertama:" if st.session_state.language == 'id' else "First method:", [
                 "Mutual Information",
@@ -1274,12 +1260,12 @@ with tab3:
                 "Random Forest Importance"
             ], key="ensemble_method1")
             method2 = st.selectbox("Metode kedua:" if st.session_state.language == 'id' else "Second method:", [
+                "Random Forest Importance",
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
                 "LASSO",
                 "Gradient Boosting Importance",
-                "Random Forest Importance"
             ], key="ensemble_method2")
 
             combine_type = st.radio("Gabungkan hasil dengan:" if st.session_state.language == 'id' else "Combine results with:", ["Intersection", "Union"], index=0)
@@ -1375,128 +1361,9 @@ with tab3:
 
             st.write(f"Fitur hasil gabungan: {selected_features}" if st.session_state.language == 'id' else f"Combined features: {selected_features}")
 
-        elif feature_selection_method == "Multi-Stage Feature Selection":
-            st.subheader("Multi-Stage Feature Selection" if st.session_state.language == 'id' else "Multi-Stage Feature Selection")
-            st.info("Metode ini menggunakan pendekatan 3 tahap: Information Gain → Random Forest Feature Importance → RFE" if st.session_state.language == 'id' else 
-                   "This method uses a 3-stage approach: Information Gain → Random Forest Feature Importance → RFE")
-            
-            from sklearn.feature_selection import RFE, SelectKBest
-            from sklearn.ensemble import RandomForestClassifier
-            
-            # Persiapkan data untuk feature selection
-            X_fs = data[all_columns].copy()
-            for col in X_fs.select_dtypes(include=['object', 'category']).columns:
-                le = LabelEncoder()
-                X_fs[col] = le.fit_transform(X_fs[col].astype(str))
-            
-            # Tampilkan parameter untuk setiap tahap
-            st.write("Tahap 1: Information Gain" if st.session_state.language == 'id' else "Stage 1: Information Gain")
-            ig_percent = st.slider("Persentase fitur yang dipertahankan setelah Information Gain (%)" if st.session_state.language == 'id' else 
-                                  "Percentage of features to keep after Information Gain (%)", 10, 90, 40)
-            
-            st.write("Tahap 2: Random Forest Feature Importance" if st.session_state.language == 'id' else "Stage 2: Random Forest Feature Importance")
-            rf_percent = st.slider("Persentase fitur yang dipertahankan setelah Random Forest (%)" if st.session_state.language == 'id' else 
-                                  "Percentage of features to keep after Random Forest (%)", 10, 90, 50)
-            
-            st.write("Tahap 3: Recursive Feature Elimination" if st.session_state.language == 'id' else "Stage 3: Recursive Feature Elimination")
-            final_features = st.slider("Jumlah fitur akhir" if st.session_state.language == 'id' else "Final number of features", 
-                                      1, min(20, len(all_columns)), min(10, len(all_columns)))
-            
-            # Tahap 1: Seleksi Fitur dengan Information Gain (SelectKBest + mutual_info_classif)
-            n_features_after_ig = max(1, int(X_fs.shape[1] * ig_percent / 100))
-            
-            if problem_type == "Regression":
-                selector_ig = SelectKBest(score_func=mutual_info_regression, k=n_features_after_ig)
-            else:
-                selector_ig = SelectKBest(score_func=mutual_info_classif, k=n_features_after_ig)
-                
-            X_train_ig = selector_ig.fit_transform(X_fs, data[target_column])
-            
-            # Dapatkan nama fitur yang terpilih
-            selected_features_ig_mask = selector_ig.get_support()
-            selected_features_ig_names = X_fs.columns[selected_features_ig_mask]
-            
-            # Tampilkan hasil tahap 1
-            st.write(f"Fitur terpilih setelah Information Gain ({n_features_after_ig}):" if st.session_state.language == 'id' else 
-                    f"Selected features after Information Gain ({n_features_after_ig}):")
-            st.write(", ".join(selected_features_ig_names))
-            
-            # Tahap 2: Seleksi Fitur dengan Feature Importance dari Random Forest
-            n_features_after_rf_fi = max(1, int(len(selected_features_ig_names) * rf_percent / 100))
-            
-            # Latih Random Forest pada data yang sudah difilter IG
-            if problem_type == "Regression":
-                rf_model_for_importance = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-            else:
-                rf_model_for_importance = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-                
-            rf_model_for_importance.fit(X_fs[selected_features_ig_names], data[target_column])
-            
-            # Dapatkan feature importance
-            feature_importances_rf = pd.Series(rf_model_for_importance.feature_importances_, index=selected_features_ig_names)
-            sorted_importances_rf = feature_importances_rf.sort_values(ascending=False)
-            
-            # Pilih fitur-fitur teratas berdasarkan importance
-            top_features_rf_names = sorted_importances_rf.head(n_features_after_rf_fi).index.tolist()
-            
-            # Tampilkan hasil tahap 2
-            st.write(f"Fitur terpilih setelah Random Forest Feature Importance ({n_features_after_rf_fi}):" if st.session_state.language == 'id' else 
-                    f"Selected features after Random Forest Feature Importance ({n_features_after_rf_fi}):")
-            st.write(", ".join(top_features_rf_names))
-            
-            # Tahap 3: Seleksi Fitur dengan Recursive Feature Elimination (RFE) + Random Forest
-            n_features_final = min(final_features, len(top_features_rf_names))
-            
-            # Pastikan jumlah fitur akhir minimal 2 untuk RFE
-            if len(top_features_rf_names) < 2:
-                # Jika fitur kurang dari 2, gunakan semua fitur yang tersisa tanpa RFE
-                final_selected_features_names = top_features_rf_names
-                st.warning("Jumlah fitur setelah tahap 2 kurang dari 2. RFE membutuhkan minimal 2 fitur. Menggunakan semua fitur dari tahap 2." if st.session_state.language == 'id' else 
-                          "Number of features after stage 2 is less than 2. RFE requires at least 2 features. Using all features from stage 2.")
-            else:
-                # Gunakan Random Forest Classifier/Regressor sebagai estimator untuk RFE
-                if problem_type == "Regression":
-                    estimator_rfe = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-                else:
-                    estimator_rfe = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-                
-                # Pastikan n_features_final minimal 2
-                n_features_final = max(2, n_features_final)
-                
-                selector_rfe = RFE(estimator=estimator_rfe, n_features_to_select=n_features_final, step=1, verbose=0)
-                
-                # Lakukan RFE pada data yang sudah difilter oleh RF Feature Importance
-                selector_rfe.fit(X_fs[top_features_rf_names], data[target_column])
-                
-                # Dapatkan nama fitur akhir yang terpilih
-                selected_features_rfe_mask = selector_rfe.get_support()
-                final_selected_features_names = np.array(top_features_rf_names)[selected_features_rfe_mask].tolist()
-            
-            # Tampilkan hasil akhir
-            st.write(f"Fitur akhir terpilih setelah RFE ({n_features_final}):" if st.session_state.language == 'id' else 
-                    f"Final selected features after RFE ({n_features_final}):")
-            st.write(", ".join(final_selected_features_names))
-            
-            # Tampilkan perbandingan jumlah fitur di setiap tahap
-            st.subheader("Ringkasan Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection Summary")
-            summary_data = {
-                "Tahap" if st.session_state.language == 'id' else "Stage": ["Awal" if st.session_state.language == 'id' else "Initial", 
-                                                                           "Information Gain", 
-                                                                           "Random Forest", 
-                                                                           "RFE"],
-                "Jumlah Fitur" if st.session_state.language == 'id' else "Number of Features": [len(all_columns), 
-                                                                                             n_features_after_ig, 
-                                                                                             n_features_after_rf_fi, 
-                                                                                             n_features_final]
-            }
-            st.table(pd.DataFrame(summary_data))
-            
-            # Set fitur yang terpilih untuk digunakan dalam model
-            selected_features = final_selected_features_names    
-
-        if not selected_features:
+    if not selected_features:
             st.warning("Silahkan pilih fitur terlebih dahulu." if st.session_state.language == 'id' else "Please select at least one feature.")
-        else:
+    else:
             # Tampilkan hasil tahap pertama
             st.success(f"Tahap 1 selesai: {len(selected_features)} fitur terpilih" if st.session_state.language == 'id' else f"Stage 1 completed: {selected_features} features selected")
             st.write(f"Fitur terpilih tahap 1: {', '.join(selected_features)}" if st.session_state.language == 'id' else f"Stage 1 selected features: {', '.join(selected_features)}")
@@ -1882,79 +1749,35 @@ with tab3:
             st.table(pd.DataFrame(comparison_data))
             st.write(f"Fitur akhir yang akan digunakan: {', '.join(final_selected_features)}" if st.session_state.language == 'id' else f"Final features to be used: {', '.join(final_selected_features)}")
             
-            # Prepare data for modeling dengan fitur akhir
-            X = data[final_selected_features]
-            y = data[target_column]
-                        
-            # Train-test split
-            st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
-            
-            test_size = st.slider("Ukuran set pengujian (persen):" if st.session_state.language == 'id' else "Test set size (%):", 10, 50, 20) / 100
-            random_state = st.number_input("Status acak:" if st.session_state.language == 'id' else "Random state:", 0, 100, 42)
-            
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state
-            )
-            
-            st.session_state.X_train = X_train
-            st.session_state.X_test = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
-            st.session_state.processed_data = data
-            
-            st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
-            
-            # Display class distribution table for classification problems
-            if st.session_state.problem_type == "Classification":
-                st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
-                
-                # Create distribution table
-                train_counts = pd.Series(y_train).value_counts().sort_index()
-                test_counts = pd.Series(y_test).value_counts().sort_index()
-                
-                distribution_df = pd.DataFrame({
-                    'Label': train_counts.index,
-                    'Jumlah Data Training': train_counts.values,
-                    'Jumlah Data Testing': test_counts.values,
-                    'Total': train_counts.values + test_counts.values
-                })
-                
-                # Add percentages
-                total_samples = len(y_train) + len(y_test)
-                distribution_df['Persentase Training (%)'] = (distribution_df['Jumlah Data Training'] / len(y_train) * 100).round(2)
-                distribution_df['Persentase Testing (%)'] = (distribution_df['Jumlah Data Testing'] / len(y_test) * 100).round(2)
-                distribution_df['Persentase Total (%)'] = (distribution_df['Total'] / total_samples * 100).round(2)
-                
-                st.dataframe(distribution_df)
-                
-                # Display summary statistics
-                st.write(f"**Total sampel:** {total_samples}")
-                st.write(f"**Training set:** {len(y_train)} sampel ({len(y_train)/total_samples*100:.1f}%)")
-                st.write(f"**Testing set:** {len(y_test)} sampel ({len(y_test)/total_samples*100:.1f}%)")
-                
-                # Display class imbalance information
-                if len(train_counts) > 1:
-                    imbalance_ratio = train_counts.max() / train_counts.min()
-                    st.write(f"**Rasio ketidakseimbangan kelas (training):** {imbalance_ratio:.2f}")
-            
-            # Display processed data
-            st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
-            st.dataframe(X.head())
+            if not selected_features:
+                st.warning("Silahkan pilih fitur terlebih dahulu." if st.session_state.language == 'id' else "Please select at least one feature.")
+            else:
+                # Get data from session state
+                if 'X_train' not in st.session_state or st.session_state.X_train is None:
+                    st.warning("Silakan lakukan preprocessing data terlebih dahulu di tab sebelumnya")
+                    st.stop()
 
-            # Update session_state setelah encoding/scaling
-            st.session_state.X_train = X_train
-            st.session_state.X_test = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
+                # Create full datasets for feature selection
+                X_train_full = st.session_state.X_train.copy()
+                X_test_full = st.session_state.X_test.copy()
+                y_train = st.session_state.y_train.copy()
+                y_test = st.session_state.y_test.copy()
+                data = st.session_state.data.copy()
 
-            
-    else:
-        st.info("Silahkan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
+                # Terapkan hasil feature selection ke data training dan testing
+                X_train = X_train_full[selected_features]
+                X_test = X_test_full[selected_features]
 
-# Tab 4: Feature Engineering and Model Training
-with tab4:
-    st.header("Pelatihan dan Evaluasi Model" if st.session_state.language == 'id' else "Model Training and Evaluation")
-    
+                # Simpan ke session state
+                st.session_state.X_train = X_train
+                st.session_state.X_test = X_test
+                st.session_state.y_train = y_train
+                st.session_state.y_test = y_test
+                st.session_state.processed_data = data
+                
+                st.success(f"Feature selection selesai. Data training: {X_train.shape}, Data testing: {X_test.shape}" if st.session_state.language == 'id' else f"Feature selection completed. Training data: {X_train.shape}, Testing data: {X_test.shape}")
+                st.write(f"Fitur yang digunakan: {', '.join(selected_features)}" if st.session_state.language == 'id' else f"Selected features: {', '.join(selected_features)}")    
+                
     if (st.session_state.X_train is not None and 
         st.session_state.y_train is not None and 
         st.session_state.problem_type is not None):
