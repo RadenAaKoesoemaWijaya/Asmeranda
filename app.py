@@ -643,8 +643,9 @@ with tab3:
 with tab4:
     st.header("Rekayasa Fitur" if st.session_state.language == 'id' else "Feature Engineering")
     
-    if st.session_state.X_train_full is None or st.session_state.y_train is None:
-        st.info("Please complete the preprocessing steps in the previous tab first.")
+    # Validasi apakah data sudah dimuat
+    if st.session_state.data is None:
+        st.error("Silakan unggah dataset terlebih dahulu di tab 'Data Upload'" if st.session_state.language == 'id' else "Please upload a dataset first in the 'Data Upload' tab")
         st.stop()
     
     # Gunakan st.session_state.data dengan aman
@@ -858,12 +859,6 @@ with tab4:
 
             st.success(f"Data dibagi menjadi {X_train_full.shape[0]} sampel training dan {X_test_full.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train_full.shape[0]} training samples and {X_test_full.shape[0]} testing samples.")
 
-            # Update session_state dengan nama yang konsisten
-            st.session_state.X_train_full = X_train
-            st.session_state.X_test_full = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
-
             # Display class distribution table for classification problems
             if st.session_state.problem_type == "Classification":
                 st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
@@ -963,6 +958,8 @@ with tab4:
                     # Gunakan session state variables
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
+                            
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
                 
                 if problem_type == "Regression":
                     mi = mutual_info_regression(X_train_full[all_columns], y_train)  # Gunakan X_train_full dan y_train
@@ -983,7 +980,9 @@ with tab4:
                     # Gunakan session state variables
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
-                             
+                            
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+                    
                     if y_train.dtype not in [np.float64, np.int64, np.float32, np.int32]:
                         st.error("Target kolom harus numerik untuk Pearson Correlation.")
                         corr = pd.Series([np.nan]*len(numeric_columns), index=numeric_columns)
@@ -1005,7 +1004,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
-                
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 from sklearn.feature_selection import RFE
                 X_rfe = X_train_full[all_columns].copy()  # Gunakan X_train_full
                 for col in X_rfe.select_dtypes(include=['object', 'category']).columns:
@@ -1032,6 +1032,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 from sklearn.linear_model import Lasso, LogisticRegression
                 alpha_lasso = st.slider("Alpha LASSO:" if st.session_state.language == 'id' else "LASSO Alpha:", 0.001, 1.0, 0.01)
                 if problem_type == "Regression":
@@ -1057,6 +1059,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
                 if problem_type == "Regression":
                     model = GradientBoostingRegressor(random_state=42)
@@ -1080,6 +1084,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
                 if problem_type == "Regression":
                     model = RandomForestRegressor(random_state=42)
@@ -1103,6 +1109,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 st.subheader("Genetic Algorithm Feature Selection (PyGAD)" if st.session_state.language == 'id' else "Genetic Algorithm Feature Selection (PyGAD)")
                 st.info("Menggunakan algoritma genetik PyGAD untuk seleksi fitur otomatis" if st.session_state.language == 'id' else "Using PyGAD genetic algorithm for automatic feature selection")
                 # Parameters for PyGAD
@@ -1326,6 +1334,8 @@ with tab4:
                     X_train_full = st.session_state.X_train
                     y_train = st.session_state.y_train
                             
+                    numeric_columns = X_train_full[all_columns].select_dtypes(include=[np.number]).columns.tolist()
+
                 # Pilih dua metode seleksi fitur untuk digabungkan
                 st.info("Pilih dua metode seleksi fitur untuk digabungkan." if st.session_state.language == 'id' else "Select two feature selection methods to combine.")
                 method1 = st.selectbox("Metode pertama:" if st.session_state.language == 'id' else "First method:", [
@@ -1690,8 +1700,6 @@ with tab4:
                     st.subheader("Ringkasan Seleksi Fitur Akhir" if st.session_state.language == 'id' else "Final Feature Selection Summary")
                     
                     # Initialize final_selected_features based on enable_second_stage
-                    final_selected_features = selected_features
-                    
                     if enable_second_stage:
                         final_selected_features = selected_features_stage2
                         comparison_data = {
@@ -1733,12 +1741,14 @@ with tab4:
                         X_train = X_train_full[final_selected_features]
                         X_test = X_test_full[final_selected_features]
 
-                        # Update session state
-                        st.session_state.X_train = X_train_selected
-                        st.session_state.X_test = X_test_selected
-                        st.session_state.selected_features = final_selected_features
+                        # Simpan ke session state
+                        st.session_state.X_train = X_train
+                        st.session_state.X_test = X_test
+                        st.session_state.y_train = y_train
+                        st.session_state.y_test = y_test
+                        st.session_state.processed_data = data
                         
-                        st.success(f"Feature selection selesai. Data training: {X_train_selected.shape}, Data testing: {X_test_selected.shape}" if st.session_state.language == 'id' else f"Feature selection completed. Training data: {X_train.shape}, Testing data: {X_test.shape}")
+                        st.success(f"Feature selection selesai. Data training: {X_train.shape}, Data testing: {X_test.shape}" if st.session_state.language == 'id' else f"Feature selection completed. Training data: {X_train.shape}, Testing data: {X_test.shape}")
                         st.write(f"Fitur yang digunakan: {', '.join(final_selected_features)}" if st.session_state.language == 'id' else f"Selected features: {', '.join(final_selected_features)}")
                     
                     if not selected_features:
