@@ -107,8 +107,8 @@ if 'scaler' not in st.session_state:
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📤 Data Upload", 
     "📊 Exploratory Data Analytic", 
-    "🔄 Preprocessing", 
-    "🛠️ Feature Engineering & Model Training", 
+    "🔄 Preprocessing and Feature Engineering", 
+    "🛠️ Cross Validation and Model Training", 
     "🔍 SHAP Model Interpretation", 
     "🔎 LIME Model Interpretation",
     "📈 Partial Dependence Plot"
@@ -641,7 +641,7 @@ with tab3:
             st.success("Tidak ditemukan data duplikat dalam dataset" if st.session_state.language == 'id' else "No duplicate data found in the dataset")
 
         # Feature selection
-        st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
+        st.subheader("Rekayasa Data" if st.session_state.language == 'id' else "Data Modification")
 
         # Pindahkan encoding sebelum imbalanced dataset handling
         categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
@@ -835,27 +835,86 @@ with tab3:
                 elif not IMB_AVAILABLE:
                     st.warning("Pustaka imbalanced-learn tidak tersedia. Silakan install dengan 'pip install imbalanced-learn'" if st.session_state.language == 'id' else "The imbalanced-learn library is not available. Please install it with 'pip install imbalanced-learn'")
 
+        # Update all_columns setelah encoding dan scaling
         all_columns = [col for col in data.columns if col != target_column]
 
-        numerical_cols = [col for col in st.session_state.numerical_columns if col in data.columns]
-        if numerical_cols:
-            st.subheader("Scale Numerical Features" if st.session_state.language == 'id' else "Scale Numerical Features")
-            scaling_method = st.selectbox(
-                "Pilih metode scaling:" if st.session_state.language == 'id' else "Select scaling method:",
-                ["StandardScaler", "MinMaxScaler"],
-                key="scaling_method"
-            )
-            if scaling_method == "StandardScaler":
-                scaler = StandardScaler()
-                scaling_description = "StandardScaler (mean=0, std=1)" if st.session_state.language == 'id' else "StandardScaler (mean=0, std=1)"
+        # Train-test split
+        st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
+        
+        test_size = st.slider("Ukuran set pengujian (persen):" if st.session_state.language == 'id' else "Test set size (%):", 10, 50, 20) / 100
+        random_state = st.number_input("Status acak:" if st.session_state.language == 'id' else "Random state:", 0, 100, 42)
+        
+        # Prepare data for modeling dengan semua fitur awal
+        X = data[all_columns]
+        y = data[target_column]
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state
+        )
+        
+        # Handle class imbalance for training data (classification only)
+        if st.session_state.problem_type == "Classification" and IMB_AVAILABLE:
+            st.subheader("Penanganan Ketidakseimbangan Dataset" if st.session_state.language == 'id' else "Handle Class Imbalance")
+            
+            # Check for class imbalance
+            train_counts = pd.Series(y_train).value_counts()
+            imbalance_ratio = train_counts.max() / train_counts.min()
+            
+            if imbalance_ratio > 1.5:  # Only show if there's significant imbalance
+                st.warning(f"Terdeteksi ketidakseimbangan kelas dengan rasio {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Detected class imbalance with ratio {imbalance_ratio:.2f}")
+                
+                # Imbalance handling options
+                balance_method = st.selectbox(
+                    "Pilih metode penyeimbangan:" if st.session_state.language == 'id' else "Select balancing method:",
+                    ["Tidak ada" if st.session_state.language == 'id' else "None",
+                     "Random Over Sampling",
+                     "Random Under Sampling", 
+                     "SMOTE",
+                     "SMOTEENN",
+                     "SMOTETomek"]
+                )
+                
+                if balance_method != "Tidak ada" and balance_method != "None":
+                    with st.spinner("Menerapkan penyeimbangan dataset..." if st.session_state.language == 'id' else "Applying dataset balancing..."):
+                        try:
+                            if balance_method == "Random Over Sampling":
+                                ros = RandomOverSampler(random_state=random_state)
+                                X_train_bal, y_train_bal = ros.fit_resample(X_train, y_train)
+                            elif balance_method == "Random Under Sampling":
+                                rus = RandomUnderSampler(random_state=random_state)
+                                X_train_bal, y_train_bal = rus.fit_resample(X_train, y_train)
+                            elif balance_method == "SMOTE":
+                                smote = SMOTE(random_state=random_state)
+                                X_train_bal, y_train_bal = smote.fit_resample(X_train, y_train)
+                            elif balance_method == "SMOTEENN":
+                                smoteenn = SMOTEENN(random_state=random_state)
+                                X_train_bal, y_train_bal = smoteenn.fit_resample(X_train, y_train)
+                            elif balance_method == "SMOTETomek":
+                                smotetomek = SMOTETomek(random_state=random_state)
+                                X_train_bal, y_train_bal = smotetomek.fit_resample(X_train, y_train)
+                            
+                            # Show before/after comparison
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Distribusi Sebelum:**" if st.session_state.language == 'id' else "**Before Distribution:**")
+                                st.write(pd.Series(y_train).value_counts().to_dict())
+                            with col2:
+                                st.write("**Distribusi Setelah:**" if st.session_state.language == 'id' else "**After Distribution:**")
+                                st.write(pd.Series(y_train_bal).value_counts().to_dict())
+                            
+                            # Use balanced data
+                            X_train, y_train = X_train_bal, y_train_bal
+                            st.success(f"Dataset berhasil diseimbangkan! Ukuran training: {len(y_train)} sampel" if st.session_state.language == 'id' else f"Dataset successfully balanced! Training size: {len(y_train)} samples")
+                            
+                        except Exception as e:
+                            st.error(f"Error saat penyeimbangan: {e}" if st.session_state.language == 'id' else f"Error during balancing: {e}")
+                            st.info("Menggunakan data training asli..." if st.session_state.language == 'id' else "Using original training data...")
             else:
-                scaler = MinMaxScaler()
-                scaling_description = "MinMaxScaler (range 0-1)" if st.session_state.language == 'id' else "MinMaxScaler (range 0-1)"
-            data[numerical_cols] = scaler.fit_transform(data[numerical_cols])
-            st.session_state.scaler = scaler
-            st.success(f"{scaling_method} diaplikasikan pada fitur numerik." if st.session_state.language == 'id' else f"{scaling_method} applied to numerical features.")
-            st.info(scaling_description)
+                st.info("Dataset seimbang, tidak perlu penanganan khusus" if st.session_state.language == 'id' else "Dataset is balanced, no special handling needed")
 
+        # Feature selection
+        st.subheader("Seleksi Fitur" if st.session_state.language == 'id' else "Feature Selection")
+        
         # Pilih algoritma seleksi fitur
         feature_selection_method = st.selectbox(
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
@@ -873,7 +932,71 @@ with tab3:
             ]
         )
 
-        selected_features = all_columns
+        # Gunakan data training untuk seleksi fitur
+        X_train_for_selection = X_train.copy()
+        y_train_for_selection = y_train.copy()
+        
+        # Simpan nama kolom asli untuk referensi
+        all_columns_for_selection = X_train_for_selection.columns.tolist()
+        selected_features = all_columns_for_selection
+
+        # Setelah feature selection selesai, terapkan pada X_train dan X_test
+        final_selected_features = selected_features
+        X_train_final = X_train[final_selected_features]
+        X_test_final = X_test[final_selected_features]
+        
+        # Update session state
+        st.session_state.X_train = X_train_final
+        st.session_state.X_test = X_test_final
+        st.session_state.y_train = y_train
+        st.session_state.y_test = y_test
+        st.session_state.processed_data = data
+        
+        st.success(f"Data training memiliki {X_train_final.shape[0]} sampel dan {X_train_final.shape[1]} fitur setelah seleksi" if st.session_state.language == 'id' else f"Training data has {X_train_final.shape[0]} samples and {X_train_final.shape[1]} features after selection")
+        st.success(f"Data testing memiliki {X_test_final.shape[0]} sampel dan {X_test_final.shape[1]} fitur" if st.session_state.language == 'id' else f"Testing data has {X_test_final.shape[0]} samples and {X_test_final.shape[1]} features")
+
+        # Display processed data
+        st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
+        st.dataframe(X_train_final.head())
+
+        # Update session state setelah encoding/scaling
+        st.session_state.X_train = X_train_final
+        st.session_state.X_test = X_test_final
+        st.session_state.y_train = y_train
+        st.session_state.y_test = y_test
+
+        # Display class distribution table for classification problems
+        if st.session_state.problem_type == "Classification":
+            st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
+            
+            # Create distribution table
+            train_counts = pd.Series(y_train).value_counts().sort_index()
+            test_counts = pd.Series(y_test).value_counts().sort_index()
+            
+            distribution_df = pd.DataFrame({
+                'Label': train_counts.index,
+                'Jumlah Data Training': train_counts.values,
+                'Jumlah Data Testing': test_counts.values,
+                'Total': train_counts.values + test_counts.values
+            })
+            
+            # Add percentages
+            total_samples = len(y_train) + len(y_test)
+            distribution_df['Persentase Training (%)'] = (distribution_df['Jumlah Data Training'] / len(y_train) * 100).round(2)
+            distribution_df['Persentase Testing (%)'] = (distribution_df['Jumlah Data Testing'] / len(y_test) * 100).round(2)
+            distribution_df['Persentase Total (%)'] = (distribution_df['Total'] / total_samples * 100).round(2)
+            
+            st.dataframe(distribution_df)
+            
+            # Display summary statistics
+            st.write(f"**Total sampel:** {total_samples}")
+            st.write(f"**Training set:** {len(y_train)} sampel ({len(y_train)/total_samples*100:.1f}%)")
+            st.write(f"**Testing set:** {len(y_test)} sampel ({len(y_test)/total_samples*100:.1f}%)")
+            
+            # Display class imbalance information
+            if len(train_counts) > 1:
+                imbalance_ratio = train_counts.max() / train_counts.min()
+                st.write(f"**Rasio ketidakseimbangan kelas (training):** {imbalance_ratio:.2f}")
 
         if feature_selection_method == "Manual":
             selected_features = st.multiselect(
@@ -1877,56 +2000,6 @@ with tab3:
             X = data[final_selected_features]
             y = data[target_column]
                         
-            # Train-test split
-            st.subheader("Lakukan Train-Test Split" if st.session_state.language == 'id' else "Train-Test Split")
-            
-            test_size = st.slider("Ukuran set pengujian (persen):" if st.session_state.language == 'id' else "Test set size (%):", 10, 50, 20) / 100
-            random_state = st.number_input("Status acak:" if st.session_state.language == 'id' else "Random state:", 0, 100, 42)
-            
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state
-            )
-            
-            st.session_state.X_train = X_train
-            st.session_state.X_test = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
-            st.session_state.processed_data = data
-            
-            st.success(f"Data dibagi menjadi {X_train.shape[0]} sampel training dan {X_test.shape[0]} sampel testing" if st.session_state.language == 'id' else f"Data split into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples.")
-            
-            # Display class distribution table for classification problems
-            if st.session_state.problem_type == "Classification":
-                st.subheader("Distribusi Label Target" if st.session_state.language == 'id' else "Target Label Distribution")
-                
-                # Create distribution table
-                train_counts = pd.Series(y_train).value_counts().sort_index()
-                test_counts = pd.Series(y_test).value_counts().sort_index()
-                
-                distribution_df = pd.DataFrame({
-                    'Label': train_counts.index,
-                    'Jumlah Data Training': train_counts.values,
-                    'Jumlah Data Testing': test_counts.values,
-                    'Total': train_counts.values + test_counts.values
-                })
-                
-                # Add percentages
-                total_samples = len(y_train) + len(y_test)
-                distribution_df['Persentase Training (%)'] = (distribution_df['Jumlah Data Training'] / len(y_train) * 100).round(2)
-                distribution_df['Persentase Testing (%)'] = (distribution_df['Jumlah Data Testing'] / len(y_test) * 100).round(2)
-                distribution_df['Persentase Total (%)'] = (distribution_df['Total'] / total_samples * 100).round(2)
-                
-                st.dataframe(distribution_df)
-                
-                # Display summary statistics
-                st.write(f"**Total sampel:** {total_samples}")
-                st.write(f"**Training set:** {len(y_train)} sampel ({len(y_train)/total_samples*100:.1f}%)")
-                st.write(f"**Testing set:** {len(y_test)} sampel ({len(y_test)/total_samples*100:.1f}%)")
-                
-                # Display class imbalance information
-                if len(train_counts) > 1:
-                    imbalance_ratio = train_counts.max() / train_counts.min()
-                    st.write(f"**Rasio ketidakseimbangan kelas (training):** {imbalance_ratio:.2f}")
             
             # Display processed data
             st.subheader("Tampilkan Data Terproses" if st.session_state.language == 'id' else "Processed Data Preview")
