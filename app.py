@@ -643,7 +643,177 @@ with tab3:
         # Feature selection
         st.subheader("Rekayasa Data" if st.session_state.language == 'id' else "Data Modification")
 
-        # Pindahkan encoding sebelum imbalanced dataset handling
+        # Penanganan imbalanced dataset untuk klasifikasi
+        if problem_type == "Classification":
+            st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
+            
+            # Tampilkan distribusi kelas
+            class_counts = data[target_column].value_counts()
+            fig, ax = plt.subplots(figsize=(10, 4))
+            class_counts.plot(kind='bar', ax=ax)
+            plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
+            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+            st.pyplot(fig)
+            
+            # Hitung rasio imbalance
+            if len(class_counts) > 1:
+                imbalance_ratio = class_counts.max() / class_counts.min()
+                st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
+                
+                # Opsi untuk menghilangkan kelas minoritas
+                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False)
+                
+                if remove_minority:
+                    # Tampilkan semua kelas dan jumlah sampelnya dalam urutan menaik
+                    st.write("Pilih kelas yang ingin dihapus:" if st.session_state.language == 'id' else "Select classes to remove:")
+                    
+                    # Urutkan kelas berdasarkan jumlah sampel (dari yang terkecil)
+                    sorted_classes = class_counts.sort_values().index.tolist()
+                    class_to_remove = {}
+                    
+                    # Buat checkbox untuk setiap kelas
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        for i, cls in enumerate(sorted_classes[:len(sorted_classes)//2 + len(sorted_classes)%2]):
+                            class_to_remove[cls] = st.checkbox(
+                                f"{cls} ({class_counts[cls]} sampel)" if st.session_state.language == 'id' else f"{cls} ({class_counts[cls]} samples)", 
+                                value=False,
+                                key=f"remove_class_{cls}"
+                            )
+                    with col2:
+                        for i, cls in enumerate(sorted_classes[len(sorted_classes)//2 + len(sorted_classes)%2:]):
+                            class_to_remove[cls] = st.checkbox(
+                                f"{cls} ({class_counts[cls]} sampel)" if st.session_state.language == 'id' else f"{cls} ({class_counts[cls]} samples)", 
+                                value=False,
+                                key=f"remove_class_{cls}"
+                            )
+                    
+                    # Identifikasi kelas yang akan dihapus
+                    classes_to_remove = [cls for cls, remove in class_to_remove.items() if remove]
+                    
+                    if classes_to_remove:
+                        # Konfirmasi penghapusan
+                        classes_str = ", ".join([f"'{cls}'" for cls in classes_to_remove])
+                        samples_count = sum([class_counts[cls] for cls in classes_to_remove])
+                        
+                        st.warning(
+                            f"Kelas {classes_str} dengan total {samples_count} sampel akan dihapus" if st.session_state.language == 'id' 
+                            else f"Classes {classes_str} with total {samples_count} samples will be removed"
+                        )
+                        
+                        confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
+                        
+                        if confirm_removal:
+                            # Simpan data asli
+                            original_data = data.copy()
+                            
+                            # Hapus kelas yang dipilih
+                            data = data[~data[target_column].isin(classes_to_remove)]
+                            
+                            # Tampilkan distribusi kelas setelah penghapusan
+                            new_class_counts = data[target_column].value_counts()
+                            fig, ax = plt.subplots(figsize=(10, 4))
+                            new_class_counts.plot(kind='bar', ax=ax)
+                            plt.title('Distribusi Kelas Setelah Penghapusan' if st.session_state.language == 'id' else 'Class Distribution After Removal')
+                            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                            st.pyplot(fig)
+                            
+                            st.success(
+                                f"Kelas {classes_str} berhasil dihapus" if st.session_state.language == 'id' 
+                                else f"Classes {classes_str} successfully removed"
+                            )
+                            
+                            # Tampilkan perbandingan jumlah sampel
+                            comparison_df = pd.DataFrame({
+                                'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
+                                'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
+                            })
+                            st.dataframe(comparison_df)
+                
+                # Tanyakan pengguna apakah ingin menangani imbalanced dataset
+                handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
+                
+                if handle_imbalance and IMB_AVAILABLE:
+                    imbalance_method = st.selectbox(
+                        "Pilih metode balancing:" if st.session_state.language == 'id' else "Select balancing method:",
+                        ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
+                    )
+                    
+                    if imbalance_method != "None":
+                        # Simpan data asli
+                        original_data = data.copy()
+                        
+                        # Siapkan data untuk balancing
+                        X_imbalance = data.drop(columns=[target_column])
+                        y_imbalance = data[target_column]
+                        
+                        # Terapkan metode balancing yang dipilih
+                        from collections import Counter
+                        min_class_count = min(class_counts.values)
+                        smote_kwargs = {}
+                        
+                        if imbalance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
+                            if min_class_count <= 1:
+                                st.warning("Tidak bisa menggunakan SMOTE karena ada kelas dengan hanya 1 sampel." if st.session_state.language == 'id' else "Cannot use SMOTE because there is a class with only 1 sample.")
+                                sampler = None
+                            else:
+                                k_neighbors = min(5, min_class_count - 1)
+                                smote_kwargs = {"k_neighbors": k_neighbors}
+                        
+                        if imbalance_method == "Random Over Sampling":
+                            sampler = RandomOverSampler(random_state=42)
+                            method_description = "Menambah jumlah sampel kelas minoritas dengan duplikasi acak" if st.session_state.language == 'id' else "Increases minority class samples by random duplication"
+                        elif imbalance_method == "Random Under Sampling":
+                            sampler = RandomUnderSampler(random_state=42)
+                            method_description = "Mengurangi jumlah sampel kelas mayoritas secara acak" if st.session_state.language == 'id' else "Reduces majority class samples randomly"
+                        elif imbalance_method == "SMOTE":
+                            sampler = SMOTE(random_state=42, **smote_kwargs)
+                            method_description = "Membuat sampel sintetis untuk kelas minoritas berdasarkan tetangga terdekat" if st.session_state.language == 'id' else "Creates synthetic samples for minority class based on nearest neighbors"
+                        elif imbalance_method == "SMOTEENN":
+                            sampler = SMOTEENN(random_state=42, smote=SMOTE(**smote_kwargs))
+                            method_description = "Kombinasi SMOTE dan Edited Nearest Neighbors untuk pembersihan" if st.session_state.language == 'id' else "Combines SMOTE and Edited Nearest Neighbors for cleaning"
+                        elif imbalance_method == "SMOTETomek":
+                            sampler = SMOTETomek(random_state=42, smote=SMOTE(**smote_kwargs))
+                            method_description = "Kombinasi SMOTE dan Tomek Links untuk pembersihan" if st.session_state.language == 'id' else "Combines SMOTE and Tomek Links for cleaning"
+                        else:
+                            sampler = None
+                        
+                        if sampler is not None:
+                            try:
+                                X_resampled, y_resampled = sampler.fit_resample(X_imbalance, y_imbalance)
+                                
+                                # Update data dengan hasil balancing
+                                data = pd.concat([X_resampled, pd.Series(y_resampled, name=target_column)], axis=1)
+                                
+                                # Tampilkan distribusi kelas setelah balancing
+                                new_class_counts = pd.Series(y_resampled).value_counts()
+                                fig, ax = plt.subplots(figsize=(10, 4))
+                                new_class_counts.plot(kind='bar', ax=ax)
+                                plt.title('Distribusi Kelas Setelah Balancing' if st.session_state.language == 'id' else 'Class Distribution After Balancing')
+                                plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                                plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                                st.pyplot(fig)
+                                
+                                st.success(f"Data berhasil di-balance menggunakan {imbalance_method}" if st.session_state.language == 'id' else f"Data successfully balanced using {imbalance_method}")
+                                st.info(method_description)
+                                
+                                # Tampilkan perbandingan jumlah sampel
+                                comparison_df = pd.DataFrame({
+                                    'Sebelum' if st.session_state.language == 'id' else 'Before': class_counts,
+                                    'Sesudah' if st.session_state.language == 'id' else 'After': new_class_counts
+                                })
+                                st.dataframe(comparison_df)
+                                
+                            except Exception as e:
+                                st.error(f"Gagal melakukan balancing: {e}" if st.session_state.language == 'id' else f"Failed to balance data: {e}")
+                                # Kembalikan data ke aslinya jika gagal
+                                data = original_data
+                elif not IMB_AVAILABLE:
+                    st.warning("Pustaka imbalanced-learn tidak tersedia. Silakan install dengan 'pip install imbalanced-learn'" if st.session_state.language == 'id' else "The imbalanced-learn library is not available. Please install it with 'pip install imbalanced-learn'")
+
+        # Encoding fitur kategorikal setelah penanganan imbalance
         categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
         if categorical_cols:
             st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
@@ -664,10 +834,6 @@ with tab3:
                 # Kembalikan target column
                 data[target_column] = target_series
                 st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
-
-        # Tambahkan penanganan imbalanced dataset setelah encoding dan hanya untuk klasifikasi
-        if problem_type == "Classification":
-            st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
             
             # Tampilkan distribusi kelas
             class_counts = data[target_column].value_counts()
