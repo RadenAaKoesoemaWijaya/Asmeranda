@@ -1388,12 +1388,13 @@ with tab3:
                 "Random Forest Importance"
             ], key="ensemble_method1")
             method2 = st.selectbox("Metode kedua:" if st.session_state.language == 'id' else "Second method:", [
+                "Random Forest Importance",
                 "Mutual Information",
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
                 "LASSO",
-                "Gradient Boosting Importance",
-                "Random Forest Importance"
+                "Gradient Boosting Importance"
+                
             ], key="ensemble_method2")
 
             combine_type = st.radio("Gabungkan hasil dengan:" if st.session_state.language == 'id' else "Combine results with:", ["Intersection", "Union"], index=0)
@@ -1743,12 +1744,12 @@ with tab3:
                         "Random Forest Importance"
                     ], key="ensemble_method1_stage2")
                     method2_stage2 = st.selectbox("Metode kedua (tahap 2):" if st.session_state.language == 'id' else "Second method (stage 2):", [
+                        "Random Forest Importance"
                         "Mutual Information",
                         "Pearson Correlation",
                         "Recursive Feature Elimination (RFE)",
                         "LASSO",
-                        "Gradient Boosting Importance",
-                        "Random Forest Importance"
+                        "Gradient Boosting Importance"
                     ], key="ensemble_method2_stage2")
 
                     combine_type_stage2 = st.radio("Gabungkan hasil dengan (tahap 2):" if st.session_state.language == 'id' else "Combine results with (stage 2):", ["Intersection", "Union"], index=0, key="combine_type_stage2")
