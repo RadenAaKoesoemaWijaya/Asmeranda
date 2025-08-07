@@ -1454,11 +1454,15 @@ with tab3:
             selected_features = rfe_df[rfe_df["Selected"]]["Feature"].tolist()
             selected_count = rfe_df['Selected'].sum()
             fig, ax = plt.subplots(figsize=(8, 6))
-            rfe_df['Selected'].value_counts().plot(kind='bar', ax=ax)
-            ax.set_xticklabels(['Not Selected', 'Selected'], rotation=0)
+            value_counts = rfe_df['Selected'].value_counts()
+            value_counts.plot(kind='bar', ax=ax)
+             # Fix: dynamically set labels based on actual values
+            labels = ['Not Selected' if val == False else 'Selected' for val in value_counts.index]
+            ax.set_xticklabels(labels, rotation=0)
             ax.set_ylabel('Count')
             ax.set_title(f'RFE Selection Results ({selected_count} features selected)')
             st.pyplot(fig)
+
         elif feature_selection_method == "LASSO":
             from sklearn.linear_model import Lasso, LogisticRegression
             if problem_type == "Regression":
