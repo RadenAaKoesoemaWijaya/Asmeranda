@@ -817,6 +817,13 @@ with tab3:
         categorical_cols = [col for col in data.columns if col in st.session_state.categorical_columns and col != target_column]
         if categorical_cols:
             st.subheader("Lakukan Encoding" if st.session_state.language == 'id' else "Encode Categorical Features")
+            
+            # Tampilkan fitur kategorikal yang akan diencode
+            st.write("**Fitur kategorikal yang akan diubah:**" if st.session_state.language == 'id' else "**Categorical features to be transformed:**")
+            for col in categorical_cols:
+                unique_values = data[col].nunique()
+                st.write(f"- **{col}**: {unique_values} nilai unik" if st.session_state.language == 'id' else f"- **{col}**: {unique_values} unique values")
+            
             encoding_method = st.radio("Encoding method:", ["Label Encoding", "One-Hot Encoding"])
             if encoding_method == "Label Encoding":
                 encoders = {}
@@ -833,8 +840,30 @@ with tab3:
                 data = pd.get_dummies(data.drop(columns=[target_column]), columns=categorical_cols, drop_first=True)
                 # Kembalikan target column
                 data[target_column] = target_series
-                st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")
+                st.success("One-hot encoding diaplikasikan pada fitur kategorikal." if st.session_state.language == 'id' else "One-hot encoding applied to categorical features.")            
             
+            # Tampilkan deskripsi fitur setelah encoding
+            st.subheader("Deskripsi Fitur Setelah Encoding" if st.session_state.language == 'id' else "Feature Description After Encoding")
+            
+            # Buat dataframe deskripsi fitur
+            feature_desc = pd.DataFrame({
+                'Nama Fitur' if st.session_state.language == 'id' else 'Feature Name': data.columns,
+                'Tipe Data' if st.session_state.language == 'id' else 'Data Type': data.dtypes.astype(str),
+                'Jumlah Non-Null' if st.session_state.language == 'id' else 'Non-Null Count': data.count(),
+                'Jumlah Nilai Unik' if st.session_state.language == 'id' else 'Unique Values': data.nunique(),
+                'Nilai yang Hilang' if st.session_state.language == 'id' else 'Missing Values': data.isnull().sum()
+            })
+            
+            # Tampilkan sebagai tabel
+            st.dataframe(feature_desc)
+            
+            # Tampilkan ringkasan statistik
+            st.write("**Ringkasan Statistik:**" if st.session_state.language == 'id' else "**Statistical Summary:**")
+            st.write(f"- Total fitur: {len(data.columns)}")
+            st.write(f"- Total baris: {len(data)}")
+            st.write(f"- Fitur numerik: {len(data.select_dtypes(include=[np.number]).columns)}")
+            st.write(f"- Fitur kategorikal: {len(data.select_dtypes(include=['object', 'category']).columns)}")
+ 
             # Tampilkan distribusi kelas
             class_counts = data[target_column].value_counts()
             fig, ax = plt.subplots(figsize=(10, 4))
