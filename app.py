@@ -662,9 +662,9 @@ with tab3:
                 st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
                 
                 # Opsi untuk menghilangkan kelas minoritas
-                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False)
+                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False, key="remove_minority_v1")
                 
-                if remove_minority:
+                if remove_minority_v1:
                     # Tampilkan semua kelas dan jumlah sampelnya dalam urutan menaik
                     st.write("Pilih kelas yang ingin dihapus:" if st.session_state.language == 'id' else "Select classes to remove:")
                     
@@ -702,9 +702,9 @@ with tab3:
                             else f"Classes {classes_str} with total {samples_count} samples will be removed"
                         )
                         
-                        confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
+                        confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal", key="confirm_removal_v1")
                         
-                        if confirm_removal:
+                        if confirm_removal_v1:
                             # Simpan data asli
                             original_data = data.copy()
                             
@@ -733,9 +733,9 @@ with tab3:
                             st.dataframe(comparison_df)
                 
                 # Tanyakan pengguna apakah ingin menangani imbalanced dataset
-                handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
+                handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5, key="handle_imbalance_v1")
                 
-                if handle_imbalance and IMB_AVAILABLE:
+                if handle_imbalance_v1 and IMB_AVAILABLE:
                     imbalance_method = st.selectbox(
                         "Pilih metode balancing:" if st.session_state.language == 'id' else "Select balancing method:",
                         ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
@@ -879,9 +879,9 @@ with tab3:
                 st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
                 
                 # Opsi untuk menghilangkan kelas minoritas
-                remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False)
+                remove_minority_v2 = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False, key="remove_minority_v2")
                 
-                if remove_minority:
+                if remove_minority_v2:
                     # Tampilkan semua kelas dan jumlah sampelnya dalam urutan menaik
                     st.write("Pilih kelas yang ingin dihapus:" if st.session_state.language == 'id' else "Select classes to remove:")
                     
@@ -919,9 +919,9 @@ with tab3:
                             else f"Classes {classes_str} with total {samples_count} samples will be removed"
                         )
                         
-                        confirm_removal = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal")
+                        confirm_removal_v2 = st.checkbox("Konfirmasi penghapusan" if st.session_state.language == 'id' else "Confirm removal", key="confirm_removal_v2")
                         
-                        if confirm_removal:
+                        if confirm_removal_v2:
                             # Simpan data asli
                             original_data = data.copy()
                             
@@ -950,9 +950,9 @@ with tab3:
                             st.dataframe(comparison_df)
                 
                 # Tanyakan pengguna apakah ingin menangani imbalanced dataset
-                handle_imbalance = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5)
+                handle_imbalance_v2 = st.checkbox("Tangani imbalanced dataset" if st.session_state.language == 'id' else "Handle imbalanced dataset", value=imbalance_ratio > 1.5, key="handle_imbalance_v2")
                 
-                if handle_imbalance and IMB_AVAILABLE:
+                if handle_imbalance_v2 and IMB_AVAILABLE:
                     imbalance_method = st.selectbox(
                         "Pilih metode balancing:" if st.session_state.language == 'id' else "Select balancing method:",
                         ["None", "Random Over Sampling", "Random Under Sampling", "SMOTE", "SMOTEENN", "SMOTETomek"]
