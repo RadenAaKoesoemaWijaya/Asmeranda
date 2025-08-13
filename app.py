@@ -16,6 +16,10 @@ from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, classi
 from sklearn.feature_selection import SelectKBest, f_regression, f_classif, mutual_info_regression, mutual_info_classif
 from sklearn.decomposition import PCA
 from sklearn.inspection import partial_dependence, PartialDependenceDisplay
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
+from sklearn.metrics import silhouette_score, adjusted_rand_score
+from sklearn.preprocessing import StandardScaler
+from scipy.cluster.hierarchy import dendrogram, linkage
 import shap
 import pickle
 import os
@@ -102,6 +106,8 @@ if 'encoders' not in st.session_state:
     st.session_state.encoders = {}
 if 'scaler' not in st.session_state:
     st.session_state.scaler = None
+if 'model_type' not in st.session_state:
+    st.session_state.model_type = None
 
 # Create tabs for different functionalities
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
@@ -442,6 +448,262 @@ with tab2:
         st.pyplot(fig)
     else:
         st.info("Silakan unggah dataset di tab 'Data Upload' terlebih dahulu." if st.session_state.language == 'id' else "Please upload a dataset in the 'Data Upload' tab first.")
+
+    if st.session_state.numerical_columns or st.session_state.categorical_columns:
+        
+        # Unsupervised Machine Learning Analysis
+        st.subheader("Analisis Machine Learning Unsupervised" if st.session_state.language == 'id' else "Unsupervised Machine Learning Analysis")
+        
+        # Select features for clustering
+        st.write("Pilih fitur untuk analisis clustering:" if st.session_state.language == 'id' else "Select features for clustering analysis:")
+        
+        # Combine numerical and categorical columns for selection
+        all_columns = st.session_state.numerical_columns + st.session_state.categorical_columns
+        selected_features = st.multiselect(
+            "Pilih fitur:" if st.session_state.language == 'id' else "Select features:",
+            all_columns,
+            default=st.session_state.numerical_columns[:min(3, len(st.session_state.numerical_columns))]
+        )
+        
+        if selected_features:
+            # Prepare data for clustering
+            clustering_data = data[selected_features].copy()
+            
+            # Handle categorical variables
+            categorical_in_selected = [col for col in selected_features if col in st.session_state.categorical_columns]
+            if categorical_in_selected:
+                # Encode categorical variables
+                le = LabelEncoder()
+                for col in categorical_in_selected:
+                    clustering_data[col] = le.fit_transform(clustering_data[col].astype(str))
+            
+            # Handle missing values
+            clustering_data = clustering_data.dropna()
+            
+            if len(clustering_data) > 0:
+                # Standardize the data
+                scaler = StandardScaler()
+                scaled_data = scaler.fit_transform(clustering_data)
+                
+                # Select clustering method
+                clustering_method = st.selectbox(
+                    "Pilih metode clustering:" if st.session_state.language == 'id' else "Select clustering method:",
+                    ["K-Means", "Hierarchical", "DBSCAN", "Spectral"]
+                )
+                
+                if clustering_method == "K-Means":
+                    # K-Means Clustering
+                    max_k = min(10, len(clustering_data) - 1)
+                    k_value = st.slider(
+                        "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
+                        2, max_k, 3
+                    )
+                    
+                    kmeans = KMeans(n_clusters=k_value, random_state=42, n_init=10)
+                    clusters = kmeans.fit_predict(scaled_data)
+                    
+                    # Calculate silhouette score
+                    if len(set(clusters)) > 1:
+                        silhouette = silhouette_score(scaled_data, clusters)
+                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    
+                    # Add cluster labels to data
+                    clustering_data['Cluster'] = clusters
+                    
+                    # Visualize clusters
+                    if len(selected_features) >= 2:
+                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                        
+                        # Scatter plot of first two features
+                        scatter = ax1.scatter(
+                            clustering_data.iloc[:, 0], 
+                            clustering_data.iloc[:, 1], 
+                            c=clusters, 
+                            cmap='viridis', 
+                            alpha=0.6
+                        )
+                        ax1.set_xlabel(selected_features[0])
+                        ax1.set_ylabel(selected_features[1])
+                        ax1.set_title('Visualisasi Cluster' if st.session_state.language == 'id' else 'Cluster Visualization')
+                        plt.colorbar(scatter, ax=ax1)
+                        
+                        # PCA visualization
+                        if len(selected_features) > 2:
+                            pca = PCA(n_components=2)
+                            pca_data = pca.fit_transform(scaled_data)
+                            scatter2 = ax2.scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                            ax2.set_xlabel('PC1')
+                            ax2.set_ylabel('PC2')
+                            ax2.set_title('PCA - Visualisasi Cluster' if st.session_state.language == 'id' else 'PCA - Cluster Visualization')
+                            plt.colorbar(scatter2, ax=ax2)
+                        
+                        st.pyplot(fig)
+                    
+                    # Show cluster statistics
+                    st.write("Statistik per cluster:" if st.session_state.language == 'id' else "Cluster statistics:")
+                    cluster_stats = clustering_data.groupby('Cluster').agg({
+                        col: ['count', 'mean', 'std'] for col in selected_features
+                    }).round(3)
+                    st.dataframe(cluster_stats)
+                
+                elif clustering_method == "Hierarchical":
+                    # Hierarchical Clustering
+                    linkage_method = st.selectbox(
+                        "Metode linkage:" if st.session_state.language == 'id' else "Linkage method:",
+                        ["ward", "complete", "average", "single"]
+                    )
+                    n_clusters = st.slider(
+                        "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
+                        2, min(10, len(clustering_data) - 1), 3
+                    )
+                    
+                    hierarchical = AgglomerativeClustering(
+                        n_clusters=n_clusters, 
+                        linkage=linkage_method
+                    )
+                    clusters = hierarchical.fit_predict(scaled_data)
+                    
+                    # Calculate silhouette score
+                    if len(set(clusters)) > 1:
+                        silhouette = silhouette_score(scaled_data, clusters)
+                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    
+                    # Dendrogram
+                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                    
+                    # Dendrogram plot
+                    linkage_matrix = linkage(scaled_data[:min(100, len(scaled_data))], method=linkage_method)
+                    dendrogram(linkage_matrix, ax=ax1)
+                    ax1.set_title('Dendrogram' if st.session_state.language == 'id' else 'Dendrogram')
+                    ax1.set_xlabel('Sample Index')
+                    ax1.set_ylabel('Distance')
+                    
+                    # Cluster visualization
+                    if len(selected_features) >= 2:
+                        scatter = ax2.scatter(
+                            clustering_data.iloc[:, 0], 
+                            clustering_data.iloc[:, 1], 
+                            c=clusters, 
+                            cmap='viridis', 
+                            alpha=0.6
+                        )
+                        ax2.set_xlabel(selected_features[0])
+                        ax2.set_ylabel(selected_features[1])
+                        ax2.set_title('Hierarchical Clustering' if st.session_state.language == 'id' else 'Hierarchical Clustering')
+                        plt.colorbar(scatter, ax=ax2)
+                    
+                    st.pyplot(fig)
+                    
+                    # Add cluster labels
+                    clustering_data['Cluster'] = clusters
+                    st.write("Distribusi cluster:" if st.session_state.language == 'id' else "Cluster distribution:")
+                    st.write(clustering_data['Cluster'].value_counts())
+                
+                elif clustering_method == "DBSCAN":
+                    # DBSCAN Clustering
+                    eps = st.slider("Eps (radius neighborhood):", 0.1, 5.0, 0.5, 0.1)
+                    min_samples = st.slider("Min samples:", 1, 20, 5)
+                    
+                    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                    clusters = dbscan.fit_predict(scaled_data)
+                    
+                    # Calculate silhouette score
+                    if len(set(clusters)) > 1 and -1 not in clusters:
+                        silhouette = silhouette_score(scaled_data, clusters)
+                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    
+                    # Count clusters (excluding noise)
+                    n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
+                    st.write(f"Jumlah cluster: {n_clusters}")
+                    st.write(f"Noise points: {(clusters == -1).sum()}")
+                    
+                    # Visualize DBSCAN clusters
+                    if len(selected_features) >= 2:
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        scatter = ax.scatter(
+                            clustering_data.iloc[:, 0], 
+                            clustering_data.iloc[:, 1], 
+                            c=clusters, 
+                            cmap='viridis', 
+                            alpha=0.6
+                        )
+                        ax.set_xlabel(selected_features[0])
+                        ax.set_ylabel(selected_features[1])
+                        ax.set_title('DBSCAN Clustering' if st.session_state.language == 'id' else 'DBSCAN Clustering')
+                        plt.colorbar(scatter, ax=ax)
+                        st.pyplot(fig)
+                    
+                    clustering_data['Cluster'] = clusters
+                
+                elif clustering_method == "Spectral":
+                    # Spectral Clustering
+                    n_clusters = st.slider(
+                        "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
+                        2, min(10, len(clustering_data) - 1), 3
+                    )
+                    
+                    spectral = SpectralClustering(
+                        n_clusters=n_clusters, 
+                        random_state=42,
+                        affinity='nearest_neighbors'
+                    )
+                    clusters = spectral.fit_predict(scaled_data)
+                    
+                    # Calculate silhouette score
+                    if len(set(clusters)) > 1:
+                        silhouette = silhouette_score(scaled_data, clusters)
+                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    
+                    # Visualize Spectral clusters
+                    if len(selected_features) >= 2:
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        scatter = ax.scatter(
+                            clustering_data.iloc[:, 0], 
+                            clustering_data.iloc[:, 1], 
+                            c=clusters, 
+                            cmap='viridis', 
+                            alpha=0.6
+                        )
+                        ax.set_xlabel(selected_features[0])
+                        ax.set_ylabel(selected_features[1])
+                        ax.set_title('Spectral Clustering' if st.session_state.language == 'id' else 'Spectral Clustering')
+                        plt.colorbar(scatter, ax=ax)
+                        st.pyplot(fig)
+                    
+                    clustering_data['Cluster'] = clusters
+                
+                # Elbow Method for K-Means
+                if clustering_method == "K-Means" and st.checkbox("Tampilkan Elbow Method" if st.session_state.language == 'id' else "Show Elbow Method"):
+                    max_k = min(10, len(clustering_data) - 1)
+                    inertias = []
+                    k_range = range(1, max_k + 1)
+                    
+                    for k in k_range:
+                        kmeans_temp = KMeans(n_clusters=k, random_state=42, n_init=10)
+                        kmeans_temp.fit(scaled_data)
+                        inertias.append(kmeans_temp.inertia_)
+                    
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.plot(k_range, inertias, 'bo-')
+                    ax.set_xlabel('Jumlah Cluster (k)' if st.session_state.language == 'id' else 'Number of Clusters (k)')
+                    ax.set_ylabel('Inertia')
+                    ax.set_title('Elbow Method untuk K-Means' if st.session_state.language == 'id' else 'Elbow Method for K-Means')
+                    ax.grid(True)
+                    st.pyplot(fig)
+                
+                # Download clustered data
+                if st.button("Download Data dengan Label Cluster" if st.session_state.language == 'id' else "Download Data with Cluster Labels"):
+                    csv = clustering_data.to_csv(index=False)
+                    st.download_button(
+                        label="Download CSV" if st.session_state.language == 'id' else "Download CSV",
+                        data=csv,
+                        file_name=f"clustered_data_{clustering_method.lower()}.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.warning("Tidak cukup data untuk clustering setelah menghapus nilai hilang." if st.session_state.language == 'id' else "Not enough data for clustering after removing missing values.")
+        else:
+            st.warning("Pilih minimal satu fitur untuk analisis clustering." if st.session_state.language == 'id' else "Select at least one feature for clustering analysis.")
 
 # Tab 3: Preprocessing
 with tab3:
@@ -2555,6 +2817,7 @@ with tab4:
                 classification_models = ["Random Forest", "Logistic Regression", "SVM", "KNN", "Decision Tree", "Naive Bayes", "Gradient Boosting", "MLP (Neural Network)"]
                                    
                 model_type = st.selectbox("Select a classification model:" if st.session_state.language == 'id' else "Pilih model klasifikasi:", classification_models)
+                st.session_state.model_type = model_type
                 
                 if model_type == "Random Forest":
                     n_estimators = st.slider("Number of trees:" if st.session_state.language == 'id' else "Jumlah pohon:", 10, 500, 100)
@@ -3133,6 +3396,7 @@ with tab4:
                     model = None
             
             model_custom_name = st.text_input("Nama model (bebas, gunakan huruf/angka/underscore):" if st.session_state.language == 'id' else "Nama model (bebas, gunakan huruf/angka/underscore):", value=f"")
+            st.session_state.model_type = model_type
 
             # Train model button
             if model is not None and st.button("Train Model"):
@@ -3309,18 +3573,44 @@ with tab4:
                             st.write(f"R² Score: {r2:.4f}")
                             st.write(f"Adjusted R² Score: {adj_r2:.4f}")
 
-                            # Tambahan: Uji Multikolinearitas (VIF)
-                            st.subheader("Uji Multikolinearitas (VIF)" if st.session_state.language == 'id' else "Multicollinearity Test (VIF)")
-                            vif_df = calculate_vif(st.session_state.X_train)
-                            st.dataframe(vif_df)
+                            # Tambahan: Uji Multikolinearitas (VIF) - hanya untuk Linear Regression
+                            if st.session_state.model_type == "Linear Regression":
+                                st.subheader("Uji Multikolinearitas (VIF)" if st.session_state.language == 'id' else "Multicollinearity Test (VIF)")
+                                vif_df = calculate_vif(st.session_state.X_train)
+                                st.dataframe(vif_df)
 
-                            # Tambahan: Uji Heteroskedastisitas (Breusch-Pagan)
-                            st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)" if st.session_state.language == 'id' else "Heteroskedasticity Test (Breusch-Pagan)")
-                            bp_result = breusch_pagan_test(st.session_state.y_test, y_pred, st.session_state.X_test)
-                            st.write(f"Lagrange multiplier statistic: {bp_result['Lagrange multiplier statistic']:.4f}")
-                            st.write(f"p-value: {bp_result['p-value']:.4f}")
-                            st.write(f"f-value: {bp_result['f-value']:.4f}")
-                            st.write(f"f p-value: {bp_result['f p-value']:.4f}")
+                                # Tambahan: Uji Heteroskedastisitas (Breusch-Pagan) - hanya untuk Linear Regression
+                                st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)" if st.session_state.language == 'id' else "Heteroskedasticity Test (Breusch-Pagan)")
+                                bp_result = breusch_pagan_test(st.session_state.y_test, y_pred, st.session_state.X_test)
+                                st.write(f"Lagrange multiplier statistic: {bp_result['Lagrange multiplier statistic']:.4f}")
+                                st.write(f"p-value: {bp_result['p-value']:.4f}")
+                                st.write(f"f-value: {bp_result['f-value']:.4f}")
+                                st.write(f"f p-value: {bp_result['f p-value']:.4f}")
+                                
+                                # Add assumptions check for linear regression
+                                st.subheader("Asumsi Regresi Linear" if st.session_state.language == 'id' else "Linear Regression Assumptions")
+                                
+                                # Check VIF values for multicollinearity
+                                high_vif = vif_df[vif_df['VIF'] > 10]
+                                if len(high_vif) > 0:
+                                    st.warning(f"⚠️ Multikolinearitas terdeteksi! {len(high_vif)} fitur memiliki VIF > 10" 
+                                            if st.session_state.language == 'id' else 
+                                            f"⚠️ Multicollinearity detected! {len(high_vif)} features have VIF > 10")
+                                    st.dataframe(high_vif)
+                                else:
+                                    st.success("✅ Tidak ada multikolinearitas yang signifikan (semua VIF ≤ 10)" 
+                                            if st.session_state.language == 'id' else 
+                                            "✅ No significant multicollinearity detected (all VIF ≤ 10)")
+                                
+                                # Check heteroskedasticity
+                                if bp_result['p-value'] < 0.05:
+                                    st.warning("⚠️ Heteroskedastisitas terdeteksi (p-value < 0.05)" 
+                                            if st.session_state.language == 'id' else 
+                                            "⚠️ Heteroskedasticity detected (p-value < 0.05)")
+                                else:
+                                    st.success("✅ Tidak ada heteroskedastisitas yang signifikan (p-value ≥ 0.05)" 
+                                            if st.session_state.language == 'id' else 
+                                            "✅ No significant heteroskedasticity detected (p-value ≥ 0.05)")
                             
                             # Plot actual vs predicted
                             fig, ax = plt.subplots(figsize=(10, 6))
