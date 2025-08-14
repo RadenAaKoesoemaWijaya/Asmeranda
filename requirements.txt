@@ -14,3 +14,4 @@ lime>=0.2.0
 fpdf
 imbalanced-learn
 pygad>=3.2.0
+kmodes

@@ -20,6 +20,7 @@ from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClu
 from sklearn.metrics import silhouette_score, adjusted_rand_score
 from sklearn.preprocessing import StandardScaler
 from scipy.cluster.hierarchy import dendrogram, linkage
+from kmodes.kprototypes import KPrototypes
 import shap
 import pickle
 import os
@@ -488,7 +489,7 @@ with tab2:
                 # Select clustering method
                 clustering_method = st.selectbox(
                     "Pilih metode clustering:" if st.session_state.language == 'id' else "Select clustering method:",
-                    ["K-Means", "Hierarchical", "DBSCAN", "Spectral"]
+                    ["K-Means", "K-Prototypes", "Hierarchical", "DBSCAN", "Spectral"]
                 )
                 
                 if clustering_method == "K-Means":
@@ -546,6 +547,86 @@ with tab2:
                     }).round(3)
                     st.dataframe(cluster_stats)
                 
+                elif clustering_method == "K-Prototypes":
+                    # K-Prototypes Clustering for mixed data types
+                    max_k = min(10, len(clustering_data) - 1)
+                    k_value = st.slider(
+                        "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
+                        2, max_k, 3
+                    )
+                    
+                    gamma = st.slider(
+                        "Gamma (bobot kategorikal):" if st.session_state.language == 'id' else "Gamma (categorical weight):",
+                        0.0, 1.0, 0.5, 0.1
+                    )
+                    
+                    # Prepare data for K-Prototypes
+                    categorical_idx = [i for i, col in enumerate(selected_features) 
+                                     if col in st.session_state.categorical_columns]
+                    
+                    # Convert categorical columns to appropriate types
+                    kproto_data = clustering_data.copy()
+                    for col in categorical_in_selected:
+                        kproto_data[col] = kproto_data[col].astype('category').cat.codes
+                    
+                    # Initialize and fit K-Prototypes
+                    kproto = KPrototypes(n_clusters=k_value, init='Huang', random_state=42, gamma=gamma)
+                    clusters = kproto.fit_predict(kproto_data.values, categorical=categorical_idx)
+                    
+                    # Calculate silhouette score (only for numerical features)
+                    if len(set(clusters)) > 1 and len([col for col in selected_features 
+                                                      if col in st.session_state.numerical_columns]) > 0:
+                        # Use only numerical features for silhouette score
+                        num_features = [col for col in selected_features 
+                                      if col in st.session_state.numerical_columns]
+                        if num_features:
+                            num_data = clustering_data[num_features]
+                            num_scaled = StandardScaler().fit_transform(num_data)
+                            silhouette = silhouette_score(num_scaled, clusters)
+                            st.write(f"Silhouette Score (numerical): {silhouette:.3f}")
+                    
+                    # Add cluster labels to data
+                    clustering_data['Cluster'] = clusters
+                    
+                    # Visualize clusters
+                    if len(selected_features) >= 2:
+                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                        
+                        # Scatter plot using first two features
+                        scatter = ax1.scatter(
+                            clustering_data.iloc[:, 0], 
+                            clustering_data.iloc[:, 1], 
+                            c=clusters, 
+                            cmap='viridis', 
+                            alpha=0.6
+                        )
+                        ax1.set_xlabel(selected_features[0])
+                        ax1.set_ylabel(selected_features[1])
+                        ax1.set_title('K-Prototypes Clustering' if st.session_state.language == 'id' else 'K-Prototypes Clustering')
+                        plt.colorbar(scatter, ax=ax1)
+                        
+                        # PCA visualization for numerical features
+                        num_features = [col for col in selected_features 
+                                      if col in st.session_state.numerical_columns]
+                        if len(num_features) >= 2:
+                            pca = PCA(n_components=2)
+                            pca_data = pca.fit_transform(clustering_data[num_features])
+                            scatter2 = ax2.scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                            ax2.set_xlabel('PC1')
+                            ax2.set_ylabel('PC2')
+                            ax2.set_title('PCA - K-Prototypes Clustering' if st.session_state.language == 'id' else 'PCA - K-Prototypes Clustering')
+                            plt.colorbar(scatter2, ax=ax2)
+                        
+                        st.pyplot(fig)
+                    
+                    # Show cluster statistics
+                    st.write("Statistik per cluster:" if st.session_state.language == 'id' else "Cluster statistics:")
+                    cluster_stats = clustering_data.groupby('Cluster').agg({
+                        col: ['count', 'mean', 'std'] if col in st.session_state.numerical_columns else ['count', 'nunique']
+                        for col in selected_features
+                    }).round(3)
+                    st.dataframe(cluster_stats)
+
                 elif clustering_method == "Hierarchical":
                     # Hierarchical Clustering
                     linkage_method = st.selectbox(
