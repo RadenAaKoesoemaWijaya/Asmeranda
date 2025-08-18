@@ -140,6 +140,20 @@ def breusch_pagan_test(y_true, y_pred, X):
     labels = ['Lagrange multiplier statistic', 'p-value', 'f-value', 'f p-value']
     return dict(zip(labels, bp_test))
 
+def get_model_type(model):
+    """Menentukan jenis model (klasifikasi atau regresi) berdasarkan model yang dimuat"""
+    try:
+        # Cek berdasarkan jenis model
+        if hasattr(model, 'predict_proba') and hasattr(model, 'classes_'):
+            return 'Classification'
+        elif hasattr(model, 'predict') and not hasattr(model, 'classes_'):
+            return 'Regression'
+        else:
+            # Fallback ke problem_type dari session state
+            return st.session_state.problem_type
+    except:
+        return st.session_state.problem_type
+
 # Tab 1: Data Upload
 with tab1:
     st.header("Unggah Dataset Anda" if st.session_state.language == 'id' else "Upload Your Dataset")
@@ -4129,20 +4143,7 @@ with tab4:
 
 # Tab 5: SHAP Model Interpretation
 with tab5:
-    # Tambahkan fungsi untuk menentukan jenis model
-    def get_model_type(model):
-        """Menentukan jenis model (klasifikasi atau regresi) berdasarkan model yang dimuat"""
-        try:
-            # Cek berdasarkan jenis model
-            if hasattr(model, 'predict_proba') and hasattr(model, 'classes_'):
-                return 'Classification'
-            elif hasattr(model, 'predict') and not hasattr(model, 'classes_'):
-                return 'Regression'
-            else:
-                # Fallback ke problem_type dari session state
-                return st.session_state.problem_type
-        except:
-            return st.session_state.problem_type
+    
             
     if st.session_state.problem_type != 'Regression':
         st.info("Fitur interpretasi SHAP hanya tersedia untuk model regresi." if st.session_state.language == 'id' else "SHAP interpretation is only available for regression models.")
