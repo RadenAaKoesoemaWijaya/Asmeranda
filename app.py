@@ -110,6 +110,9 @@ if 'scaler' not in st.session_state:
 if 'model_type' not in st.session_state:
     st.session_state.model_type = None
 
+if 'model_results' not in st.session_state:
+    st.session_state.model_results = []
+
 # Create tabs for different functionalities
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📤 Data Upload", 
@@ -3729,7 +3732,257 @@ with tab4:
                             st.pyplot(fig)
                             
                     except Exception as e:
-                        st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error during model training: {str(e)}") 
+                        st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error during model training: {str(e)}")
+                    
+                    # Simpan hasil evaluasi untuk perbandingan
+                    if 'model_results' not in st.session_state:
+                        st.session_state.model_results = []
+                    
+                    model_name = type(st.session_state.model).__name__
+                    result = {
+                        'model_name': model_name,
+                        'model': st.session_state.model,
+                        'y_test': st.session_state.y_test,
+                        'y_pred': y_pred,
+                        'problem_type': problem_type
+                    }
+                    
+                    if problem_type == "Classification":
+                        result.update({
+                            'accuracy': accuracy,
+                            'confusion_matrix': cm,
+                            'classification_report': report
+                        })
+                    else:  # Regression
+                        result.update({
+                            'mse': mse,
+                            'rmse': rmse,
+                            'r2': r2,
+                            'adj_r2': adj_r2
+                        })
+                    
+                    st.session_state.model_results.append(result)
+            
+            # Tampilkan perbandingan model jika ada lebih dari satu model
+            if len(st.session_state.model_results) > 1:
+                st.header("Perbandingan Model" if st.session_state.language == 'id' else "Model Comparison")
+                
+                # Buat tabs untuk berbagai jenis perbandingan
+                comparison_tabs = st.tabs([
+                    "Confusion Matrix Comparison" if st.session_state.language == 'id' else "Confusion Matrix Comparison",
+                    "Performance Metrics" if st.session_state.language == 'id' else "Performance Metrics",
+                    "Model Rankings" if st.session_state.language == 'id' else "Model Rankings"
+                ])
+                
+                with comparison_tabs[0]:
+                    if problem_type == "Classification":
+                        st.subheader("Perbandingan Confusion Matrix" if st.session_state.language == 'id' else "Confusion Matrix Comparison")
+                        
+                        # Hitung jumlah model dan baris/kolom yang dibutuhkan
+                        n_models = len(st.session_state.model_results)
+                        n_cols = min(3, n_models)  # Maksimal 3 kolom per baris
+                        n_rows = (n_models + n_cols - 1) // n_cols
+                        
+                        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows))
+                        axes = axes.flatten() if n_models > 1 else [axes]
+                        
+                        for idx, result in enumerate(st.session_state.model_results):
+                            if result['problem_type'] == "Classification":
+                                cm = result['confusion_matrix']
+                                model_name = result['model_name']
+                                
+                                # Buat heatmap untuk confusion matrix
+                                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                                          ax=axes[idx], cbar=False)
+                                axes[idx].set_title(f'{model_name}\nAccuracy: {result["accuracy"]:.3f}')
+                                axes[idx].set_xlabel('Predicted')
+                                axes[idx].set_ylabel('Actual')
+                        
+                        # Sembunyikan subplot kosong
+                        for idx in range(n_models, len(axes)):
+                            axes[idx].set_visible(False)
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        
+                        # Tampilkan ringkasan performa
+                        st.subheader("Ringkasan Performa Klasifikasi" if st.session_state.language == 'id' else "Classification Performance Summary")
+                        comparison_df = pd.DataFrame([
+                            {
+                                'Model': r['model_name'],
+                                'Accuracy': f"{r['accuracy']:.4f}",
+                                'Precision': f"{r['classification_report']['weighted avg']['precision']:.4f}",
+                                'Recall': f"{r['classification_report']['weighted avg']['recall']:.4f}",
+                                'F1-Score': f"{r['classification_report']['weighted avg']['f1-score']:.4f}"
+                            }
+                            for r in st.session_state.model_results 
+                            if r['problem_type'] == "Classification"
+                        ])
+                        st.dataframe(comparison_df)
+                        
+                        # Visualisasi perbandingan metrik
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        metrics_data = []
+                        for r in st.session_state.model_results:
+                            if r['problem_type'] == "Classification":
+                                metrics_data.append({
+                                    'Model': r['model_name'],
+                                    'Accuracy': r['accuracy'],
+                                    'Precision': r['classification_report']['weighted avg']['precision'],
+                                    'Recall': r['classification_report']['weighted avg']['recall'],
+                                    'F1-Score': r['classification_report']['weighted avg']['f1-score']
+                                })
+                        
+                        if metrics_data:
+                            metrics_df = pd.DataFrame(metrics_data)
+                            metrics_df.set_index('Model').plot(kind='bar', ax=ax)
+                            plt.title('Perbandingan Metrik Klasifikasi' if st.session_state.language == 'id' else 'Classification Metrics Comparison')
+                            plt.ylabel('Score')
+                            plt.xticks(rotation=45)
+                            plt.legend()
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                    else:
+                        st.info("Perbandingan confusion matrix hanya tersedia untuk masalah klasifikasi." if st.session_state.language == 'id' else "Confusion matrix comparison is only available for classification problems.")
+                
+                with comparison_tabs[1]:
+                    st.subheader("Metrik Performa" if st.session_state.language == 'id' else "Performance Metrics")
+                    
+                    if problem_type == "Classification":
+                        # Tampilkan semua metrik klasifikasi
+                        metrics_summary = []
+                        for result in st.session_state.model_results:
+                            if result['problem_type'] == "Classification":
+                                report = result['classification_report']
+                                metrics_summary.append({
+                                    'Model': result['model_name'],
+                                    'Accuracy': result['accuracy'],
+                                    'Macro Precision': report['macro avg']['precision'],
+                                    'Macro Recall': report['macro avg']['recall'],
+                                    'Macro F1-Score': report['macro avg']['f1-score'],
+                                    'Weighted Precision': report['weighted avg']['precision'],
+                                    'Weighted Recall': report['weighted avg']['recall'],
+                                    'Weighted F1-Score': report['weighted avg']['f1-score']
+                                })
+                        
+                        if metrics_summary:
+                            metrics_df = pd.DataFrame(metrics_summary)
+                            st.dataframe(metrics_df)
+                            
+                            # Heatmap perbandingan
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            comparison_matrix = metrics_df.set_index('Model').T
+                            sns.heatmap(comparison_matrix, annot=True, fmt='.3f', cmap='RdYlGn', ax=ax)
+                            plt.title('Heatmap Perbandingan Metrik' if st.session_state.language == 'id' else 'Metrics Comparison Heatmap')
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                    
+                    else:  # Regression
+                        # Tampilkan metrik regresi
+                        metrics_summary = []
+                        for result in st.session_state.model_results:
+                            if result['problem_type'] == "Regression":
+                                metrics_summary.append({
+                                    'Model': result['model_name'],
+                                    'MSE': result['mse'],
+                                    'RMSE': result['rmse'],
+                                    'R²': result['r2'],
+                                    'Adjusted R²': result['adj_r2']
+                                })
+                        
+                        if metrics_summary:
+                            metrics_df = pd.DataFrame(metrics_summary)
+                            st.dataframe(metrics_df)
+                            
+                            # Visualisasi perbandingan
+                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                            
+                            # Plot untuk error metrics (semakin rendah semakin baik)
+                            error_df = metrics_df[['Model', 'RMSE', 'MSE']].set_index('Model')
+                            error_df.plot(kind='bar', ax=ax1, color=['red', 'orange'])
+                            ax1.set_title('Perbandingan Error Metrics' if st.session_state.language == 'id' else 'Error Metrics Comparison')
+                            ax1.set_ylabel('Error Value')
+                            ax1.legend(['RMSE', 'MSE'])
+                            ax1.tick_params(axis='x', rotation=45)
+                            
+                            # Plot untuk R² metrics (semakin tinggi semakin baik)
+                            r2_df = metrics_df[['Model', 'R²', 'Adjusted R²']].set_index('Model')
+                            r2_df.plot(kind='bar', ax=ax2, color=['green', 'blue'])
+                            ax2.set_title('Perbandingan R² Metrics' if st.session_state.language == 'id' else 'R² Metrics Comparison')
+                            ax2.set_ylabel('Score')
+                            ax2.legend(['R²', 'Adjusted R²'])
+                            ax2.tick_params(axis='x', rotation=45)
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                
+                with comparison_tabs[2]:
+                    st.subheader("Peringkat Model" if st.session_state.language == 'id' else "Model Rankings")
+                    
+                    if problem_type == "Classification":
+                        # Ranking berdasarkan F1-Score
+                        ranking_data = []
+                        for result in st.session_state.model_results:
+                            if result['problem_type'] == "Classification":
+                                ranking_data.append({
+                                    'Model': result['model_name'],
+                                    'Accuracy': result['accuracy'],
+                                    'F1-Score': result['classification_report']['weighted avg']['f1-score'],
+                                    'Precision': result['classification_report']['weighted avg']['precision'],
+                                    'Recall': result['classification_report']['weighted avg']['recall']
+                                })
+                        
+                        if ranking_data:
+                            ranking_df = pd.DataFrame(ranking_data)
+                            ranking_df['Rank'] = ranking_df['F1-Score'].rank(ascending=False)
+                            ranking_df = ranking_df.sort_values('Rank')
+                            
+                            st.write("**Ranking berdasarkan F1-Score (terbaik → terburuk):**" if st.session_state.language == 'id' else "**Ranking by F1-Score (best → worst):**")
+                            st.dataframe(ranking_df[['Rank', 'Model', 'F1-Score', 'Accuracy', 'Precision', 'Recall']])
+                            
+                            # Visualisasi ranking
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            sns.barplot(data=ranking_df, x='Model', y='F1-Score', ax=ax)
+                            ax.set_title('Ranking Model berdasarkan F1-Score' if st.session_state.language == 'id' else 'Model Ranking by F1-Score')
+                            ax.set_ylabel('F1-Score')
+                            plt.xticks(rotation=45)
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                    
+                    else:  # Regression
+                        # Ranking berdasarkan R² (semakin tinggi semakin baik)
+                        ranking_data = []
+                        for result in st.session_state.model_results:
+                            if result['problem_type'] == "Regression":
+                                ranking_data.append({
+                                    'Model': result['model_name'],
+                                    'RMSE': result['rmse'],
+                                    'R²': result['r2'],
+                                    'Adjusted R²': result['adj_r2']
+                                })
+                        
+                        if ranking_data:
+                            ranking_df = pd.DataFrame(ranking_data)
+                            ranking_df['Rank'] = ranking_df['R²'].rank(ascending=False)
+                            ranking_df = ranking_df.sort_values('Rank')
+                            
+                            st.write("**Ranking berdasarkan R² Score (terbaik → terburuk):**" if st.session_state.language == 'id' else "**Ranking by R² Score (best → worst):**")
+                            st.dataframe(ranking_df[['Rank', 'Model', 'R²', 'Adjusted R²', 'RMSE']])
+                            
+                            # Visualisasi ranking
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            sns.barplot(data=ranking_df, x='Model', y='R²', ax=ax)
+                            ax.set_title('Ranking Model berdasarkan R² Score' if st.session_state.language == 'id' else 'Model Ranking by R² Score')
+                            ax.set_ylabel('R² Score')
+                            plt.xticks(rotation=45)
+                            plt.tight_layout()
+                            st.pyplot(fig)
+            
+            # Tombol untuk reset hasil perbandingan
+            if st.session_state.model_results:
+                if st.button("Reset Hasil Perbandingan" if st.session_state.language == 'id' else "Reset Comparison Results"):
+                    st.session_state.model_results = []
+                    st.rerun() 
 
             # Tambahkan bagian untuk prediksi data baru
             if st.session_state.model is not None:
