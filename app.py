@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, StratifiedKFold, LeaveOneOut, LeavePOut, KFold
 from sklearn.preprocessing import StandardScaler, LabelEncoder, PolynomialFeatures, RobustScaler, MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, GradientBoostingClassifier, BaggingRegressor, VotingRegressor, StackingRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -2395,30 +2395,81 @@ with tab4:
         if date_columns:
             is_timeseries = st.checkbox("Data ini adalah data deret waktu (time series)", value=False)
         
-        # Add K-Fold Cross Validation option
-        use_kfold = st.checkbox("Gunakan K-Fold Cross Validation" if st.session_state.language == 'id' else "Use K-Fold Cross Validation", value=False)
+        # Cross Validation Options
+        st.subheader("Pilihan Validasi Silang" if st.session_state.language == 'id' else "Cross Validation Options")
         
-        if use_kfold:
-            from sklearn.model_selection import KFold, cross_val_score, cross_val_predict
-            
-            st.subheader("Lakukan K-Fold Cross Validation" if st.session_state.language == 'id' else "Perform K-Fold Cross Validation")
+        cv_options = [
+            "None (Holdout Validation)",
+            "K-Fold Cross Validation", 
+            "Stratified K-Fold Cross Validation",
+            "Leave-One-Out Cross Validation",
+            "Leave-P-Out Cross Validation"
+        ]
+        
+        cv_method = st.selectbox(
+            "Pilih metode validasi silang:" if st.session_state.language == 'id' else "Select cross validation method:",
+            cv_options
+        )
+        
+        cv_params = {}
+        
+        if cv_method == "K-Fold Cross Validation":
+            from sklearn.model_selection import KFold, cross_val_score
             
             n_splits = st.slider("Jumlah fold (K):" if st.session_state.language == 'id' else "Number of folds (K):", 2, 10, 5)
-            cv_scoring = None
+            cv_params['cv'] = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+            cv_params['name'] = f"K-Fold (K={n_splits})"
+            
+        elif cv_method == "Stratified K-Fold Cross Validation":
+            from sklearn.model_selection import StratifiedKFold, cross_val_score
+            
+            n_splits = st.slider("Jumlah fold (K):" if st.session_state.language == 'id' else "Number of folds (K):", 2, 10, 5)
+            cv_params['cv'] = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+            cv_params['name'] = f"Stratified K-Fold (K={n_splits})"
+            
+        elif cv_method == "Leave-One-Out Cross Validation":
+            from sklearn.model_selection import LeaveOneOut, cross_val_score
+            
+            cv_params['cv'] = LeaveOneOut()
+            cv_params['name'] = "Leave-One-Out"
+            
+        elif cv_method == "Leave-P-Out Cross Validation":
+            from sklearn.model_selection import LeavePOut, cross_val_score
+            
+            max_p = min(5, len(X) - 1)
+            p_value = st.slider("Nilai P:" if st.session_state.language == 'id' else "P value:", 1, max_p, 2)
+            cv_params['cv'] = LeavePOut(p=p_value)
+            cv_params['name'] = f"Leave-{p_value}-Out"
+            
+        else:  # None (Holdout)
+            cv_params['cv'] = None
+            cv_params['name'] = "Holdout Validation"
+        
+        # Select evaluation metric
+        if cv_params['cv'] is not None:
+            st.subheader("Pengaturan Evaluasi" if st.session_state.language == 'id' else "Evaluation Settings")
             
             if problem_type == "Classification":
                 cv_scoring = st.selectbox(
-                    "Metrik evaluasi:",
+                    "Metrik evaluasi:" if st.session_state.language == 'id' else "Evaluation metric:",
                     ["accuracy", "precision", "recall", "f1", "roc_auc"]
                 )
+                cv_params['scoring'] = cv_scoring
+            else:  # Regression
+                cv_scoring = st.selectbox(
+                    "Metrik evaluasi:" if st.session_state.language == 'id' else "Evaluation metric:",
+                    ["neg_mean_squared_error", "neg_root_mean_squared_error", "neg_mean_absolute_error", "r2"]
+                )
+                cv_params['scoring'] = cv_scoring
                 
-                # Display fold distribution for classification
-                st.write("**Distribisi Data per Fold:**" if st.session_state.language == 'id' else "**Data Distribution per Fold:**")
+            # Display data distribution for classification with stratified k-fold
+            if problem_type == "Classification" and cv_method == "Stratified K-Fold Cross Validation":
+                st.write("**Distribusi Data per Fold:**" if st.session_state.language == 'id' else "**Data Distribution per Fold:**")
                 
-                kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+                skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
                 fold_info = []
                 
-                for fold_idx, (train_idx, val_idx) in enumerate(kf.split(X)):
+                for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y)):
                     y_fold_train = y.iloc[train_idx]
                     y_fold_val = y.iloc[val_idx]
                     
@@ -2432,11 +2483,6 @@ with tab4:
                 
                 fold_df = pd.DataFrame(fold_info)
                 st.dataframe(fold_df)
-            else:  # Regression
-                cv_scoring = st.selectbox(
-                    "Metrik evaluasi:",
-                    ["neg_mean_squared_error", "neg_root_mean_squared_error", "neg_mean_absolute_error", "r2"]
-                )
         
         if is_timeseries:
             st.subheader("Pelatihan Model Forecasting" if st.session_state.language == 'id' else "Forecasting Model Training")
@@ -2930,7 +2976,8 @@ with tab4:
                             'min_samples_split': [2, 5, 10],
                             'min_samples_leaf': [1, 2, 4]
                         }
-                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     else:
                         model = RandomForestClassifier(
                             n_estimators=n_estimators,
@@ -2950,7 +2997,8 @@ with tab4:
                             'solver': ['liblinear', 'lbfgs', 'saga'],
                             'max_iter': [100, 500, 1000]
                         }
-                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     else:
                         model = LogisticRegression(
                             C=C,
@@ -2971,7 +3019,8 @@ with tab4:
                             'kernel': [kernel] if kernel != "rbf" else ['linear', 'rbf'],
                             'gamma': [gamma] if gamma != "scale" else ['scale', 'auto'],
                         }
-                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     else:
                         model = SVC(
                             C=C,
@@ -3224,7 +3273,8 @@ with tab4:
                             'min_samples_split': [2, 5, 10],
                             'min_samples_leaf': [1, 2, 4]
                         }
-                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='r2', n_jobs=-1)
                     else:
                         model = RandomForestRegressor(
                             n_estimators=n_estimators,
@@ -3528,6 +3578,62 @@ with tab4:
                             st.success(f"Model selesai dilatih dalam {training_time:.2f} detik" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds!")
                             y_pred = model.predict(st.session_state.X_test)
                             st.session_state.model = model
+                        
+                        # Cross-validation evaluation
+                        if cv_params['cv'] is not None:
+                            st.subheader("Hasil Cross-Validation" if st.session_state.language == 'id' else "Cross-Validation Results")
+                            
+                            with st.spinner("Menghitung cross-validation..." if st.session_state.language == 'id' else "Calculating cross-validation..."):
+                                try:
+                                    # Get the actual model (best estimator if GridSearchCV)
+                                    eval_model = model.best_estimator_ if use_grid_search else model
+                                    
+                                    # Perform cross-validation
+                                    cv_scores = cross_val_score(
+                                        eval_model, 
+                                        st.session_state.X_train, 
+                                        st.session_state.y_train,
+                                        cv=cv_params['cv'],
+                                        scoring=cv_params['scoring'],
+                                        n_jobs=-1
+                                    )
+                                    
+                                    # Display results
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric(
+                                            "Rata-rata Skor CV" if st.session_state.language == 'id' else "Mean CV Score",
+                                            f"{cv_scores.mean():.4f}"
+                                        )
+                                    with col2:
+                                        st.metric(
+                                            "Standar Deviasi" if st.session_state.language == 'id' else "Std Deviation",
+                                            f"{cv_scores.std():.4f}"
+                                        )
+                                    with col3:
+                                        st.metric(
+                                            "Metode Validasi" if st.session_state.language == 'id' else "Validation Method",
+                                            cv_params['name']
+                                        )
+                                    
+                                    # Plot cross-validation scores
+                                    fig, ax = plt.subplots(figsize=(10, 6))
+                                    ax.boxplot(cv_scores)
+                                    ax.set_title(f"Cross-Validation Scores - {cv_params['name']}" if st.session_state.language == 'id' else f"Cross-Validation Scores - {cv_params['name']}")
+                                    ax.set_ylabel("Score")
+                                    ax.grid(True, alpha=0.3)
+                                    st.pyplot(fig)
+                                    
+                                    # Detailed scores
+                                    st.write("**Detail Skor per Fold:**" if st.session_state.language == 'id' else "**Detailed Scores per Fold:**")
+                                    fold_df = pd.DataFrame({
+                                        'Fold': [f'Fold {i+1}' for i in range(len(cv_scores))],
+                                        'Score': cv_scores
+                                    })
+                                    st.dataframe(fold_df)
+                                    
+                                except Exception as e:
+                                    st.error(f"Error dalam cross-validation: {str(e)}" if st.session_state.language == 'id' else f"Error in cross-validation: {str(e)}")
                         
                         # Save model dengan nama custom
                         os.makedirs("models", exist_ok=True)
