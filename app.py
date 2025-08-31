@@ -1651,11 +1651,16 @@ with tab3:
             train_counts = pd.Series(y_train).value_counts().sort_index()
             test_counts = pd.Series(y_test).value_counts().sort_index()
             
+            # Align the indices and fill missing values with 0
+            all_labels = train_counts.index.union(test_counts.index)
+            train_aligned = train_counts.reindex(all_labels, fill_value=0)
+            test_aligned = test_counts.reindex(all_labels, fill_value=0)
+            
             distribution_df = pd.DataFrame({
-                'Label': train_counts.index,
-                'Jumlah Data Training': train_counts.values,
-                'Jumlah Data Testing': test_counts.values,
-                'Total': train_counts.values + test_counts.values
+                'Label': all_labels,
+                'Jumlah Data Training': train_aligned.values,
+                'Jumlah Data Testing': test_aligned.values,
+                'Total': train_aligned.values + test_aligned.values
             })
             
             # Add percentages
