@@ -258,10 +258,52 @@ def forecast_future(model_info, periods=10, freq='D'):
         forecast = model_info.forecast(steps=periods)
         
         # Buat tanggal untuk periode masa depan
-        if hasattr(model_info, 'model') and hasattr(model_info.model, 'data'):
-            last_date = model_info.model.data.index[-1]
-        else:
-            # Jika tidak bisa mendapatkan tanggal terakhir, gunakan indeks numerik
+        try:
+            if hasattr(model_info, 'model') and hasattr(model_info.model, 'data'):
+                # Handle both regular DataFrame and PandasData object
+                data_obj = model_info.model.data
+                
+                # Try different ways to get the index
+                last_date = None
+                
+                # Method 1: Direct index access
+                if hasattr(data_obj, 'index') and len(data_obj.index) > 0:
+                    try:
+                        last_date = data_obj.index[-1]
+                    except (IndexError, TypeError):
+                        pass
+                
+                # Method 2: Access through orig_endog for PandasData
+                if last_date is None and hasattr(data_obj, 'orig_endog'):
+                    orig_endog = data_obj.orig_endog
+                    if hasattr(orig_endog, 'index') and len(orig_endog.index) > 0:
+                        try:
+                            last_date = orig_endog.index[-1]
+                        except (IndexError, TypeError):
+                            pass
+                
+                # Method 3: Access through _index attribute
+                if last_date is None and hasattr(data_obj, '_index') and len(data_obj._index) > 0:
+                    try:
+                        last_date = data_obj._index[-1]
+                    except (IndexError, TypeError):
+                        pass
+                
+                # If still no date, use numerical index
+                if last_date is None:
+                    return pd.DataFrame({
+                        'forecast_index': range(periods),
+                        'forecast': forecast
+                    })
+                    
+            else:
+                # Fallback to numerical index
+                return pd.DataFrame({
+                    'forecast_index': range(periods),
+                    'forecast': forecast
+                })
+        except Exception:
+            # Fallback to numerical index if any error occurs
             return pd.DataFrame({
                 'forecast_index': range(periods),
                 'forecast': forecast
