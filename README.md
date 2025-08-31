@@ -73,6 +73,7 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 1. Pastikan semua persyaratan telah terpenuhi dengan menjalankan:
 
 pip install -r requirements.txt
+python -m pip install "tensorflow"
 
 2. Jalankan aplikasi dengan perintah:
 
