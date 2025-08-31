@@ -171,6 +171,105 @@ def get_model_type(model):
     except:
         return st.session_state.problem_type
 
+def recommend_research_methods(data):
+    """Rekomendasikan metode penelitian berdasarkan karakteristik dataset"""
+    recommendations = []
+    
+    # Analisis karakteristik dataset
+    n_rows, n_cols = data.shape
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    missing_values = data.isnull().sum().sum()
+    missing_percentage = (missing_values / (n_rows * n_cols)) * 100 if n_rows * n_cols > 0 else 0
+    
+    # Rekomendasi berdasarkan ukuran dataset
+    if n_rows < 100:
+        recommendations.append({
+            'type': 'warning',
+            'title': 'Dataset Kecil' if st.session_state.language == 'id' else 'Small Dataset',
+            'description': 'Gunakan Leave-One-Out Cross Validation atau k-fold dengan k yang besar untuk validasi model.' if st.session_state.language == 'id' else 'Use Leave-One-Out Cross Validation or k-fold with large k for model validation.',
+            'methods': ['Leave-One-Out CV', 'Stratified K-Fold (k=5-10)', 'Simple models (Logistic/Linear Regression)']
+        })
+    elif 100 <= n_rows < 1000:
+        recommendations.append({
+            'type': 'info',
+            'title': 'Dataset Sedang' if st.session_state.language == 'id' else 'Medium Dataset',
+            'description': 'Gunakan Stratified K-Fold Cross Validation dengan k=5 atau 10 untuk hasil yang stabil.' if st.session_state.language == 'id' else 'Use Stratified K-Fold Cross Validation with k=5 or 10 for stable results.',
+            'methods': ['Stratified K-Fold CV', 'Grid Search CV', 'Random Forest, SVM, Neural Networks']
+        })
+    else:
+        recommendations.append({
+            'type': 'success',
+            'title': 'Dataset Besar' if st.session_state.language == 'id' else 'Large Dataset',
+            'description': 'Dataset cukup besar untuk deep learning dan ensemble methods yang kompleks.' if st.session_state.language == 'id' else 'Dataset is large enough for complex deep learning and ensemble methods.',
+            'methods': ['K-Fold CV', 'Hold-out Validation', 'Deep Learning, Gradient Boosting, XGBoost']
+        })
+    
+    # Rekomendasi berdasarkan missing values
+    if missing_percentage > 20:
+        recommendations.append({
+            'type': 'warning',
+            'title': 'Banyak Missing Values' if st.session_state.language == 'id' else 'High Missing Values',
+            'description': f'Terdapat {missing_percentage:.1f}% missing values. Pertimbangkan imputasi atau analisis sensitivitas.' if st.session_state.language == 'id' else f'There are {missing_percentage:.1f}% missing values. Consider imputation or sensitivity analysis.',
+            'methods': ['Multiple Imputation', 'KNN Imputation', 'Missing Indicator Features', 'Tree-based Models']
+        })
+    elif missing_percentage > 5:
+        recommendations.append({
+            'type': 'info',
+            'title': 'Missing Values Moderat' if st.session_state.language == 'id' else 'Moderate Missing Values',
+            'description': f'Terdapat {missing_percentage:.1f}% missing values. Gunakan imputasi yang sesuai.' if st.session_state.language == 'id' else f'There are {missing_percentage:.1f}% missing values. Use appropriate imputation.',
+            'methods': ['Mean/Median Imputation', 'KNN Imputation', 'MICE', 'Model-based Imputation']
+        })
+    
+    # Rekomendasi berdasarkan jenis data
+    if len(categorical_cols) > len(numerical_cols):
+        recommendations.append({
+            'type': 'info',
+            'title': 'Data Dominan Kategorikal' if st.session_state.language == 'id' else 'Categorical Dominant Data',
+            'description': 'Dataset memiliki lebih banyak fitur kategorikal. Gunakan encoding yang tepat.' if st.session_state.language == 'id' else 'Dataset has more categorical features. Use appropriate encoding.',
+            'methods': ['One-Hot Encoding', 'Target Encoding', 'Ordinal Encoding', 'Tree-based Models']
+        })
+    elif len(numerical_cols) > len(categorical_cols):
+        recommendations.append({
+            'type': 'info',
+            'title': 'Data Dominan Numerik' if st.session_state.language == 'id' else 'Numerical Dominant Data',
+            'description': 'Dataset memiliki lebih banyak fitur numerik. Scaling mungkin diperlukan.' if st.session_state.language == 'id' else 'Dataset has more numerical features. Scaling may be needed.',
+            'methods': ['StandardScaler', 'MinMaxScaler', 'RobustScaler', 'PCA for Dimensionality Reduction']
+        })
+    
+    # Rekomendasi berdasarkan jumlah fitur
+    if n_cols > 50:
+        recommendations.append({
+            'type': 'warning',
+            'title': 'Dimensi Tinggi' if st.session_state.language == 'id' else 'High Dimensionality',
+            'description': f'Terdapat {n_cols} fitur. Pertimbangkan reduksi dimensi untuk menghindari overfitting.' if st.session_state.language == 'id' else f'There are {n_cols} features. Consider dimensionality reduction to avoid overfitting.',
+            'methods': ['PCA', 'Feature Selection (RFE, SelectKBest)', 'L1 Regularization', 'Autoencoders']
+        })
+    elif n_cols > 20:
+        recommendations.append({
+            'type': 'info',
+            'title': 'Banyak Fitur' if st.session_state.language == 'id' else 'Many Features',
+            'description': f'Terdapat {n_cols} fitur. Gunakan feature selection untuk meningkatkan performa.' if st.session_state.language == 'id' else f'There are {n_cols} features. Use feature selection to improve performance.',
+            'methods': ['Feature Importance', 'Recursive Feature Elimination', 'Mutual Information', 'Correlation Analysis']
+        })
+    
+    # Rekomendasi umum
+    recommendations.append({
+        'type': 'success',
+        'title': 'Langkah Selanjutnya' if st.session_state.language == 'id' else 'Next Steps',
+        'description': 'Ikuti langkah-langkah berikut untuk analisis yang komprehensif.' if st.session_state.language == 'id' else 'Follow these steps for comprehensive analysis.',
+        'methods': [
+            '1. Exploratory Data Analysis (EDA)',
+            '2. Preprocessing & Feature Engineering',
+            '3. Model Training & Cross Validation',
+            '4. Model Interpretation (SHAP/LIME)',
+            '5. Hyperparameter Tuning',
+            '6. Final Model Evaluation'
+        ]
+    })
+    
+    return recommendations
+
 def verify_captcha(input_text, correct_text):
     """Verify captcha input"""
     return input_text.upper().strip() == correct_text.upper().strip()
@@ -499,6 +598,24 @@ with tab1:
             
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
+            
+            # Rekomendasi Metode Penelitian
+            st.subheader("🎯 Rekomendasi Metode Penelitian" if st.session_state.language == 'id' else "🎯 Research Method Recommendations")
+            recommendations = recommend_research_methods(data)
+            
+            for rec in recommendations:
+                if rec['type'] == 'warning':
+                    st.warning(f"**{rec['title']}**\n\n{rec['description']}")
+                elif rec['type'] == 'info':
+                    st.info(f"**{rec['title']}**\n\n{rec['description']}")
+                elif rec['type'] == 'success':
+                    st.success(f"**{rec['title']}**\n\n{rec['description']}")
+                
+                if 'methods' in rec:
+                    st.write(f"**Metode yang disarankan:**" if st.session_state.language == 'id' else f"**Recommended methods:**")
+                    for method in rec['methods']:
+                        st.write(f"• {method}")
+                    st.write("")
         
         # Tambahkan informasi kolom untuk dataset gabungan dari ZIP
         if uploaded_file.name.endswith('.zip') and st.session_state.data is not None:
@@ -545,6 +662,24 @@ with tab1:
             
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
+            
+            # Rekomendasi Metode Penelitian untuk dataset gabungan
+            st.subheader("🎯 Rekomendasi Metode Penelitian" if st.session_state.language == 'id' else "🎯 Research Method Recommendations")
+            recommendations = recommend_research_methods(data)
+            
+            for rec in recommendations:
+                if rec['type'] == 'warning':
+                    st.warning(f"**{rec['title']}**\n\n{rec['description']}")
+                elif rec['type'] == 'info':
+                    st.info(f"**{rec['title']}**\n\n{rec['description']}")
+                elif rec['type'] == 'success':
+                    st.success(f"**{rec['title']}**\n\n{rec['description']}")
+                
+                if 'methods' in rec:
+                    st.write(f"**Metode yang disarankan:**" if st.session_state.language == 'id' else f"**Recommended methods:**")
+                    for method in rec['methods']:
+                        st.write(f"• {method}")
+                    st.write("")
 
 # Tab 2: Exploratory Data Analysis
 with tab2:
