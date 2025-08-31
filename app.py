@@ -4840,6 +4840,7 @@ with tab4:
 
 # Tab 5: SHAP Model Interpretation
 with tab5:
+    st.info("⚠️ **Notifikasi:** Fitur interpretasi SHAP sementara hanya bekerja untuk algoritma model **regresi**. Untuk model **klasifikasi** dan **forecasting**, analisis belum bisa dilakukan." if st.session_state.language == 'id' else "⚠️ **Notification:** SHAP interpretation currently only works for **regression** algorithms. Analysis for **classification** and **forecasting** models is not yet available.")
     
             
     if st.session_state.problem_type != 'Regression':
@@ -5204,6 +5205,7 @@ with tab5:
 
 # Tab 6: LIME Model Interpretation
 with tab6:
+    st.info("⚠️ **Notifikasi:** Fitur interpretasi LIME sementara hanya bekerja untuk algoritma model **regresi**. Untuk model **klasifikasi** dan **forecasting**, analisis belum bisa dilakukan." if st.session_state.language == 'id' else "⚠️ **Notification:** LIME interpretation currently only works for **regression** algorithms. Analysis for **classification** and **forecasting** models is not yet available.")
     if st.session_state.problem_type != 'Regression':
         st.info("Fitur interpretasi LIME hanya tersedia untuk model regresi." if st.session_state.language == 'id' else "LIME interpretation is only available for regression models.")
     else:
@@ -5313,6 +5315,7 @@ with tab6:
 
 # Tab7: Model Interpretation (Partial Dependence Plot)
 with tab7:
+    st.info("⚠️ **Notifikasi:** Fitur analisis PDP (Partial Dependence Plot) sementara hanya bekerja untuk algoritma model **regresi**. Untuk model **klasifikasi** dan **forecasting**, analisis belum bisa dilakukan." if st.session_state.language == 'id' else "⚠️ **Notification:** PDP (Partial Dependence Plot) analysis currently only works for **regression** algorithms. Analysis for **classification** and **forecasting** models is not yet available.")
     st.header("Partial Dependence Plot (PDP) Analysis")
 
     if (
