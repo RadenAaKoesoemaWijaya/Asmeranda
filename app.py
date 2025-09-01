@@ -1342,12 +1342,15 @@ with tab3:
             
             # Tampilkan distribusi kelas
             class_counts = data[target_column].value_counts()
-            fig, ax = plt.subplots(figsize=(10, 4))
-            class_counts.plot(kind='bar', ax=ax)
-            plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
-            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
-            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
-            st.pyplot(fig)
+            if len(class_counts) > 0:
+                fig, ax = plt.subplots(figsize=(10, 4))
+                class_counts.plot(kind='bar', ax=ax)
+                plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
+                plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                st.pyplot(fig)
+            else:
+                st.warning("Tidak ada data untuk kolom target yang dipilih." if st.session_state.language == 'id' else "No data available for the selected target column.")
             
             # Hitung rasio imbalance
             if len(class_counts) > 1:
