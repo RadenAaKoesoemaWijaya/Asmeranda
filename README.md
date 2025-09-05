@@ -52,6 +52,16 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - Hasil prediksi dapat diunduh dalam format CSV atau PDF laporan prediksi
 - Fitur untuk memuat model yang sudah disimpan dan melakukan prediksi ulang
 
+### 7. ⚠️ Deteksi Anomali Time Series
+- **Algoritma State-of-the-Art**: Isolation Forest, One-Class SVM, Statistical (Z-Score), dan Ensemble Method
+- Deteksi otomatis kolom tanggal/waktu dalam dataset
+- Konfigurasi parameter interaktif (tingkat kontaminasi, threshold Z-score)
+- Visualisasi komprehensif hasil deteksi anomali
+- Analisis perbandingan antar metode deteksi
+- Ekspor hasil dalam format CSV dengan flag anomali untuk setiap metode
+- Dukungan bilingual (Bahasa Indonesia & English)
+- Penanganan missing values otomatis
+
 ## Model yang Didukung
 ### Klasifikasi
 - Random Forest
@@ -88,3 +98,4 @@ streamlit run app.py
 4. Latih dan evaluasi model di tab "Feature Engineering & Model Training"
 5. Interpretasikan hasil model dengan SHAP di tab "SHAP Model Interpretation"
 6. Lakukan prediksi data baru dan unduh hasilnya di tab "Feature Engineering & Model Training"
+7. Analisis anomali pada data time series di tab "Time Series Anomaly Detection"
