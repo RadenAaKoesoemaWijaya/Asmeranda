@@ -1482,12 +1482,16 @@ with tab3:
  
             # Tampilkan distribusi kelas
             class_counts = data[target_column].value_counts()
-            fig, ax = plt.subplots(figsize=(10, 4))
-            class_counts.plot(kind='bar', ax=ax)
-            plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
-            plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
-            plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
-            st.pyplot(fig)
+            
+            if len(class_counts) > 0:
+                fig, ax = plt.subplots(figsize=(10, 4))
+                class_counts.plot(kind='bar', ax=ax)
+                plt.title('Distribusi Kelas' if st.session_state.language == 'id' else 'Class Distribution')
+                plt.ylabel('Jumlah' if st.session_state.language == 'id' else 'Count')
+                plt.xlabel('Kelas' if st.session_state.language == 'id' else 'Class')
+                st.pyplot(fig)
+            else:
+                st.warning("Tidak ada data untuk kolom target yang dipilih" if st.session_state.language == 'id' else "No data available for selected target column")
             
         # Update all_columns setelah encoding
         all_columns = [col for col in data.columns if col != target_column]
@@ -1501,6 +1505,14 @@ with tab3:
         # Prepare data for modeling dengan semua fitur awal
         X = data[all_columns]
         y = data[target_column]
+
+        # Validasi jumlah sampel sebelum train test split
+        if len(X) == 0:
+            st.error("Tidak ada data untuk diproses. Pastikan dataset memiliki minimal 1 baris data." if st.session_state.language == 'id' else "No data to process. Please ensure your dataset has at least 1 row of data.")
+            st.stop()
+        elif len(X) < 2:
+            st.error("Dataset terlalu kecil. Diperlukan minimal 2 sampel untuk train-test split." if st.session_state.language == 'id' else "Dataset too small. At least 2 samples required for train-test split.")
+            st.stop()
 
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state
