@@ -2909,8 +2909,14 @@ with tab4:
                         # Check stationarity
                         stationarity_result = check_stationarity(ts_data[target_column])
                         st.write("Hasil Uji Stasioneritas:" if st.session_state.language == 'id' else "Stationarity Test Results:")
-                        st.write(f"- Test Statistic: {stationarity_result['Test Statistic']:.4f}")
-                        st.write(f"- p-value: {stationarity_result['p-value']:.4f}")
+                        
+                        if stationarity_result['Message']:
+                            st.warning(stationarity_result['Message'])
+                        
+                        if stationarity_result['Test Statistic'] is not None:
+                            st.write(f"- Test Statistic: {stationarity_result['Test Statistic']:.4f}")
+                        if stationarity_result['p-value'] is not None:
+                            st.write(f"- p-value: {stationarity_result['p-value']:.4f}")
                         st.write(f"- Data {'stasioner' if stationarity_result['Stationary'] else 'tidak stasioner'}")
                         
                         # Plot time series analysis
@@ -5373,14 +5379,16 @@ with tab7:
             # Select date column
             date_column = st.selectbox(
                 "Pilih kolom tanggal/waktu:" if st.session_state.language == 'id' else "Select date/time column:",
-                date_columns
+                date_columns,
+                key="ts_date_column"
             )
             
             # Select target column for anomaly detection
             numerical_columns = st.session_state.data.select_dtypes(include=[np.number]).columns.tolist()
             target_column = st.selectbox(
                 "Pilih kolom target untuk deteksi anomali:" if st.session_state.language == 'id' else "Select target column for anomaly detection:",
-                [col for col in numerical_columns if col != date_column]
+                [col for col in numerical_columns if col != date_column],
+                key="ts_target_column"
             )
             
             # Data preparation

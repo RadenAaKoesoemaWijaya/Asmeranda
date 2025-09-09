@@ -109,20 +109,60 @@ def check_stationarity(timeseries):
     dict
         Hasil uji stasioneritas
     """
-    # Uji Augmented Dickey-Fuller
-    result = adfuller(timeseries.dropna())
+    # Hapus nilai missing
+    clean_timeseries = timeseries.dropna()
     
-    # Siapkan output
-    output = {
-        'Test Statistic': result[0],
-        'p-value': result[1],
-        'Lags Used': result[2],
-        'Number of Observations Used': result[3],
-        'Critical Values': result[4],
-        'Stationary': result[1] <= 0.05
-    }
+    # Cek apakah data konstan (semua nilai sama)
+    if len(clean_timeseries.unique()) <= 1:
+        return {
+            'Test Statistic': None,
+            'p-value': None,
+            'Lags Used': None,
+            'Number of Observations Used': len(clean_timeseries),
+            'Critical Values': None,
+            'Stationary': True,  # Data konstan dianggap stasioner
+            'Message': 'Data konstan (semua nilai sama) - tidak dapat dilakukan uji stasioneritas'
+        }
     
-    return output
+    # Cek apakah data terlalu pendek
+    if len(clean_timeseries) < 3:
+        return {
+            'Test Statistic': None,
+            'p-value': None,
+            'Lags Used': None,
+            'Number of Observations Used': len(clean_timeseries),
+            'Critical Values': None,
+            'Stationary': True,
+            'Message': 'Data terlalu pendek untuk uji stasioneritas'
+        }
+    
+    try:
+        # Uji Augmented Dickey-Fuller
+        result = adfuller(clean_timeseries)
+        
+        # Siapkan output
+        output = {
+            'Test Statistic': result[0],
+            'p-value': result[1],
+            'Lags Used': result[2],
+            'Number of Observations Used': result[3],
+            'Critical Values': result[4],
+            'Stationary': result[1] <= 0.05,
+            'Message': None
+        }
+        
+        return output
+        
+    except Exception as e:
+        return {
+            'Test Statistic': None,
+            'p-value': None,
+            'Lags Used': None,
+            'Number of Observations Used': len(clean_timeseries),
+            'Critical Values': None,
+            'Stationary': True,
+            'Message': f'Error dalam uji stasioneritas: {str(e)}'
+        }
 
 def plot_timeseries_analysis(timeseries, figsize=(15, 12)):
     """
