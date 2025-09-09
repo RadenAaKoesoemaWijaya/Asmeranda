@@ -180,22 +180,66 @@ def plot_timeseries_analysis(timeseries, figsize=(15, 12)):
     matplotlib.figure.Figure
         Figure yang berisi plot analisis
     """
-    fig, axes = plt.subplots(3, 1, figsize=figsize)
+    # Hapus nilai missing dan cek jumlah data
+    clean_timeseries = timeseries.dropna()
     
-    # Plot data asli
-    axes[0].plot(timeseries)
-    axes[0].set_title('Data Timeseries')
+    # Cek apakah data terlalu sedikit untuk ACF/PACF
+    if len(clean_timeseries) < 2:
+        # Hanya plot data asli jika terlalu sedikit data
+        fig, ax = plt.subplots(1, 1, figsize=(15, 4))
+        ax.plot(clean_timeseries)
+        ax.set_title('Data Timeseries (Data terlalu sedikit untuk ACF/PACF)')
+        plt.tight_layout()
+        return fig
     
-    # Plot ACF
-    plot_acf(timeseries.dropna(), ax=axes[1])
-    axes[1].set_title('Autocorrelation Function (ACF)')
+    elif len(clean_timeseries) < 5:
+        # Plot data asli dan ACF saja jika data cukup untuk ACF tapi tidak untuk PACF
+        fig, axes = plt.subplots(2, 1, figsize=figsize)
+        
+        # Plot data asli
+        axes[0].plot(clean_timeseries)
+        axes[0].set_title('Data Timeseries')
+        
+        # Plot ACF
+        try:
+            plot_acf(clean_timeseries, ax=axes[1])
+            axes[1].set_title('Autocorrelation Function (ACF)')
+        except Exception as e:
+            axes[1].text(0.5, 0.5, f'Error plotting ACF: {str(e)}', 
+                        ha='center', va='center', transform=axes[1].transAxes)
+            axes[1].set_title('ACF - Error')
+        
+        plt.tight_layout()
+        return fig
     
-    # Plot PACF
-    plot_pacf(timeseries.dropna(), ax=axes[2])
-    axes[2].set_title('Partial Autocorrelation Function (PACF)')
-    
-    plt.tight_layout()
-    return fig
+    else:
+        # Plot lengkap jika data cukup
+        fig, axes = plt.subplots(3, 1, figsize=figsize)
+        
+        # Plot data asli
+        axes[0].plot(clean_timeseries)
+        axes[0].set_title('Data Timeseries')
+        
+        # Plot ACF
+        try:
+            plot_acf(clean_timeseries, ax=axes[1])
+            axes[1].set_title('Autocorrelation Function (ACF)')
+        except Exception as e:
+            axes[1].text(0.5, 0.5, f'Error plotting ACF: {str(e)}', 
+                        ha='center', va='center', transform=axes[1].transAxes)
+            axes[1].set_title('ACF - Error')
+        
+        # Plot PACF
+        try:
+            plot_pacf(clean_timeseries, ax=axes[2])
+            axes[2].set_title('Partial Autocorrelation Function (PACF)')
+        except Exception as e:
+            axes[2].text(0.5, 0.5, f'Error plotting PACF: {str(e)}', 
+                        ha='center', va='center', transform=axes[2].transAxes)
+            axes[2].set_title('PACF - Error')
+        
+        plt.tight_layout()
+        return fig
 
 def create_features_from_date(df, date_column):
     """
