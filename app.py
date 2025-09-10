@@ -630,10 +630,20 @@ with tab1:
                 
                 with col2:
                     if numeric_columns:
+                        # Validasi target_column yang tersimpan di session state
+                        default_index = 0
+                        if st.session_state.target_column is not None:
+                            available_columns = [""] + numeric_columns
+                            if st.session_state.target_column in available_columns:
+                                default_index = available_columns.index(st.session_state.target_column)
+                            else:
+                                # Reset jika kolom target tidak valid
+                                st.session_state.target_column = None
+                        
                         target_column = st.selectbox(
                             "Pilih kolom target untuk forecasting:" if st.session_state.language == 'id' else "Select target column for forecasting:",
                             [""] + numeric_columns,
-                            index=0 if st.session_state.target_column is None else ([""] + numeric_columns).index(st.session_state.target_column)
+                            index=default_index
                         )
                         st.session_state.target_column = target_column if target_column else None
                     else:
