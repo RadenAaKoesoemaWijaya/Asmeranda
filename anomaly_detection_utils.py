@@ -225,13 +225,39 @@ class TimeSeriesAnomalyDetector:
             'y': data.values
         })
         
-        # Fit Prophet model
-        model = Prophet(changepoint_prior_scale=changepoint_prior_scale)
-        model.fit(df)
+        # Validasi timestamp untuk Prophet
+        # Batasi tanggal agar tidak out of bounds (maksimum 10 tahun dari sekarang)
+        current_year = pd.Timestamp.now().year
+        max_allowed_year = current_year + 10
         
-        # Make predictions
-        future = model.make_future_dataframe(periods=0)
-        forecast = model.predict(future)
+        # Filter tanggal yang terlalu jauh di masa depan
+        df_filtered = df[df['ds'].dt.year <= max_allowed_year].copy()
+        
+        if len(df_filtered) == 0:
+            raise ValueError("Tidak ada data yang valid untuk Prophet (tanggal terlalu jauh di masa depan)")
+        
+        # Fit Prophet model dengan data yang sudah difilter
+        model = Prophet(changepoint_prior_scale=changepoint_prior_scale)
+        model.fit(df_filtered)
+        
+        # Make predictions dengan validasi
+        try:
+            future = model.make_future_dataframe(periods=0)
+            # Validasi tanggal hasil prediksi
+            if future['ds'].dt.year.max() > max_allowed_year:
+                # Batasi tanggal prediksi
+                future = future[future['ds'].dt.year <= max_allowed_year]
+            forecast = model.predict(future)
+        except Exception as e:
+            if "Out of bounds" in str(e) or "timestamp" in str(e).lower():
+                # Fallback dengan data yang lebih pendek
+                df_safe = df_filtered.tail(min(len(df_filtered), 365))  # Maksimum 1 tahun data
+                model_safe = Prophet(changepoint_prior_scale=changepoint_prior_scale)
+                model_safe.fit(df_safe)
+                future = model_safe.make_future_dataframe(periods=0)
+                forecast = model_safe.predict(future)
+            else:
+                raise e
         
         # Calculate residuals
         residuals = np.abs(data.values - forecast['yhat'].values)

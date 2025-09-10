@@ -621,19 +621,39 @@ with tab1:
                 
                 col1, col2 = st.columns(2)
                 with col1:
+                    # Buat list opsi yang aman untuk time column
+                    time_options = [""] + date_columns + numeric_columns
+                    
+                    # Cek apakah time_column yang tersimpan masih valid
+                    current_time = st.session_state.time_column
+                    if current_time is not None and current_time in time_options:
+                        safe_time_index = time_options.index(current_time)
+                    else:
+                        safe_time_index = 0
+                    
                     time_column = st.selectbox(
                         "Pilih kolom waktu/date:" if st.session_state.language == 'id' else "Select time/date column:",
-                        [""] + date_columns + numeric_columns,
-                        index=0 if st.session_state.time_column is None else ([""] + date_columns + numeric_columns).index(st.session_state.time_column)
+                        time_options,
+                        index=safe_time_index
                     )
                     st.session_state.time_column = time_column if time_column else None
                 
                 with col2:
                     if numeric_columns:
+                        # Buat list opsi yang aman
+                        target_options = [""] + numeric_columns
+                        
+ # Cek apakah target_column yang tersimpan masih valid
+                        current_target = st.session_state.target_column
+                        if current_target is not None and current_target in target_options:
+                            safe_index = target_options.index(current_target)
+                        else:
+                            safe_index = 0
+                        
                         target_column = st.selectbox(
                             "Pilih kolom target untuk forecasting:" if st.session_state.language == 'id' else "Select target column for forecasting:",
-                            [""] + numeric_columns,
-                            index=0 if st.session_state.target_column is None else ([""] + numeric_columns).index(st.session_state.target_column)
+                            target_options,
+                            index=safe_index
                         )
                         st.session_state.target_column = target_column if target_column else None
                     else:
@@ -3154,32 +3174,165 @@ with tab4:
                         if st.session_state.model is not None:
                             with st.spinner("Mengevaluasi model..." if st.session_state.language == 'id' else "Evaluating model..."):
                                 try:
-                                    eval_results = evaluate_forecast_model(st.session_state.model, test_data, target_column)
+                                    # Validasi data sebelum evaluasi
+                                    if test_data.empty:
+                                        st.error("Data test kosong, tidak dapat mengevaluasi model." if st.session_state.language == 'id' else "Test data is empty, cannot evaluate model.")
                                     
-                                    st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
-                                    st.write(f"- MAE: {eval_results['MAE']:.4f}")
-                                    st.write(f"- MSE: {eval_results['MSE']:.4f}")
-                                    st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
-                                    if eval_results['MAPE'] is not None:
-                                        st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
-                                    else:
-                                        st.write("- MAPE: Tidak dapat dihitung (nilai aktual 0)" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated (actual values are 0)")
-                                    st.write(f"- R²: {eval_results['R2']:.4f}")
                                     
-                                    # Generate forecast
-                                    try:
-                                        forecast_data = forecast_future(st.session_state.model, periods=forecast_periods)
-                                        # Perbaikan: Konversi kolom tanggal ke string jika tipe datetime64[ns] dan out of bounds
-                                        if 'date' in forecast_data.columns:
-                                            # Cek dan konversi semua nilai tanggal yang out of bounds ke string
-                                            def safe_to_datetime(val):
+                                    # Validasi timestamp untuk mencegah out of bounds
+                                    test_data_valid = test_data.copy()
+                                    
+                                    # Validasi dan perbaiki index datetime
+                                    if hasattr(test_data_valid, 'index') and isinstance(test_data_valid.index, pd.DatetimeIndex):
+                                        try:
+                                            # Filter tanggal yang reasonable (50 tahun ke belakang, 10 tahun ke depan)
+                                            current_date = pd.Timestamp.now()
+                                            min_date = current_date - pd.DateOffset(years=50)
+                                            max_date = current_date + pd.DateOffset(years=10)
+                                            
+                                            # Validasi setiap tanggal
+                                            valid_dates = []
+                                            for date in test_data_valid.index:
                                                 try:
-                                                    return pd.to_datetime(val)
-                                                except (pd.errors.OutOfBoundsDatetime, ValueError, OverflowError):
-                                                    return str(val)
-                                            forecast_data['date'] = forecast_data['date'].apply(safe_to_datetime)
+                                                    if isinstance(date, pd.Timestamp):
+                                                        date.timestamp()  # Test if date is valid
+                                                        if min_date <= date <= max_date:
+                                                            valid_dates.append(date)
+                                                except (OverflowError, OSError, ValueError):
+                                                    continue
+                                            
+                                            if valid_dates:
+                                                test_data_valid = test_data_valid.loc[valid_dates]
+                                            else:
+                                                st.error("Semua tanggal dalam data test tidak valid." if st.session_state.language == 'id' else "All dates in test data are invalid.")
+                                            # Fallback ke index numerik
+                                            test_data_valid = test_data_valid.reset_index(drop=True)
+                                            
+                                                
+                                        except Exception as date_error:
+                                            st.error(f"Error validasi tanggal: {str(date_error)}" if st.session_state.language == 'id' else f"Date validation error: {str(date_error)}")
+                                            # Fallback ke index numerik
+                                            test_data_valid = test_data_valid.reset_index(drop=True)
+                                    
+                                    if test_data_valid.empty:
+                                        st.error("Data test mengandung tanggal yang tidak valid (terlalu jauh di masa depan)." if st.session_state.language == 'id' else "Test data contains invalid dates (too far in the future).")
+                                        
+                                    
+                                    try:
+                                        eval_results = evaluate_forecast_model(st.session_state.model, test_data_valid, target_column)
+                                        
+                                        if isinstance(eval_results, dict) and 'error' in eval_results:
+                                            st.error(f"Error evaluasi model: {eval_results['error']}")
+                                            st.info("Silakan periksa kembali data Anda atau gunakan data dengan tanggal yang lebih reasonable." if st.session_state.language == 'id' else "Please check your data or use data with more reasonable dates.")
+                                        else:
+                                            st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
+                                            st.write(f"- MAE: {eval_results['MAE']:.4f}")
+                                            st.write(f"- MSE: {eval_results['MSE']:.4f}")
+                                            st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
+                                            if eval_results['MAPE'] is not None:
+                                                st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
+                                            else:
+                                                st.write("- MAPE: Tidak dapat dihitung (nilai aktual 0)" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated (actual values are 0)")
+                                            st.write(f"- R²: {eval_results['R2']:.4f}")
+                                            
                                     except Exception as e:
-                                        st.error(f"Error saat membuat forecast: {str(e)}" if st.session_state.language == 'id' else f"Error generating forecast: {str(e)}")
+                                        error_msg = str(e).lower()
+                                        if any(keyword in error_msg for keyword in ['out of bounds', 'timestamp', 'overflow', 'datetime', 'bounds']):
+                                            st.error("Error: Data mengandung tanggal yang melebihi batas yang diizinkan." if st.session_state.language == 'id' else "Error: Data contains dates that exceed allowed limits.")
+                                            st.info("Silakan gunakan data dengan tanggal yang lebih reasonable (maksimum 10 tahun ke depan dari sekarang)." if st.session_state.language == 'id' else "Please use data with more reasonable dates (maximum 10 years ahead from now).")
+                                        else:
+                                            st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error evaluating model: {str(e)}")
+                                    
+                                    # Generate forecast dengan validasi timestamp yang lebih kuat
+                                    try:
+                                        # Validasi ulang data test untuk memastikan tidak ada timestamp yang out of bounds
+                                        if len(test_data) > 0:
+                                            # Cek timestamp bounds untuk data test
+                                            try:
+                                                test_data.index = pd.to_datetime(test_data.index)
+                                                # Filter tanggal yang reasonable
+                                                max_date = pd.Timestamp.now() + pd.DateOffset(years=10)
+                                                min_date = pd.Timestamp.now() - pd.DateOffset(years=50)
+                                                test_data = test_data[(test_data.index >= min_date) & (test_data.index <= max_date)]
+                                            except (OverflowError, OSError, ValueError) as e:
+                                                st.warning("Data test mengandung tanggal yang tidak valid, menggunakan index numerik...")
+                                                test_data.index = pd.RangeIndex(len(test_data))
+                                        
+                                        # Batasi periode forecast agar tidak terlalu jauh (maksimum 3 bulan untuk safety)
+                                        safe_periods = min(forecast_periods, 90)  # Maksimum 3 bulan
+                                        
+                                        # Tambahkan parameter max_years untuk forecast_future
+                                        forecast_data = forecast_future(st.session_state.model, periods=safe_periods, max_years_ahead=2)
+                                        
+                                        # Validasi dan konversi tanggal yang aman
+                                        if 'ds' in forecast_data.columns:
+                                            def safe_date_conversion(date_val):
+                                                try:
+                                                    # Coba konversi ke timestamp untuk validasi
+                                                    if isinstance(date_val, pd.Timestamp):
+                                                        # Validasi timestamp bounds
+                                                        timestamp = date_val.timestamp()
+                                                        if timestamp < -2147483648 or timestamp > 2147483647:  # 32-bit timestamp limits
+                                                            # Gunakan tanggal yang aman
+                                                            return pd.Timestamp.now() + pd.DateOffset(days=1)
+                                                        return date_val
+                                                    else:
+                                                        parsed = pd.to_datetime(date_val)
+                                                        timestamp = parsed.timestamp()
+                                                        if timestamp < -2147483648 or timestamp > 2147483647:
+                                                            return pd.Timestamp.now() + pd.DateOffset(days=1)
+                                                        return parsed
+                                                except (OverflowError, OSError, ValueError, pd.errors.OutOfBoundsDatetime):
+                                                    # Fallback ke tanggal yang aman
+                                                    try:
+                                                        # Extract hari dari string tanggal
+                                                        date_str = str(date_val)
+                                                        if '-' in date_str:
+                                                            day = int(date_str.split('-')[-1])
+                                                        else:
+                                                            day = 1
+                                                        return pd.Timestamp.now() + pd.DateOffset(days=day % 365)
+                                                    except:
+                                                        return pd.Timestamp.now() + pd.DateOffset(days=1)
+                                            
+                                            forecast_data['ds'] = forecast_data['ds'].apply(safe_date_conversion)
+                                        
+                                        # Pastikan tidak ada tanggal yang out of bounds
+                                        max_safe_date = pd.Timestamp.now() + pd.DateOffset(years=2)  # Batas 2 tahun
+                                        min_safe_date = pd.Timestamp.now() - pd.DateOffset(years=2)   # Batas 2 tahun ke belakang
+                                        
+                                        if 'ds' in forecast_data.columns:
+                                            # Filter tanggal yang reasonable
+                                            forecast_data = forecast_data[
+                                                (forecast_data['ds'] >= min_safe_date) & 
+                                                (forecast_data['ds'] <= max_safe_date)
+                                            ]
+                                            
+                                            # Validasi ulang semua tanggal
+                                            valid_forecast = []
+                                            for idx, row in forecast_data.iterrows():
+                                                try:
+                                                    row['ds'].timestamp()
+                                                    valid_forecast.append(idx)
+                                                except (OverflowError, OSError, ValueError):
+                                                    continue
+                                            
+                                            if valid_forecast:
+                                                forecast_data = forecast_data.loc[valid_forecast]
+                                            else:
+                                                forecast_data = None
+                                            
+                                        if forecast_data is None or forecast_data.empty:
+                                            st.warning("Tidak dapat menghasilkan forecast karena batasan tanggal. Silakan coba dengan periode yang lebih pendek." if st.session_state.language == 'id' else "Cannot generate forecast due to date limitations. Please try with shorter periods.")
+                                            forecast_data = None
+                                            
+                                    except Exception as e:
+                                        # Handling untuk error timestamp dengan lebih detail
+                                        error_msg = str(e).lower()
+                                        if any(keyword in error_msg for keyword in ['out of bounds', 'timestamp', 'overflow', 'datetime']):
+                                            st.error("Error: Tanggal prediksi melebihi batas yang diizinkan. Silakan gunakan data dengan tanggal yang lebih reasonable atau kurangi periode forecast." if st.session_state.language == 'id' else "Error: Prediction dates exceed allowed limits. Please use data with more reasonable dates or reduce forecast periods.")
+                                        else:
+                                            st.error(f"Error saat membuat forecast: {str(e)}" if st.session_state.language == 'id' else f"Error generating forecast: {str(e)}")
                                         forecast_data = None
 
                                     # Plot results

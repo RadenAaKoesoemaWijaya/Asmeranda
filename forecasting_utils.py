@@ -136,60 +136,108 @@ def evaluate_forecast_model(model, test_data, target_column, date_column=None):
     dict
         Hasil evaluasi model
     """
-    if hasattr(model, 'predict'):
-        # Untuk model ML (Random Forest, Gradient Boosting, dll)
-        if date_column is not None:
-            # Buat fitur untuk data testing
-            from utils import create_features_from_date, create_lag_features, create_rolling_features
+    try:
+        # Validasi input data
+        if test_data is None or test_data.empty:
+            raise ValueError("Data testing kosong")
             
-            df = test_data.copy()
-            df[date_column] = pd.to_datetime(df[date_column])
-            df = df.sort_values(by=date_column)
-            
-            # Buat fitur
-            df = create_features_from_date(df, date_column)
-            df = create_lag_features(df, target_column)
-            df = create_rolling_features(df, target_column)
-            
-            # Hapus NaN
-            df = df.dropna()
-            
-            # Dapatkan fitur yang digunakan
-            features = [col for col in df.columns if col != target_column and col != date_column]
-            
-            if len(df) > 0:
-                X_test = df[features]
-                y_actual = df[target_column]
-                y_pred = model.predict(X_test)
+        # Validasi kolom target
+        if target_column not in test_data.columns:
+            raise ValueError(f"Kolom '{target_column}' tidak ditemukan dalam data testing")
+        
+        # Validasi timestamp untuk mencegah out of bounds
+        test_data_valid = test_data.copy()
+        
+        # Cek dan validasi index datetime
+        if hasattr(test_data_valid, 'index') and isinstance(test_data_valid.index, pd.DatetimeIndex):
+            try:
+                # Batasi tanggal agar tidak terlalu jauh di masa depan/lampau
+                current_year = pd.Timestamp.now().year
+                min_year = current_year - 50  # Maksimum 50 tahun ke belakang
+                max_year = current_year + 10  # Maksimum 10 tahun ke depan
+                
+                # Filter tanggal yang valid
+                mask = (test_data_valid.index.year >= min_year) & (test_data_valid.index.year <= max_year)
+                test_data_valid = test_data_valid[mask]
+                
+                if test_data_valid.empty:
+                    raise ValueError("Data testing mengandung tanggal yang tidak valid (di luar batas yang diizinkan)")
+                    
+            except Exception as e:
+                if "Out of bounds" in str(e) or "timestamp" in str(e).lower():
+                    # Fallback ke data numerik jika datetime bermasalah
+                    test_data_valid = test_data_valid.reset_index(drop=True)
+        
+        # Dapatkan prediksi untuk data test dengan handling yang aman
+        if hasattr(model, 'predict') and date_column is not None:
+            # Untuk model ML (Random Forest, Gradient Boosting, dll)
+            try:
+                # Buat fitur untuk data testing
+                from utils import create_features_from_date, create_lag_features, create_rolling_features
+                
+                df = test_data_valid.copy()
+                df[date_column] = pd.to_datetime(df[date_column])
+                df = df.sort_values(by=date_column)
+                
+                # Buat fitur
+                df = create_features_from_date(df, date_column)
+                df = create_lag_features(df, target_column)
+                df = create_rolling_features(df, target_column)
+                
+                # Hapus NaN
+                df = df.dropna()
+                
+                # Dapatkan fitur yang digunakan
+                features = [col for col in df.columns if col != target_column and col != date_column]
+                
+                if len(df) > 0:
+                    X_test = df[features]
+                    y_actual = df[target_column]
+                    y_pred = model.predict(X_test)
+                    
+                    return calculate_forecast_metrics(y_actual, y_pred)
+                else:
+                    return {'error': 'Tidak cukup data untuk evaluasi'}
+                    
+            except Exception as e:
+                return {'error': f'Error dalam evaluasi model ML: {str(e)}'}
+        
+        elif hasattr(model, 'forecast'):
+            # Untuk model ARIMA, SARIMA, Exponential Smoothing
+            try:
+                # Dapatkan prediksi untuk periode testing
+                steps = len(test_data_valid)
+                forecast_result = model.forecast(steps=steps)
+                
+                if hasattr(forecast_result, 'values'):
+                    y_pred = forecast_result.values
+                else:
+                    y_pred = np.array(forecast_result)
+                
+                y_actual = test_data_valid[target_column].values
                 
                 return calculate_forecast_metrics(y_actual, y_pred)
-            else:
-                return {'error': 'Tidak cukup data untuk evaluasi'}
-    
-    elif hasattr(model, 'forecast'):
-        # Untuk model ARIMA, SARIMA, Exponential Smoothing
-        try:
-            # Dapatkan prediksi untuk periode testing
-            steps = len(test_data)
-            forecast_result = model.forecast(steps=steps)
+                
+            except Exception as e:
+                return {'error': f'Error dalam evaluasi model: {str(e)}'}
+        
+        else:
+            return {'error': 'Tipe model tidak dikenali'}
             
-            if hasattr(forecast_result, 'values'):
-                y_pred = forecast_result.values
-            else:
-                y_pred = np.array(forecast_result)
-            
-            y_actual = test_data[target_column].values
-            
-            return calculate_forecast_metrics(y_actual, y_pred)
-            
-        except Exception as e:
-            return {'error': f'Error dalam evaluasi model: {str(e)}'}
-    
-    else:
-        return {'error': 'Tipe model tidak dikenali'}
-
-
-    return model_fit
+    except Exception as e:
+        # Error handling terakhir
+        error_msg = str(e)
+        if "Out of bounds" in error_msg or "timestamp" in error_msg:
+            error_msg = "Error: Timestamp out of bounds. Silakan periksa tanggal dalam data Anda."
+        
+        return {
+            'error': error_msg,
+            'MAE': None,
+            'MSE': None,
+            'RMSE': None,
+            'MAPE': None,
+            'R2': None
+        }
 
 def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1,12)):
     """
@@ -371,7 +419,7 @@ def train_ml_forecaster(data, date_column, target_column, features=None, model_t
         'model_type': model_type
     }
 
-def forecast_future(model_info, periods=10, freq='D'):
+def forecast_future(model_info, periods=10, freq='D', max_years_ahead=10):
     """
     Membuat prediksi untuk periode di masa depan
     
@@ -383,6 +431,8 @@ def forecast_future(model_info, periods=10, freq='D'):
         Jumlah periode yang akan diprediksi
     freq : str, optional
         Frekuensi data ('D' untuk harian, 'W' untuk mingguan, 'M' untuk bulanan, dll.)
+    max_years_ahead : int, optional
+        Batas maksimum tahun ke depan untuk prediksi (default: 10 tahun)
         
     Returns:
     --------
@@ -398,8 +448,17 @@ def forecast_future(model_info, periods=10, freq='D'):
         target_column = model_info['target_column']
         last_date = model_info['last_date']
         
-        # Buat tanggal untuk periode masa depan
+        # Validasi batas tanggal prediksi
+        max_date = last_date + pd.DateOffset(years=max_years_ahead)
+        
+        # Hitung periode yang valid
         future_dates = pd.date_range(start=last_date, periods=periods+1, freq=freq)[1:]
+        valid_dates = future_dates[future_dates <= max_date]
+        
+        if len(valid_dates) < periods:
+            print(f"Peringatan: Prediksi dibatasi hingga {max_years_ahead} tahun ke depan ({len(valid_dates)} dari {periods} periode)")
+            
+        future_dates = valid_dates
         
         # Buat DataFrame untuk prediksi
         future_df = pd.DataFrame({date_column: future_dates})
@@ -429,7 +488,7 @@ def forecast_future(model_info, periods=10, freq='D'):
         # Prediksi menggunakan model statsmodels
         forecast = model_info.forecast(steps=periods)
         
-        # Buat tanggal untuk periode masa depan
+        # Buat tanggal untuk periode masa depan dengan validasi timestamp
         try:
             if hasattr(model_info, 'model') and hasattr(model_info.model, 'data'):
                 # Handle both regular DataFrame and PandasData object
@@ -481,21 +540,160 @@ def forecast_future(model_info, periods=10, freq='D'):
                 'forecast': forecast
             })
         
-        # Buat tanggal untuk periode masa depan
+        # Validasi dan batasi tanggal prediksi dengan multiple safety checks
         if isinstance(last_date, pd.Timestamp):
-            future_dates = pd.date_range(start=last_date, periods=periods+1, freq=freq)[1:]
+            try:
+                # Cek apakah tanggal terakhir sudah reasonable
+                current_year = pd.Timestamp.now().year
+                last_year = last_date.year
+                
+                # Batasi range tahun yang reasonable (50 tahun ke belakang, 10 tahun ke depan)
+                if last_year < current_year - 50 or last_year > current_year + 10:
+                    print(f"Warning: Tanggal terakhir ({last_date}) di luar range yang diizinkan")
+                    # Gunakan fallback ke indeks numerik
+                    return pd.DataFrame({
+                        'forecast_index': range(min(periods, 365)),
+                        'forecast': forecast[:min(periods, 365)]
+                    })
+                
+                # Batasi prediksi maksimum 2 tahun ke depan (lebih konservatif)
+                max_prediction_date = last_date + pd.DateOffset(years=2)
+                
+                # Gunakan frekuensi yang aman
+                safe_freq = freq if freq in ['D', 'W', 'M', 'Q'] else 'D'
+                
+                try:
+                    future_dates = pd.date_range(start=last_date, periods=periods+1, freq=safe_freq)[1:]
+                except (OverflowError, OSError, ValueError) as e:
+                    # Jika error dengan frekuensi tertentu, gunakan frekuensi harian
+                    future_dates = pd.date_range(start=last_date, periods=min(periods+1, 730))[1:]  # Maksimum 2 tahun
+                
+                # Filter tanggal yang tidak out of bounds dengan validasi yang ketat
+                valid_dates = []
+                for date in future_dates:
+                    try:
+                        # Validasi timestamp bounds (32-bit limits)
+                        timestamp = date.timestamp()
+                        if -2147483648 <= timestamp <= 2147483647:  # 32-bit timestamp limits
+                            # Validasi tahun
+                            if current_year - 50 <= date.year <= current_year + 10:
+                                valid_dates.append(date)
+                            else:
+                                break
+                        else:
+                            break
+                    except (OverflowError, OSError, ValueError):
+                        # Tanggal out of bounds, hentikan prediksi
+                        break
+                
+                if len(valid_dates) == 0:
+                    # Jika semua tanggal invalid, gunakan indeks numerik
+                    return pd.DataFrame({
+                        'forecast_index': range(min(periods, 365)),  # Batasi maksimum 1 tahun
+                        'forecast': forecast[:min(periods, 365)]
+                    })
+                
+                future_dates = pd.DatetimeIndex(valid_dates)
+                
+            except (OverflowError, OSError, ValueError) as e:
+                # Tangani error timestamp dengan fallback ke indeks numerik
+                print(f"Warning: Timestamp error - {str(e)}")
+                return pd.DataFrame({
+                    'forecast_index': range(min(periods, 365)),
+                    'forecast': forecast[:min(periods, 365)]
+                })
         else:
-            future_dates = range(periods)
+            # Gunakan indeks numerik jika bukan timestamp
+            future_dates = range(min(periods, 365))
         
-        # Kembalikan hasil prediksi
-        return pd.DataFrame({
-            'ds': future_dates,
-            'yhat': forecast
-        })
+        # Kembalikan hasil prediksi dengan handling yang aman
+        try:
+            if isinstance(future_dates, pd.DatetimeIndex):
+                return pd.DataFrame({
+                    'ds': future_dates,
+                    'yhat': forecast[:len(future_dates)]
+                })
+            else:
+                return pd.DataFrame({
+                    'forecast_index': list(future_dates),
+                    'forecast': forecast[:len(list(future_dates))]
+                })
+        except Exception as e:
+            # Fallback terakhir
+            return pd.DataFrame({
+                'forecast_index': range(min(periods, 100)),
+                'forecast': forecast[:min(periods, 100)]
+            })
+
+def validate_timestamp_data(data, target_column=None):
+    """
+    Validasi data untuk memastikan tidak ada timestamp yang out of bounds
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Data yang akan divalidasi
+    target_column : str, optional
+        Nama kolom target untuk validasi tambahan
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        Data yang sudah divalidasi dan difilter
+    """
+    if data is None or data.empty:
+        return data
+    
+    data_valid = data.copy()
+    
+    # Validasi index datetime
+    if hasattr(data_valid, 'index') and isinstance(data_valid.index, pd.DatetimeIndex):
+        try:
+            # Batasi range tanggal yang reasonable
+            current_year = pd.Timestamp.now().year
+            min_year = current_year - 50
+            max_year = current_year + 10
+            
+            # Filter berdasarkan tahun
+            mask = (data_valid.index.year >= min_year) & (data_valid.index.year <= max_year)
+            data_valid = data_valid[mask]
+            
+            # Validasi individual timestamps
+            valid_indices = []
+            for idx in data_valid.index:
+                try:
+                    idx.timestamp()
+                    valid_indices.append(idx)
+                except (OverflowError, OSError, ValueError):
+                    continue
+            
+            if valid_indices:
+                data_valid = data_valid.loc[valid_indices]
+            else:
+                # Fallback ke index numerik
+                data_valid = data_valid.reset_index(drop=True)
+                
+        except Exception as e:
+            # Jika error, gunakan index numerik
+            data_valid = data_valid.reset_index(drop=True)
+    
+    # Validasi kolom tanggal jika ada
+    date_columns = data_valid.select_dtypes(include=['datetime64']).columns
+    for col in date_columns:
+        try:
+            data_valid[col] = pd.to_datetime(data_valid[col])
+            # Filter tanggal yang reasonable
+            mask = (data_valid[col].dt.year >= current_year - 50) & (data_valid[col].dt.year <= current_year + 10)
+            data_valid = data_valid[mask]
+        except Exception:
+            # Jika error, skip kolom ini
+            continue
+    
+    return data_valid
 
 def evaluate_forecast_model(model, test_data, target_column):
     """
-    Mengevaluasi model forecasting menggunakan data test
+    Mengevaluasi model forecasting menggunakan data test dengan validasi timestamp
     
     Parameters:
     -----------
@@ -509,41 +707,85 @@ def evaluate_forecast_model(model, test_data, target_column):
     Returns:
     --------
     dict
-        Dictionary berisi metrik evaluasi
+        Dictionary berisi metrik evaluasi atau error message
     """
-    # Cek tipe model
-    if isinstance(model, dict) and 'model_type' in model:  # ML model
-        # Ambil informasi dari model
-        ml_model = model['model']
-        features = model['features']
+    try:
+        # Validasi input
+        if test_data is None or test_data.empty:
+            return {'error': 'Data testing kosong atau tidak valid'}
+            
+        if target_column not in test_data.columns:
+            return {'error': f"Kolom '{target_column}' tidak ditemukan dalam data testing"}
         
-        # Pastikan semua fitur ada di test_data
-        missing_features = [f for f in features if f not in test_data.columns]
-        if missing_features:
-            raise ValueError(f"Fitur berikut tidak ada di test_data: {missing_features}")
+        # Validasi timestamp data
+        test_data_valid = validate_timestamp_data(test_data, target_column)
         
-        # Prediksi menggunakan model ML
-        y_pred = ml_model.predict(test_data[features])
-        y_true = test_data[target_column]
-    
-    else:  # Statsmodels model
-        # Prediksi menggunakan model statsmodels
-        y_pred = model.forecast(steps=len(test_data))
-        y_true = test_data[target_column]
-    
-    # Hitung metrik evaluasi
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-    
-    # Kembalikan metrik evaluasi
-    return {
-        'MSE': mse,
-        'RMSE': rmse,
-        'MAE': mae,
-        'R2': r2
-    }
+        if test_data_valid.empty:
+            return {'error': 'Data testing tidak valid setelah validasi timestamp'}
+        
+        # Cek tipe model
+        if isinstance(model, dict) and 'model_type' in model:  # ML model
+            ml_model = model['model']
+            features = model['features']
+            
+            # Pastikan semua fitur ada
+            missing_features = [f for f in features if f not in test_data_valid.columns]
+            if missing_features:
+                return {'error': f"Fitur tidak ditemukan: {missing_features}"}
+            
+            # Prediksi
+            y_pred = ml_model.predict(test_data_valid[features])
+            y_true = test_data_valid[target_column]
+            
+        else:  # Statsmodels model
+            # Prediksi dengan handling yang aman
+            try:
+                y_pred = model.forecast(steps=len(test_data_valid))
+                y_true = test_data_valid[target_column]
+            except Exception as e:
+                return {'error': f"Error saat forecasting: {str(e)}"}
+        
+        # Hitung metrik dengan validasi
+        y_true = np.array(y_true)
+        y_pred = np.array(y_pred)
+        
+        # Hapus nilai yang tidak valid
+        mask = ~(np.isnan(y_true) | np.isnan(y_pred) | np.isinf(y_true) | np.isinf(y_pred))
+        y_true = y_true[mask]
+        y_pred = y_pred[mask]
+        
+        if len(y_true) == 0:
+            return {'error': 'Tidak ada data yang valid untuk evaluasi'}
+        
+        # Hitung metrik
+        mse = mean_squared_error(y_true, y_pred)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_true, y_pred)
+        
+        # MAPE dengan handling division by zero
+        mask_nonzero = y_true != 0
+        if np.sum(mask_nonzero) > 0:
+            mape = np.mean(np.abs((y_true[mask_nonzero] - y_pred[mask_nonzero]) / y_true[mask_nonzero])) * 100
+        else:
+            mape = None
+        
+        r2 = r2_score(y_true, y_pred)
+        
+        return {
+            'MSE': mse,
+            'RMSE': rmse,
+            'MAE': mae,
+            'MAPE': mape,
+            'R2': r2,
+            'n_samples': len(y_true)
+        }
+        
+    except Exception as e:
+        error_msg = str(e).lower()
+        if any(keyword in error_msg for keyword in ['out of bounds', 'timestamp', 'overflow', 'datetime']):
+            return {'error': 'Error timestamp: Tanggal di luar batas yang diizinkan'}
+        else:
+            return {'error': f"Error evaluasi model: {str(e)}"}
 
 def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8)):
     """
