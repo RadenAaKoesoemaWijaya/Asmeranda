@@ -95,7 +95,34 @@ def prepare_timeseries_data(data, date_column, target_column, freq=None):
     
     # Resampling data jika frekuensi ditentukan
     if freq is not None:
-        ts_data = ts_data.resample(freq)[target_column].mean().to_frame()
+        # Handle different aggregation methods based on frequency
+        if freq.upper() in ['D', 'W', 'M', 'Y']:
+            # For daily, weekly, monthly, yearly - use mean for continuous data
+            ts_data = ts_data.resample(freq.upper())[target_column].mean().to_frame()
+        elif freq.upper() == 'H':
+            # For hourly - use mean
+            ts_data = ts_data.resample('H')[target_column].mean().to_frame()
+        else:
+            # Default resampling
+            ts_data = ts_data.resample(freq)[target_column].mean().to_frame()
+        
+        # Handle missing values after resampling
+        if ts_data[target_column].isnull().sum() > 0:
+            # Forward fill for missing values, then backward fill
+            ts_data[target_column] = ts_data[target_column].fillna(method='ffill').fillna(method='bfill')
+            
+            # If still missing, use interpolation
+            if ts_data[target_column].isnull().sum() > 0:
+                ts_data[target_column] = ts_data[target_column].interpolate(method='linear')
+    
+    # Remove any remaining NaN values
+    ts_data = ts_data.dropna()
+    
+    # Ensure we have enough data points
+    if len(ts_data) < 3:
+        raise ValueError(f"Data terlalu sedikit setelah resampling ({len(ts_data)} data points). Pastikan data mencukupi untuk frekuensi {freq}")
+    
+    return ts_data
     
     return ts_data
 

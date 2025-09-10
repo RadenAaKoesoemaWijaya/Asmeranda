@@ -3022,13 +3022,58 @@ with tab4:
                                         [col for col in st.session_state.data.columns 
                                          if col != date_column and col in st.session_state.numerical_columns])
             
-            # Select frequency
-            freq = st.selectbox("Frekuensi data:", ["Harian (D)", "Mingguan (W)", "Bulanan (M)", "Tahunan (Y)", "Lainnya"] if st.session_state.language == 'id' else ["Daily (D)", "Weekly (W)", "Monthly (M)", "Yearly (Y)", "Other"])
-            freq_map = {"Harian (D)": "D", "Mingguan (W)": "W", "Bulanan (M)": "M", "Tahunan (Y)": "Y", "Lainnya": None if st.session_state.language == 'id' else "Other"}
-            selected_freq = freq_map[freq]
+            # Frequency detection
+            try:
+                from forecasting_utils import detect_frequency, get_frequency_info
+                detected_freq = detect_frequency(st.session_state.data[date_column])
+                freq_info = get_frequency_info(detected_freq)
+                
+                if st.session_state.language == 'id':
+                    freq_display = f"Frekuensi terdeteksi: {freq_info['description']} ({detected_freq})"
+                else:
+                    freq_display = f"Detected frequency: {freq_info['description']} ({detected_freq})"
+                
+                st.info(freq_display)
+                
+                # Allow manual override
+                manual_freq = st.checkbox("Atur frekuensi secara manual" if st.session_state.language == 'id' else "Set frequency manually")
+                if manual_freq:
+                    freq_options = ["Harian (D)", "Mingguan (W)", "Bulanan (M)", "Tahunan (Y)", "Otomatis"] if st.session_state.language == 'id' else ["Daily (D)", "Weekly (W)", "Monthly (M)", "Yearly (Y)", "Auto"]
+                    freq = st.selectbox("Frekuensi data:", freq_options)
+                    freq_map = {"Harian (D)": "D", "Mingguan (W)": "W", "Bulanan (M)": "M", "Tahunan (Y)": "Y", "Otomatis": detected_freq, "Daily (D)": "D", "Weekly (W)": "W", "Monthly (M)": "M", "Yearly (Y)": "Y", "Auto": detected_freq}
+                    selected_freq = freq_map[freq]
+                else:
+                    selected_freq = detected_freq
+                    
+            except ImportError:
+                # Fallback to manual selection if detection not available
+                freq = st.selectbox("Frekuensi data:", ["Harian (D)", "Mingguan (W)", "Bulanan (M)", "Tahunan (Y)", "Lainnya"] if st.session_state.language == 'id' else ["Daily (D)", "Weekly (W)", "Monthly (M)", "Yearly (Y)", "Other"])
+                freq_map = {"Harian (D)": "D", "Mingguan (W)": "W", "Bulanan (M)": "M", "Tahunan (Y)": "Y", "Lainnya": None if st.session_state.language == 'id' else "Other"}
+                selected_freq = freq_map[freq]
             
-            # Number of periods to forecast
-            forecast_periods = st.slider("Jumlah periode untuk prediksi ke depan:" if st.session_state.language == 'id' else "Number of periods to forecast:", 1, 100, 10)
+            # Number of periods to forecast - adjusted based on frequency
+            if selected_freq == 'D':
+                max_periods = 60  # 60 days
+                default_periods = 7
+                label = "Jumlah hari untuk prediksi:" if st.session_state.language == 'id' else "Number of days to forecast:"
+            elif selected_freq == 'W':
+                max_periods = 52  # 1 year
+                default_periods = 4
+                label = "Jumlah minggu untuk prediksi:" if st.session_state.language == 'id' else "Number of weeks to forecast:"
+            elif selected_freq == 'M':
+                max_periods = 24  # 2 years
+                default_periods = 12
+                label = "Jumlah bulan untuk prediksi:" if st.session_state.language == 'id' else "Number of months to forecast:"
+            elif selected_freq == 'Y':
+                max_periods = 5   # 5 years
+                default_periods = 2
+                label = "Jumlah tahun untuk prediksi:" if st.session_state.language == 'id' else "Number of years to forecast:"
+            else:
+                max_periods = 30
+                default_periods = 10
+                label = "Jumlah periode untuk prediksi:" if st.session_state.language == 'id' else "Number of periods to forecast:"
+            
+            forecast_periods = st.slider(label, 1, max_periods, default_periods)
             
             # Select forecasting model
             model_type = st.selectbox("Pilih model forecasting:" if st.session_state.language == 'id' else "Select forecasting model:", 

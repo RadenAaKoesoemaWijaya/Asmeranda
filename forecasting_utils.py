@@ -12,6 +12,106 @@ import math
 import warnings
 warnings.filterwarnings('ignore')
 
+# Utility untuk deteksi frekuensi data
+def detect_frequency(data, date_column=None):
+    """
+    Mendeteksi frekuensi data timeseries secara otomatis
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        DataFrame dengan kolom tanggal atau index datetime
+    date_column : str, optional
+        Nama kolom tanggal jika bukan index
+        
+    Returns:
+    --------
+    str
+        Frekuensi terdeteksi ('D', 'W', 'M', 'Q', 'Y', atau 'H')
+    """
+    if date_column is not None:
+        dates = pd.to_datetime(data[date_column])
+    else:
+        if isinstance(data.index, pd.DatetimeIndex):
+            dates = data.index
+        else:
+            return 'D'  # Default fallback
+    
+    # Hitung selisih antar tanggal
+    diffs = dates.diff().dropna()
+    
+    # Hitung median selisih dalam hari
+    median_diff_days = diffs.dt.total_seconds().median() / (24 * 3600)
+    
+    # Deteksi frekuensi berdasarkan median selisih
+    if median_diff_days < 0.05:  # Kurang dari ~1.2 jam
+        return 'H'  # Hourly
+    elif median_diff_days < 1.5:  # Sekitar 1 hari
+        return 'D'  # Daily
+    elif median_diff_days < 3.5:  # Sekitar 1 minggu
+        return 'W'  # Weekly
+    elif median_diff_days < 15:  # Sekitar 1 bulan
+        return 'M'  # Monthly
+    elif median_diff_days < 45:  # Sekitar 1 kuartal
+        return 'Q'  # Quarterly
+    else:
+        return 'Y'  # Yearly
+
+def get_frequency_info(freq):
+    """
+    Mendapatkan informasi detail tentang frekuensi
+    
+    Parameters:
+    -----------
+    freq : str
+        Kode frekuensi
+        
+    Returns:
+    --------
+    dict
+        Informasi frekuensi (nama, periode dalam setahun, dll)
+    """
+    freq_map = {
+        'H': {'name': 'Hourly', 'periods_per_year': 8760, 'period_name': 'hour'},
+        'D': {'name': 'Daily', 'periods_per_year': 365, 'period_name': 'day'},
+        'W': {'name': 'Weekly', 'periods_per_year': 52, 'period_name': 'week'},
+        'M': {'name': 'Monthly', 'periods_per_year': 12, 'period_name': 'month'},
+        'Q': {'name': 'Quarterly', 'periods_per_year': 4, 'period_name': 'quarter'},
+        'Y': {'name': 'Yearly', 'periods_per_year': 1, 'period_name': 'year'}
+    }
+    return freq_map.get(freq, freq_map['D'])
+
+def adjust_seasonal_periods(freq, seasonal_periods=None):
+    """
+    Menyesuaikan periode musiman berdasarkan frekuensi data
+    
+    Parameters:
+    -----------
+    freq : str
+        Frekuensi data
+    seasonal_periods : int, optional
+        Periode musiman yang ingin digunakan
+        
+    Returns:
+    --------
+    int
+        Periode musiman yang disesuaikan
+    """
+    if seasonal_periods is not None:
+        return seasonal_periods
+    
+    # Default seasonal periods berdasarkan frekuensi
+    seasonal_map = {
+        'H': 24,      # 24 jam dalam sehari
+        'D': 7,       # 7 hari dalam seminggu
+        'W': 52,      # 52 minggu dalam setahun
+        'M': 12,      # 12 bulan dalam setahun
+        'Q': 4,       # 4 kuartal dalam setahun
+        'Y': 1        # Tidak ada musiman untuk data tahunan
+    }
+    
+    return seasonal_map.get(freq, 12)
+
 # Import fungsi-fungsi dari utils.py
 from utils import (
     is_timeseries, detect_timeseries_columns, prepare_timeseries_data,
@@ -419,9 +519,9 @@ def train_ml_forecaster(data, date_column, target_column, features=None, model_t
         'model_type': model_type
     }
 
-def forecast_future(model_info, periods=10, freq='D', max_years_ahead=10):
+def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_frequency=None):
     """
-    Membuat prediksi untuk periode di masa depan
+    Membuat prediksi untuk periode di masa depan dengan support berbagai frekuensi data
     
     Parameters:
     -----------
@@ -431,14 +531,36 @@ def forecast_future(model_info, periods=10, freq='D', max_years_ahead=10):
         Jumlah periode yang akan diprediksi
     freq : str, optional
         Frekuensi data ('D' untuk harian, 'W' untuk mingguan, 'M' untuk bulanan, dll.)
+        Jika None, akan otomatis dideteksi dari data
     max_years_ahead : int, optional
-        Batas maksimum tahun ke depan untuk prediksi (default: 10 tahun)
+        Batas maksimum tahun ke depan untuk prediksi (default: 2 tahun)
+    data_frequency : str, optional
+        Frekuensi data yang terdeteksi secara otomatis
         
     Returns:
     --------
     pandas.DataFrame
-        DataFrame dengan tanggal dan hasil prediksi
+        DataFrame dengan tanggal dan hasil prediksi yang sesuai dengan frekuensi data
     """
+    # Deteksi frekuensi jika tidak ditentukan
+    if freq is None:
+        if data_frequency is not None:
+            freq = data_frequency
+        else:
+            freq = 'D'  # Default ke harian
+    
+    # Validasi dan map frekuensi yang valid
+    freq_map = {
+        'harian': 'D', 'daily': 'D', 'D': 'D',
+        'mingguan': 'W', 'weekly': 'W', 'W': 'W',
+        'bulanan': 'M', 'monthly': 'M', 'M': 'M',
+        'kuartal': 'Q', 'quarterly': 'Q', 'Q': 'Q',
+        'tahunan': 'Y', 'yearly': 'Y', 'Y': 'Y'
+    }
+    
+    # Gunakan frekuensi yang valid
+    safe_freq = freq_map.get(str(freq).lower(), freq) if str(freq).lower() in freq_map else freq
+    
     # Cek tipe model
     if isinstance(model_info, dict) and 'model_type' in model_info:  # ML model
         # Ambil informasi dari model_info
@@ -451,9 +573,14 @@ def forecast_future(model_info, periods=10, freq='D', max_years_ahead=10):
         # Validasi batas tanggal prediksi
         max_date = last_date + pd.DateOffset(years=max_years_ahead)
         
-        # Hitung periode yang valid
-        future_dates = pd.date_range(start=last_date, periods=periods+1, freq=freq)[1:]
-        valid_dates = future_dates[future_dates <= max_date]
+        # Hitung periode yang valid dengan frekuensi yang sesuai
+        try:
+            future_dates = pd.date_range(start=last_date, periods=periods+1, freq=safe_freq)[1:]
+            valid_dates = future_dates[future_dates <= max_date]
+        except ValueError:
+            # Fallback ke frekuensi harian jika error
+            future_dates = pd.date_range(start=last_date, periods=periods+1, freq='D')[1:]
+            valid_dates = future_dates[future_dates <= max_date]
         
         if len(valid_dates) < periods:
             print(f"Peringatan: Prediksi dibatasi hingga {max_years_ahead} tahun ke depan ({len(valid_dates)} dari {periods} periode)")
@@ -559,8 +686,8 @@ def forecast_future(model_info, periods=10, freq='D', max_years_ahead=10):
                 # Batasi prediksi maksimum 2 tahun ke depan (lebih konservatif)
                 max_prediction_date = last_date + pd.DateOffset(years=2)
                 
-                # Gunakan frekuensi yang aman
-                safe_freq = freq if freq in ['D', 'W', 'M', 'Q'] else 'D'
+                # Gunakan frekuensi yang aman dengan mapping yang lebih baik
+                safe_freq = safe_freq if safe_freq in ['D', 'W', 'M', 'Q', 'Y', 'H'] else 'D'
                 
                 try:
                     future_dates = pd.date_range(start=last_date, periods=periods+1, freq=safe_freq)[1:]
@@ -787,57 +914,41 @@ def evaluate_forecast_model(model, test_data, target_column):
         else:
             return {'error': f"Error evaluasi model: {str(e)}"}
 
-def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8)):
-    """
-    Membuat plot hasil forecasting
-    
-    Parameters:
-    -----------
-    train_data : pandas.DataFrame
-        Data training
-    test_data : pandas.DataFrame
-        Data testing
-    forecast_data : pandas.DataFrame
-        Data hasil forecasting
-    target_column : str
-        Nama kolom target
-    date_column : str, optional
-        Nama kolom tanggal (jika tidak menggunakan index)
-    figsize : tuple, optional
-        Ukuran gambar
-        
-    Returns:
-    --------
-    matplotlib.figure.Figure
-        Figure yang berisi plot hasil forecasting
-    """
+def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8), frequency=None):
     fig, ax = plt.subplots(figsize=figsize)
     
-    # Plot data training
-    if date_column is not None and date_column in train_data.columns:
+    # Handle data preparation
+    if date_column and date_column in train_data.columns:
         train_data = train_data.set_index(date_column)
-    
-    ax.plot(train_data.index, train_data[target_column], label='Data Training')
-    
-    # Plot data testing
-    if date_column is not None and date_column in test_data.columns:
+    if date_column and date_column in test_data.columns:
         test_data = test_data.set_index(date_column)
     
-    ax.plot(test_data.index, test_data[target_column], label='Data Testing', color='green')
+    # Plot data
+    ax.plot(train_data.index, train_data[target_column], label='Training', linewidth=2)
+    ax.plot(test_data.index, test_data[target_column], label='Testing', color='green', linewidth=2)
     
-    # Plot hasil forecasting
+    # Plot forecast
     if 'ds' in forecast_data.columns and 'yhat' in forecast_data.columns:
-        # Format dari forecast_future untuk model statsmodels
-        ax.plot(forecast_data['ds'], forecast_data['yhat'], label='Forecast', color='red')
+        ax.plot(forecast_data['ds'], forecast_data['yhat'], label='Forecast', color='red', linewidth=2, linestyle='--')
     elif date_column in forecast_data.columns and f'predicted_{target_column}' in forecast_data.columns:
-        # Format dari forecast_future untuk model ML
-        ax.plot(forecast_data[date_column], forecast_data[f'predicted_{target_column}'], label='Forecast', color='red')
+        ax.plot(forecast_data[date_column], forecast_data[f'predicted_{target_column}'], 
+               label='Forecast', color='red', linewidth=2, linestyle='--')
     
-    ax.set_title('Hasil Forecasting')
-    ax.set_xlabel('Tanggal')
+    # Format based on frequency
+    if frequency == 'D':
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        plt.xticks(rotation=45)
+    elif frequency == 'M':
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        plt.xticks(rotation=45)
+    elif frequency == 'Y':
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    
+    ax.set_title(f'Forecasting Results ({frequency or "Auto"})')
+    ax.set_xlabel('Date')
     ax.set_ylabel(target_column)
     ax.legend()
-    ax.grid(True)
+    ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     return fig
