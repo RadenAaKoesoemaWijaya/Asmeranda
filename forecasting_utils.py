@@ -136,60 +136,145 @@ def evaluate_forecast_model(model, test_data, target_column, date_column=None):
     dict
         Hasil evaluasi model
     """
-    if hasattr(model, 'predict'):
-        # Untuk model ML (Random Forest, Gradient Boosting, dll)
-        if date_column is not None:
-            # Buat fitur untuk data testing
-            from utils import create_features_from_date, create_lag_features, create_rolling_features
+    try:
+        # Validasi jumlah data testing yang cukup
+        if len(test_data) < 2:
+            return {
+                'error': f'Data testing terlalu sedikit. Minimal 2 data dibutuhkan, tersedia: {len(test_data)}',
+                'MAE': None,
+                'MSE': None,
+                'RMSE': None,
+                'MAPE': None,
+                'R2': None
+            }
             
-            df = test_data.copy()
-            df[date_column] = pd.to_datetime(df[date_column])
-            df = df.sort_values(by=date_column)
-            
-            # Buat fitur
-            df = create_features_from_date(df, date_column)
-            df = create_lag_features(df, target_column)
-            df = create_rolling_features(df, target_column)
-            
-            # Hapus NaN
-            df = df.dropna()
-            
-            # Dapatkan fitur yang digunakan
-            features = [col for col in df.columns if col != target_column and col != date_column]
-            
-            if len(df) > 0:
-                X_test = df[features]
-                y_actual = df[target_column]
-                y_pred = model.predict(X_test)
-                
-                return calculate_forecast_metrics(y_actual, y_pred)
-            else:
-                return {'error': 'Tidak cukup data untuk evaluasi'}
+        # Validasi data target
+        if test_data[target_column].isnull().all():
+            return {
+                'error': f'Kolom target {target_column} tidak memiliki nilai yang valid',
+                'MAE': None,
+                'MSE': None,
+                'RMSE': None,
+                'MAPE': None,
+                'R2': None
+            }
     
-    elif hasattr(model, 'forecast'):
-        # Untuk model ARIMA, SARIMA, Exponential Smoothing
-        try:
-            # Dapatkan prediksi untuk periode testing
-            steps = len(test_data)
-            forecast_result = model.forecast(steps=steps)
+        y_pred = None
+        y_actual = None
+        
+        if hasattr(model, 'predict'):
+            # Untuk model ML (Random Forest, Gradient Boosting, dll)
+            if date_column is not None:
+                try:
+                    from utils import create_features_from_date, create_lag_features, create_rolling_features
+                    
+                    df = test_data.copy()
+                    df[date_column] = pd.to_datetime(df[date_column])
+                    df = df.sort_values(by=date_column)
+                    
+                    # Buat fitur
+                    df = create_features_from_date(df, date_column)
+                    df = create_lag_features(df, target_column)
+                    df = create_rolling_features(df, target_column)
+                    
+                    # Hapus NaN
+                    df = df.dropna()
+                    
+                    # Validasi kembali setelah preprocessing
+                    if len(df) < 2:
+                        return {
+                            'error': f'Data terlalu sedikit setelah preprocessing: {len(df)} data',
+                            'MAE': None,
+                            'MSE': None,
+                            'RMSE': None,
+                            'MAPE': None,
+                            'R2': None
+                        }
+                    
+                    # Dapatkan fitur yang digunakan
+                    features = [col for col in df.columns if col != target_column and col != date_column]
+                    
+                    if len(features) > 0 and len(df) > 0:
+                        X_test = df[features]
+                        y_actual = df[target_column]
+                        y_pred = model.predict(X_test)
+                        
+                        return calculate_forecast_metrics(y_actual, y_pred)
+                    else:
+                        return {
+                            'error': 'Tidak cukup fitur atau data untuk evaluasi',
+                            'MAE': None,
+                            'MSE': None,
+                            'RMSE': None,
+                            'MAPE': None,
+                            'R2': None
+                        }
+                        
+                except Exception as e:
+                    return {
+                        'error': f'Error dalam evaluasi model ML: {str(e)}',
+                        'MAE': None,
+                        'MSE': None,
+                        'RMSE': None,
+                        'MAPE': None,
+                        'R2': None
+                    }
+        
+        elif hasattr(model, 'forecast'):
+            # Untuk model ARIMA, SARIMA, Exponential Smoothing
+            try:
+                # Dapatkan prediksi untuk periode testing
+                steps = len(test_data)
+                if steps > 0:
+                    forecast_result = model.forecast(steps=steps)
+                    
+                    if hasattr(forecast_result, 'values'):
+                        y_pred = forecast_result.values
+                    else:
+                        y_pred = np.array(forecast_result)
+                    
+                    y_actual = test_data[target_column].values
+                    
+                    return calculate_forecast_metrics(y_actual, y_pred)
+                else:
+                    return {
+                        'error': 'Tidak ada data untuk forecasting',
+                        'MAE': None,
+                        'MSE': None,
+                        'RMSE': None,
+                        'MAPE': None,
+                        'R2': None
+                    }
+                    
+            except Exception as e:
+                return {
+                    'error': f'Error dalam evaluasi model time series: {str(e)}',
+                    'MAE': None,
+                    'MSE': None,
+                    'RMSE': None,
+                    'MAPE': None,
+                    'R2': None
+                }
+        
+        else:
+            return {
+                'error': 'Tipe model tidak dikenali',
+                'MAE': None,
+                'MSE': None,
+                'RMSE': None,
+                'MAPE': None,
+                'R2': None
+            }
             
-            if hasattr(forecast_result, 'values'):
-                y_pred = forecast_result.values
-            else:
-                y_pred = np.array(forecast_result)
-            
-            y_actual = test_data[target_column].values
-            
-            return calculate_forecast_metrics(y_actual, y_pred)
-            
-        except Exception as e:
-            return {'error': f'Error dalam evaluasi model: {str(e)}'}
-    
-    else:
-        return {'error': 'Tipe model tidak dikenali'}
-
-
-    return model_fit
+    except Exception as e:
+        return {
+            'error': f'Error umum dalam evaluasi: {str(e)}',
+            'MAE': None,
+            'MSE': None,
+            'RMSE': None,
+            'MAPE': None,
+            'R2': None
+        }
 
 def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1,12)):
     """

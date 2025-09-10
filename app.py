@@ -3166,15 +3166,26 @@ with tab4:
                                 try:
                                     eval_results = evaluate_forecast_model(st.session_state.model, test_data, target_column)
                                     
-                                    st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
-                                    st.write(f"- MAE: {eval_results['MAE']:.4f}")
-                                    st.write(f"- MSE: {eval_results['MSE']:.4f}")
-                                    st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
-                                    if eval_results['MAPE'] is not None:
-                                        st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
+                                    # Cek apakah ada error dalam evaluasi
+                                    if 'error' in eval_results:
+                                        st.warning(f"⚠️ {eval_results['error']}" if st.session_state.language == 'id' else f"⚠️ {eval_results['error']}")
+                                        # Tetap tampilkan hasil yang tersedia
+                                        st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
+                                        st.write("- MAE: N/A")
+                                        st.write("- MSE: N/A") 
+                                        st.write("- RMSE: N/A")
+                                        st.write("- MAPE: N/A")
+                                        st.write("- R²: N/A")
                                     else:
-                                        st.write("- MAPE: Tidak dapat dihitung (nilai aktual 0)" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated (actual values are 0)")
-                                    st.write(f"- R²: {eval_results['R2']:.4f}")
+                                        st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
+                                        st.write(f"- MAE: {eval_results['MAE']:.4f}" if eval_results['MAE'] is not None else "- MAE: N/A")
+                                        st.write(f"- MSE: {eval_results['MSE']:.4f}" if eval_results['MSE'] is not None else "- MSE: N/A")
+                                        st.write(f"- RMSE: {eval_results['RMSE']:.4f}" if eval_results['RMSE'] is not None else "- RMSE: N/A")
+                                        if eval_results['MAPE'] is not None:
+                                            st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
+                                        else:
+                                            st.write("- MAPE: Tidak dapat dihitung" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated")
+                                        st.write(f"- R²: {eval_results['R2']:.4f}" if eval_results['R2'] is not None else "- R²: N/A")
                                     
                                     # Generate forecast
                                     try:
@@ -3197,17 +3208,35 @@ with tab4:
                                         try:
                                             fig = plot_forecast_results(train_data, test_data, forecast_data, target_column)
                                             st.pyplot(fig)
+                                            
+                                            # Store data for visualization
+                                            st.session_state.forecast_data = forecast_data
+                                            st.session_state.train_data = train_data
+                                            st.session_state.test_data = test_data
+                                            st.session_state.target_column = target_column
+                                            st.session_state.eval_results = eval_results
+                                            
                                         except Exception as e:
-                                            st.error(f"Error saat plotting hasil forecast: {str(e)}" if st.session_state.language == 'id' else f"Error plotting forecast results: {str(e)}")
+                                            st.error(f"Error saat memplot hasil: {str(e)}" if st.session_state.language == 'id' else f"Error plotting results: {str(e)}")
 
                                     # Show forecast data
                                     if forecast_data is not None:
                                         st.write("Data Hasil Forecasting:" if st.session_state.language == 'id' else "Forecast Data:")
                                         st.dataframe(forecast_data)
 
-                                # Download forecast data
                                 except Exception as e:
                                     st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error evaluating model: {str(e)}")
+
+                        # Button for detailed visualization
+                        if hasattr(st.session_state, 'forecast_data') and st.session_state.forecast_data is not None:
+                            if st.button("Tampilkan Visualisasi Forecasting Lengkap" if st.session_state.language == 'id' else "Show Complete Forecasting Visualization"):
+                                display_forecast_summary(
+                                    st.session_state.train_data,
+                                    st.session_state.test_data,
+                                    st.session_state.forecast_data,
+                                    st.session_state.target_column,
+                                    st.session_state.eval_results
+                                )
 
         else:
             # Non-time series data - Classification or Regression
@@ -4373,6 +4402,13 @@ with tab4:
                         st.session_state.model_results = []
                     
                     model_name = type(st.session_state.model).__name__
+                    
+                    # Pastikan y_pred didefinisikan berdasarkan problem type
+                    if problem_type == "Classification":
+                        y_pred = st.session_state.model.predict(X_test_scaled if 'X_test_scaled' in locals() else X_test)
+                    else:  # Regression
+                        y_pred = st.session_state.model.predict(X_test_scaled if 'X_test_scaled' in locals() else X_test)
+                    
                     result = {
                         'model_name': model_name,
                         'model': st.session_state.model,
@@ -5790,3 +5826,278 @@ with tab7:
                             except Exception as e:
                                 st.error(f"Error saat menjalankan deteksi anomali: {str(e)}")
                                 st.error(f"Detail error: {str(e)}")
+
+# ========================= FORECASTING VISUALIZATION FUNCTIONS =========================
+
+def calculate_forecast_metrics(actual, predicted):
+    """Menghitung metrik evaluasi untuk forecasting"""
+    try:
+        from sklearn.metrics import mean_squared_error, mean_absolute_error
+        import numpy as np
+        
+        # Validasi input
+        actual = np.array(actual).flatten()
+        predicted = np.array(predicted).flatten()
+        
+        # Hapus nilai NaN atau infinite
+        mask = ~(np.isnan(actual) | np.isnan(predicted) | np.isinf(actual) | np.isinf(predicted))
+        actual = actual[mask]
+        predicted = predicted[mask]
+        
+        if len(actual) == 0 or len(predicted) == 0:
+            return {
+                'rmse': np.nan,
+                'mae': np.nan,
+                'mape': np.nan,
+                'r2': np.nan,
+                'count': 0
+            }
+        
+        # Hitung metrik
+        rmse = np.sqrt(mean_squared_error(actual, predicted))
+        mae = mean_absolute_error(actual, predicted)
+        
+        # MAPE (Mean Absolute Percentage Error)
+        mask_non_zero = actual != 0
+        if np.any(mask_non_zero):
+            mape = np.mean(np.abs((actual[mask_non_zero] - predicted[mask_non_zero]) / actual[mask_non_zero])) * 100
+        else:
+            mape = np.nan
+        
+        # R² Score
+        ss_res = np.sum((actual - predicted) ** 2)
+        ss_tot = np.sum((actual - np.mean(actual)) ** 2)
+        r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else np.nan
+        
+        return {
+            'rmse': rmse,
+            'mae': mae,
+            'mape': mape,
+            'r2': r2,
+            'count': len(actual)
+        }
+    except Exception as e:
+        return {
+            'rmse': np.nan,
+            'mae': np.nan,
+            'mape': np.nan,
+            'r2': np.nan,
+            'count': 0
+        }
+
+def plot_forecast_visualization(data, forecast_results, target_column, date_column=None):
+    """Membuat visualisasi hasil forecasting"""
+    try:
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        import numpy as np
+        
+        fig, axes = plt.subplots(2, 2, figsize=(20, 12))
+        fig.suptitle(f'Forecasting Analysis - {target_column}', fontsize=16, fontweight='bold')
+        
+        # Data preparation
+        if date_column and date_column in data.columns:
+            data = data.set_index(date_column)
+        
+        actual_data = data[target_column].dropna()
+        
+        # 1. Actual vs Predicted Plot
+        ax1 = axes[0, 0]
+        
+        # Plot actual data
+        ax1.plot(actual_data.index, actual_data.values, 
+                label='Actual', color='blue', linewidth=2, alpha=0.8)
+        
+        # Plot forecast results
+        colors = ['red', 'green', 'orange', 'purple', 'brown']
+        model_names = []
+        
+        for i, (model_name, forecast) in enumerate(forecast_results.items()):
+            if isinstance(forecast, dict) and 'forecast' in forecast:
+                forecast_values = forecast['forecast']
+            else:
+                forecast_values = forecast
+            
+            if hasattr(forecast_values, '__len__') and len(forecast_values) > 0:
+                # Create forecast index
+                start_idx = len(actual_data) - len(forecast_values)
+                if start_idx >= 0:
+                    forecast_index = actual_data.index[-len(forecast_values):]
+                    ax1.plot(forecast_index, forecast_values, 
+                            label=f'{model_name} Forecast', 
+                            color=colors[i % len(colors)], 
+                            linewidth=2, linestyle='--')
+                    model_names.append(model_name)
+        
+        ax1.set_title('Actual vs Forecast Comparison')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('Value')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 2. Residual Plot
+        ax2 = axes[0, 1]
+        
+        for i, (model_name, forecast) in enumerate(forecast_results.items()):
+            if isinstance(forecast, dict) and 'forecast' in forecast:
+                forecast_values = forecast['forecast']
+            else:
+                forecast_values = forecast
+            
+            if hasattr(forecast_values, '__len__') and len(forecast_values) > 0:
+                # Calculate residuals
+                actual_slice = actual_data.values[-len(forecast_values):]
+                residuals = actual_slice - forecast_values
+                
+                # Create forecast index for residuals
+                forecast_index = actual_data.index[-len(forecast_values):]
+                
+                ax2.scatter(forecast_index, residuals, 
+                           label=f'{model_name} Residuals', 
+                           color=colors[i % len(colors)], alpha=0.7)
+        
+        ax2.axhline(y=0, color='black', linestyle='-', linewidth=1)
+        ax2.set_title('Residual Analysis')
+        ax2.set_xlabel('Date')
+        ax2.set_ylabel('Residual')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 3. Error Distribution
+        ax3 = axes[1, 0]
+        
+        for i, (model_name, forecast) in enumerate(forecast_results.items()):
+            if isinstance(forecast, dict) and 'forecast' in forecast:
+                forecast_values = forecast['forecast']
+            else:
+                forecast_values = forecast
+            
+            if hasattr(forecast_values, '__len__') and len(forecast_values) > 0:
+                actual_slice = actual_data.values[-len(forecast_values):]
+                residuals = actual_slice - forecast_values
+                
+                ax3.hist(residuals, bins=20, alpha=0.6, 
+                        label=f'{model_name} Errors', color=colors[i % len(colors)])
+        
+        ax3.set_title('Error Distribution')
+        ax3.set_xlabel('Error')
+        ax3.set_ylabel('Frequency')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        
+        # 4. Performance Metrics
+        ax4 = axes[1, 1]
+        ax4.axis('off')
+        
+        # Create metrics table
+        metrics_data = []
+        for model_name, forecast in forecast_results.items():
+            if isinstance(forecast, dict) and 'forecast' in forecast:
+                forecast_values = forecast['forecast']
+            else:
+                forecast_values = forecast
+            
+            if hasattr(forecast_values, '__len__') and len(forecast_values) > 0:
+                actual_slice = actual_data.values[-len(forecast_values):]
+                metrics = calculate_forecast_metrics(actual_slice, forecast_values)
+                
+                metrics_data.append({
+                    'Model': model_name,
+                    'RMSE': f"{metrics['rmse']:.4f}" if not np.isnan(metrics['rmse']) else "N/A",
+                    'MAE': f"{metrics['mae']:.4f}" if not np.isnan(metrics['mae']) else "N/A",
+                    'MAPE': f"{metrics['mape']:.2f}%" if not np.isnan(metrics['mape']) else "N/A",
+                    'R²': f"{metrics['r2']:.4f}" if not np.isnan(metrics['r2']) else "N/A"
+                })
+        
+        if metrics_data:
+            # Create table
+            table_data = [[d['Model'], d['RMSE'], d['MAE'], d['MAPE'], d['R²']] for d in metrics_data]
+            table = ax4.table(cellText=table_data,
+                            colLabels=['Model', 'RMSE', 'MAE', 'MAPE', 'R²'],
+                            cellLoc='center',
+                            loc='center',
+                            bbox=[0, 0.2, 1, 0.6])
+            
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+            table.scale(1.2, 1.5)
+            
+            # Style the table
+            for i in range(len(table_data[0])):
+                table[(0, i)].set_facecolor('#4CAF50')
+                table[(0, i)].set_text_props(weight='bold', color='white')
+            
+            ax4.set_title('Model Performance Metrics', fontsize=14, fontweight='bold', pad=20)
+        
+        plt.tight_layout()
+        return fig
+        
+    except Exception as e:
+        st.error(f"Error dalam visualisasi forecasting: {str(e)}")
+        return None
+
+def display_forecast_summary(forecast_results, target_column, data):
+    """Menampilkan ringkasan hasil forecasting"""
+    try:
+        st.subheader(f"📊 Forecasting Summary - {target_column}")
+        
+        # Calculate metrics for all models
+        metrics_summary = []
+        actual_data = data[target_column].dropna()
+        
+        for model_name, forecast in forecast_results.items():
+            if isinstance(forecast, dict) and 'forecast' in forecast:
+                forecast_values = forecast['forecast']
+            else:
+                forecast_values = forecast
+            
+            if hasattr(forecast_values, '__len__') and len(forecast_values) > 0:
+                actual_slice = actual_data.values[-len(forecast_values):]
+                metrics = calculate_forecast_metrics(actual_slice, forecast_values)
+                
+                metrics_summary.append({
+                    'Model': model_name,
+                    'RMSE': metrics['rmse'],
+                    'MAE': metrics['mae'],
+                    'MAPE': metrics['mape'],
+                    'R²': metrics['r2'],
+                    'Data Points': metrics['count']
+                })
+        
+        if metrics_summary:
+            # Create DataFrame for display
+            metrics_df = pd.DataFrame(metrics_summary)
+            
+            # Display metrics cards
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Best RMSE", f"{metrics_df['RMSE'].min():.4f}")
+            with col2:
+                st.metric("Best MAE", f"{metrics_df['MAE'].min():.4f}")
+            with col3:
+                if not metrics_df['MAPE'].isna().all():
+                    st.metric("Best MAPE", f"{metrics_df['MAPE'].min():.2f}%")
+                else:
+                    st.metric("Best MAPE", "N/A")
+            with col4:
+                st.metric("Best R²", f"{metrics_df['R²'].max():.4f}")
+            
+            # Display detailed table
+            st.dataframe(
+                metrics_df.style.format({
+                    'RMSE': '{:.4f}',
+                    'MAE': '{:.4f}',
+                    'MAPE': '{:.2f}%',
+                    'R²': '{:.4f}'
+                }).background_gradient(cmap='RdYlGn', subset=['R²'], axis=0)
+                 .background_gradient(cmap='RdYlGn_r', subset=['RMSE', 'MAE', 'MAPE'], axis=0)
+            )
+            
+            return metrics_df
+        
+    except Exception as e:
+        st.error(f"Error dalam menampilkan ringkasan: {str(e)}")
+        return None
