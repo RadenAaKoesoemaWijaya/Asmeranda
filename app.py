@@ -32,6 +32,7 @@ import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
 from auth_db import auth_db
 from captcha_utils import captcha_gen, verify_captcha
+from utils import prepare_timeseries_data, check_stationarity, plot_timeseries_analysis, analyze_trend_seasonality_cycle, plot_pattern_analysis
 
 try:
     import lime
@@ -114,6 +115,16 @@ if 'model_type' not in st.session_state:
 
 if 'model_results' not in st.session_state:
     st.session_state.model_results = []
+
+# Time series specific state variables
+if 'is_time_series' not in st.session_state:
+    st.session_state.is_time_series = False
+if 'time_column' not in st.session_state:
+    st.session_state.time_column = None
+if 'forecasting_models' not in st.session_state:
+    st.session_state.forecasting_models = []
+if 'forecast_results' not in st.session_state:
+    st.session_state.forecast_results = None
 
 # Authentication state variables
 if 'authenticated' not in st.session_state:
@@ -589,6 +600,70 @@ with tab1:
             st.subheader("Statistik Data" if st.session_state.language == 'id' else "Data Statistics")
             st.dataframe(data.describe())
             
+            # Time Series Detection
+            st.subheader("Deteksi Dataset Time Series" if st.session_state.language == 'id' else "Time Series Dataset Detection")
+            
+            # Check if this is a time series dataset
+            is_time_series = st.checkbox(
+                "Apakah ini dataset time series?" if st.session_state.language == 'id' else "Is this a time series dataset?",
+                value=st.session_state.is_time_series,
+                help="Centang jika dataset ini berisi data time series untuk forecasting" if st.session_state.language == 'id' else "Check if this dataset contains time series data for forecasting"
+            )
+            
+            st.session_state.is_time_series = is_time_series
+            
+            if is_time_series:
+                st.info("Dataset akan diproses sebagai time series untuk analisis forecasting" if st.session_state.language == 'id' else "Dataset will be processed as time series for forecasting analysis")
+                
+                # Select time column
+                date_columns = data.select_dtypes(include=['object', 'datetime64']).columns.tolist()
+                numeric_columns = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    time_column = st.selectbox(
+                        "Pilih kolom waktu/date:" if st.session_state.language == 'id' else "Select time/date column:",
+                        [""] + date_columns + numeric_columns,
+                        index=0 if st.session_state.time_column is None else ([""] + date_columns + numeric_columns).index(st.session_state.time_column)
+                    )
+                    st.session_state.time_column = time_column if time_column else None
+                
+                with col2:
+                    if numeric_columns:
+                        target_column = st.selectbox(
+                            "Pilih kolom target untuk forecasting:" if st.session_state.language == 'id' else "Select target column for forecasting:",
+                            [""] + numeric_columns,
+                            index=0 if st.session_state.target_column is None else ([""] + numeric_columns).index(st.session_state.target_column)
+                        )
+                        st.session_state.target_column = target_column if target_column else None
+                    else:
+                        st.warning("Tidak ada kolom numerik untuk forecasting" if st.session_state.language == 'id' else "No numeric columns for forecasting")
+                        
+                if time_column and target_column:
+                    # Validate time column
+                    try:
+                        if data[time_column].dtype == 'object':
+                            data[time_column] = pd.to_datetime(data[time_column])
+                        
+                        # Check if time column is monotonic
+                        is_monotonic = data[time_column].is_monotonic_increasing
+                        
+                        if not is_monotonic:
+                            st.warning("Kolom waktu tidak berurutan. Data akan diurutkan berdasarkan waktu." if st.session_state.language == 'id' else "Time column is not sequential. Data will be sorted by time.")
+                            data = data.sort_values(by=time_column)
+                            st.session_state.data = data
+                        
+                        st.success(f"Dataset time series terdeteksi: {len(data)} observasi dari {data[time_column].min()} hingga {data[time_column].max()}")
+                        
+                        # Display time series preview
+                        st.write("Preview data time series:" if st.session_state.language == 'id' else "Time series data preview:")
+                        time_series_preview = data[[time_column, target_column]].head(10)
+                        st.dataframe(time_series_preview)
+                        
+                    except Exception as e:
+                        st.error(f"Error processing time column: {e}")
+                        st.session_state.is_time_series = False
+            
             # Identify numerical and categorical columns
             numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
             categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
@@ -738,6 +813,85 @@ with tab2:
             ax[1].set_title(f'Boxplot {selected_num_col}')
             
             st.pyplot(fig)
+        
+        # Time Series Pattern Analysis (if time series data)
+        if st.session_state.get('is_time_series', False) and st.session_state.time_column and st.session_state.target_column:
+            st.subheader("🔍 Analisis Pola Time Series" if st.session_state.language == 'id' else "🔍 Time Series Pattern Analysis")
+            
+            try:
+                # Prepare time series data
+                ts_data = prepare_timeseries_data(
+                    data, 
+                    st.session_state.time_column, 
+                    st.session_state.target_column
+                )
+                
+                # Analyze patterns
+                pattern_analysis = analyze_trend_seasonality_cycle(
+                    ts_data[st.session_state.target_column]
+                )
+                
+                # Display pattern insights
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Tren Terdeteksi" if st.session_state.language == 'id' else "Trend Detected",
+                        "✅ Ya" if pattern_analysis['trend_detected'] else "❌ Tidak",
+                        delta=f"Kekuatan: {pattern_analysis['trend_strength']:.2f}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Seasonality Terdeteksi" if st.session_state.language == 'id' else "Seasonality Detected",
+                        "✅ Ya" if pattern_analysis['seasonality_detected'] else "❌ Tidak",
+                        delta=f"Kekuatan: {pattern_analysis['seasonality_strength']:.2f}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Siklus Terdeteksi" if st.session_state.language == 'id' else "Cycle Detected",
+                        "✅ Ya" if pattern_analysis['cycle_detected'] else "❌ Tidak",
+                        delta=f"Kekuatan: {pattern_analysis['cycle_strength']:.2f}"
+                    )
+                
+                # Detailed pattern information
+                if pattern_analysis['trend_detected']:
+                    st.info(f"📈 **Tren:** Kemiringan tren adalah {pattern_analysis['trend_slope']:.4f} per periode")
+                
+                if pattern_analysis['seasonality_detected']:
+                    st.info(f"🌊 **Seasonality:** Terdeteksi dengan kekuatan {pattern_analysis['seasonality_strength']:.2f}")
+                
+                if pattern_analysis['cycle_detected'] and pattern_analysis['dominant_cycle_period']:
+                    st.info(f"🔄 **Siklus:** Periode dominan adalah {pattern_analysis['dominant_cycle_period']:.1f} periode")
+                
+                # Visualize patterns
+                st.write("**Visualisasi Pola Time Series:**" if st.session_state.language == 'id' else "**Time Series Pattern Visualization:**")
+                pattern_fig = plot_pattern_analysis(ts_data[st.session_state.target_column])
+                st.pyplot(pattern_fig)
+                
+                # Seasonal decomposition insights
+                if 'decomposition' in pattern_analysis and pattern_analysis['decomposition'] is not None:
+                    st.write("**Insight dari Dekomposisi:**" if st.session_state.language == 'id' else "**Decomposition Insights:**")
+                    
+                    decomposition = pattern_analysis['decomposition']
+                    
+                    # Calculate variance explained by each component
+                    total_var = np.var(ts_data[st.session_state.target_column])
+                    trend_var = np.var(decomposition.trend.dropna()) if decomposition.trend is not None else 0
+                    seasonal_var = np.var(decomposition.seasonal.dropna()) if decomposition.seasonal is not None else 0
+                    residual_var = np.var(decomposition.resid.dropna()) if decomposition.resid is not None else 0
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Varians Tren", f"{trend_var/total_var:.1%}")
+                    with col2:
+                        st.metric("Varians Seasonal", f"{seasonal_var/total_var:.1%}")
+                    with col3:
+                        st.metric("Varians Residual", f"{residual_var/total_var:.1%}")
+                
+            except Exception as e:
+                st.error(f"Error dalam analisis pola: {str(e)}")
         
         # Distribution of categorical columns
         if len(st.session_state.categorical_columns) > 0:
@@ -3003,8 +3157,13 @@ with tab4:
                                     eval_results = evaluate_forecast_model(st.session_state.model, test_data, target_column)
                                     
                                     st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
-                                    st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
                                     st.write(f"- MAE: {eval_results['MAE']:.4f}")
+                                    st.write(f"- MSE: {eval_results['MSE']:.4f}")
+                                    st.write(f"- RMSE: {eval_results['RMSE']:.4f}")
+                                    if eval_results['MAPE'] is not None:
+                                        st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
+                                    else:
+                                        st.write("- MAPE: Tidak dapat dihitung (nilai aktual 0)" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated (actual values are 0)")
                                     st.write(f"- R²: {eval_results['R2']:.4f}")
                                     
                                     # Generate forecast

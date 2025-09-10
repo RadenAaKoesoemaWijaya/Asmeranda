@@ -8,6 +8,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import math
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -39,10 +40,155 @@ def train_arima_model(data, target_column, order=(1,1,1)):
     # Pastikan data tidak memiliki nilai yang hilang
     data = data.dropna()
     
-    # Latih model ARIMA
-    model = ARIMA(data[target_column], order=order)
-    model_fit = model.fit()
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model ARIMA")
     
+    if len(data) < 5:
+        raise ValueError(f"Data terlalu sedikit untuk training model ARIMA. Minimal 5 data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
+    # Latih model ARIMA
+    try:
+        model = ARIMA(data[target_column], order=order)
+        model_fit = model.fit()
+        return model_fit
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model ARIMA: {str(e)}")
+
+def calculate_forecast_metrics(actual, predicted):
+    """
+    Menghitung berbagai metrik evaluasi untuk forecasting
+    
+    Parameters:
+    -----------
+    actual : array-like
+        Nilai aktual
+    predicted : array-like
+        Nilai prediksi
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi MAE, MSE, RMSE, dan MAPE
+    """
+    actual = np.array(actual)
+    predicted = np.array(predicted)
+    
+    # Hapus nilai NaN atau infinite
+    mask = ~(np.isnan(actual) | np.isnan(predicted) | np.isinf(actual) | np.isinf(predicted))
+    actual = actual[mask]
+    predicted = predicted[mask]
+    
+    if len(actual) == 0:
+        return {
+            'MAE': None,
+            'MSE': None,
+            'RMSE': None,
+            'MAPE': None,
+            'R2': None
+        }
+    
+    # Hitung metrik
+    mae = mean_absolute_error(actual, predicted)
+    mse = mean_squared_error(actual, predicted)
+    rmse = math.sqrt(mse)
+    
+    # MAPE (Mean Absolute Percentage Error)
+    # Hindari pembagian dengan nol
+    mask_nonzero = actual != 0
+    if np.sum(mask_nonzero) > 0:
+        mape = np.mean(np.abs((actual[mask_nonzero] - predicted[mask_nonzero]) / actual[mask_nonzero])) * 100
+    else:
+        mape = None
+    
+    # R-squared
+    r2 = r2_score(actual, predicted)
+    
+    return {
+        'MAE': mae,
+        'MSE': mse,
+        'RMSE': rmse,
+        'MAPE': mape,
+        'R2': r2
+    }
+
+def evaluate_forecast_model(model, test_data, target_column, date_column=None):
+    """
+    Mengevaluasi model forecasting dengan berbagai metrik
+    
+    Parameters:
+    -----------
+    model : object
+        Model yang telah dilatih
+    test_data : pandas.DataFrame
+        Data testing
+    target_column : str
+        Nama kolom target
+    date_column : str, optional
+        Nama kolom tanggal (untuk model ML)
+        
+    Returns:
+    --------
+    dict
+        Hasil evaluasi model
+    """
+    if hasattr(model, 'predict'):
+        # Untuk model ML (Random Forest, Gradient Boosting, dll)
+        if date_column is not None:
+            # Buat fitur untuk data testing
+            from utils import create_features_from_date, create_lag_features, create_rolling_features
+            
+            df = test_data.copy()
+            df[date_column] = pd.to_datetime(df[date_column])
+            df = df.sort_values(by=date_column)
+            
+            # Buat fitur
+            df = create_features_from_date(df, date_column)
+            df = create_lag_features(df, target_column)
+            df = create_rolling_features(df, target_column)
+            
+            # Hapus NaN
+            df = df.dropna()
+            
+            # Dapatkan fitur yang digunakan
+            features = [col for col in df.columns if col != target_column and col != date_column]
+            
+            if len(df) > 0:
+                X_test = df[features]
+                y_actual = df[target_column]
+                y_pred = model.predict(X_test)
+                
+                return calculate_forecast_metrics(y_actual, y_pred)
+            else:
+                return {'error': 'Tidak cukup data untuk evaluasi'}
+    
+    elif hasattr(model, 'forecast'):
+        # Untuk model ARIMA, SARIMA, Exponential Smoothing
+        try:
+            # Dapatkan prediksi untuk periode testing
+            steps = len(test_data)
+            forecast_result = model.forecast(steps=steps)
+            
+            if hasattr(forecast_result, 'values'):
+                y_pred = forecast_result.values
+            else:
+                y_pred = np.array(forecast_result)
+            
+            y_actual = test_data[target_column].values
+            
+            return calculate_forecast_metrics(y_actual, y_pred)
+            
+        except Exception as e:
+            return {'error': f'Error dalam evaluasi model: {str(e)}'}
+    
+    else:
+        return {'error': 'Tipe model tidak dikenali'}
+
+
     return model_fit
 
 def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1,12)):
@@ -68,11 +214,24 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
     # Pastikan data tidak memiliki nilai yang hilang
     data = data.dropna()
     
-    # Latih model SARIMA
-    model = SARIMAX(data[target_column], order=order, seasonal_order=seasonal_order)
-    model_fit = model.fit(disp=False)
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model SARIMA")
     
-    return model_fit
+    if len(data) < 5:
+        raise ValueError(f"Data terlalu sedikit untuk training model SARIMA. Minimal 5 data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
+    # Latih model SARIMA
+    try:
+        model = SARIMAX(data[target_column], order=order, seasonal_order=seasonal_order)
+        model_fit = model.fit(disp=False)
+        return model_fit
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model SARIMA: {str(e)}")
 
 def train_exponential_smoothing(data, target_column, trend=None, seasonal=None, seasonal_periods=None):
     """
@@ -99,23 +258,36 @@ def train_exponential_smoothing(data, target_column, trend=None, seasonal=None, 
     # Pastikan data tidak memiliki nilai yang hilang
     data = data.dropna()
     
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model Exponential Smoothing")
+    
+    if len(data) < 5:
+        raise ValueError(f"Data terlalu sedikit untuk training model Exponential Smoothing. Minimal 5 data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
     # Latih model Exponential Smoothing
-    if seasonal is not None and seasonal_periods is not None:
-        model = ExponentialSmoothing(
-            data[target_column],
-            trend=trend,
-            seasonal=seasonal,
-            seasonal_periods=seasonal_periods
-        )
-    else:
-        model = ExponentialSmoothing(
-            data[target_column],
-            trend=trend
-        )
-    
-    model_fit = model.fit()
-    
-    return model_fit
+    try:
+        if seasonal is not None and seasonal_periods is not None:
+            model = ExponentialSmoothing(
+                data[target_column],
+                trend=trend,
+                seasonal=seasonal,
+                seasonal_periods=seasonal_periods
+            )
+        else:
+            model = ExponentialSmoothing(
+                data[target_column],
+                trend=trend
+            )
+        
+        model_fit = model.fit()
+        return model_fit
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model Exponential Smoothing: {str(e)}")
 
 def train_ml_forecaster(data, date_column, target_column, features=None, model_type='random_forest', **model_params):
     """
