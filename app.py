@@ -1324,43 +1324,214 @@ with tab3:
         
         st.subheader("Atasi Nilai Hilang" if st.session_state.language == 'id' else "Handle Missing Values")
         
+        # Store original missing counts
+        if 'original_missing_counts' not in st.session_state:
+            st.session_state.original_missing_counts = data.isnull().sum().to_dict()
+        
         # Display columns with missing values
         missing_cols = data.columns[data.isnull().any()].tolist()
         
         if missing_cols:
             st.write("Kolom yang memiliki nilai hilang:" if st.session_state.language == 'id' else "Columns with missing values:", ", ".join(missing_cols))
             
-            for col in missing_cols:
-                col_type = "numerical" if data[col].dtype in ['int64', 'float64'] else "categorical"
+            # Advanced missing value handling options
+            st.markdown("### 🔧 Metode Penanganan Nilai Hilang" if st.session_state.language == 'id' else "### 🔧 Missing Value Handling Methods")
+            
+            # Group handling options
+            group_handling = st.checkbox("Terapkan metode yang sama untuk semua kolom" if st.session_state.language == 'id' else "Apply same method for all columns", key="group_missing")
+            
+            if group_handling:
+                # Advanced methods selection
+                st.markdown("#### Pilih Metode Global" if st.session_state.language == 'id' else "#### Select Global Method")
                 
-                st.write(f"Handle missing values in '{col}' ({col_type}):")
+                global_method = st.selectbox(
+                    "Metode penanganan nilai hilang:" if st.session_state.language == 'id' else "Missing value handling method:",
+                    [
+                        "Drop rows with missing values",
+                        "Simple Imputation",
+                        "Advanced Imputation",
+                        "Interpolation",
+                        "KNN Imputation",
+                        "Iterative Imputation",
+                        "Forward/Backward Fill"
+                    ]
+                )
                 
-                if col_type == "numerical":
-                    method = st.radio(f"Method for {col}:", 
-                                     ["Drop rows", "Mean", "Median", "Zero"], 
-                                     key=f"missing_{col}")
+                if global_method == "Simple Imputation":
+                    num_strategy = st.selectbox("Strategi untuk data numerik:" if st.session_state.language == 'id' else "Strategy for numerical data:", 
+                                               ["Mean", "Median", "Mode", "Zero", "Min", "Max"])
+                    cat_strategy = st.selectbox("Strategi untuk data kategorikal:" if st.session_state.language == 'id' else "Strategy for categorical data:", 
+                                               ["Mode", "New Category", "Drop"])
                     
-                    if method == "Drop rows":
-                        data = data.dropna(subset=[col])
-                    elif method == "Mean":
-                        data[col] = data[col].fillna(data[col].mean())
-                    elif method == "Median":
-                        data[col] = data[col].fillna(data[col].median())
-                    elif method == "Zero":
-                        data[col] = data[col].fillna(0)
-                else:
-                    method = st.radio(f"Method for {col}:", 
-                                     ["Drop rows", "Mode", "New category"], 
-                                     key=f"missing_{col}")
+                    if st.button("Terapkan Metode Global" if st.session_state.language == 'id' else "Apply Global Method"):
+                        for col in missing_cols:
+                            col_type = "numerical" if data[col].dtype in ['int64', 'float64'] else "categorical"
+                            
+                            if col_type == "numerical":
+                                if num_strategy == "Mean":
+                                    data[col] = data[col].fillna(data[col].mean())
+                                elif num_strategy == "Median":
+                                    data[col] = data[col].fillna(data[col].median())
+                                elif num_strategy == "Mode":
+                                    data[col] = data[col].fillna(data[col].mode()[0])
+                                elif num_strategy == "Zero":
+                                    data[col] = data[col].fillna(0)
+                                elif num_strategy == "Min":
+                                    data[col] = data[col].fillna(data[col].min())
+                                elif num_strategy == "Max":
+                                    data[col] = data[col].fillna(data[col].max())
+                            else:
+                                if cat_strategy == "Mode":
+                                    data[col] = data[col].fillna(data[col].mode()[0])
+                                elif cat_strategy == "New Category":
+                                    data[col] = data[col].fillna("Unknown")
+                                elif cat_strategy == "Drop":
+                                    data = data.dropna(subset=[col])
+                        
+                        st.success("Metode global berhasil diterapkan!" if st.session_state.language == 'id' else "Global method applied successfully!")
+                        st.rerun()
+            
+            else:
+                # Individual column handling
+                for col in missing_cols:
+                    col_type = "numerical" if data[col].dtype in ['int64', 'float64'] else "categorical"
                     
-                    if method == "Drop rows":
-                        data = data.dropna(subset=[col])
-                    elif method == "Mode":
-                        data[col] = data[col].fillna(data[col].mode()[0])
-                    elif method == "New category":
-                        data[col] = data[col].fillna("Unknown")
+                    with st.expander(f"⚙️ {col} ({col_type})", expanded=False):
+                        method = st.selectbox(
+                            f"Metode untuk {col}:" if st.session_state.language == 'id' else f"Method for {col}:",
+                            [
+                                "Drop rows",
+                                "Mean",
+                                "Median", 
+                                "Mode",
+                                "Zero",
+                                "Min",
+                                "Max",
+                                "Forward Fill",
+                                "Backward Fill",
+                                "Linear Interpolation",
+                                "Polynomial Interpolation",
+                                "KNN Imputation",
+                                "Iterative Imputation",
+                                "Custom Value"
+                            ] if col_type == "numerical" else [
+                                "Drop rows",
+                                "Mode",
+                                "New category",
+                                "Forward Fill",
+                                "Backward Fill",
+                                "Custom Value"
+                            ],
+                            key=f"method_{col}"
+                        )
+                        
+                        if method == "Linear Interpolation" and col_type == "numerical":
+                            data[col] = data[col].interpolate(method='linear')
+                        elif method == "Polynomial Interpolation" and col_type == "numerical":
+                            order = st.slider("Orde polinomial:" if st.session_state.language == 'id' else "Polynomial order:", 2, 5, 2, key=f"poly_order_{col}")
+                            data[col] = data[col].interpolate(method='polynomial', order=order)
+                        elif method == "Forward Fill":
+                            data[col] = data[col].fillna(method='ffill')
+                        elif method == "Backward Fill":
+                            data[col] = data[col].fillna(method='bfill')
+                        elif method == "KNN Imputation" and col_type == "numerical":
+                            try:
+                                from sklearn.impute import KNNImputer
+                                imputer = KNNImputer(n_neighbors=5)
+                                data[[col]] = imputer.fit_transform(data[[col]])
+                            except ImportError:
+                                st.warning("KNN Imputation memerlukan scikit-learn. Menggunakan median sebagai fallback." if st.session_state.language == 'id' else "KNN Imputation requires scikit-learn. Using median as fallback.")
+                                data[col] = data[col].fillna(data[col].median())
+                        elif method == "Iterative Imputation" and col_type == "numerical":
+                            try:
+                                from sklearn.impute import IterativeImputer
+                                from sklearn.ensemble import RandomForestRegressor
+                                imputer = IterativeImputer(estimator=RandomForestRegressor(random_state=42), random_state=42)
+                                data[[col]] = imputer.fit_transform(data[[col]])
+                            except ImportError:
+                                st.warning("Iterative Imputation memerlukan scikit-learn. Menggunakan median sebagai fallback." if st.session_state.language == 'id' else "Iterative Imputation requires scikit-learn. Using median as fallback.")
+                                data[col] = data[col].fillna(data[col].median())
+                        elif method == "Drop rows":
+                            data = data.dropna(subset=[col])
+                        elif method == "Mean" and col_type == "numerical":
+                            data[col] = data[col].fillna(data[col].mean())
+                        elif method == "Median" and col_type == "numerical":
+                            data[col] = data[col].fillna(data[col].median())
+                        elif method == "Mode":
+                            mode_val = data[col].mode()[0] if len(data[col].mode()) > 0 else (0 if col_type == "numerical" else "Unknown")
+                            data[col] = data[col].fillna(mode_val)
+                        elif method == "Zero" and col_type == "numerical":
+                            data[col] = data[col].fillna(0)
+                        elif method == "Min" and col_type == "numerical":
+                            data[col] = data[col].fillna(data[col].min())
+                        elif method == "Max" and col_type == "numerical":
+                            data[col] = data[col].fillna(data[col].max())
+                        elif method == "New category" and col_type != "numerical":
+                            data[col] = data[col].fillna("Unknown")
+                        elif method == "Custom Value":
+                            custom_value = st.text_input("Masukkan nilai kustom:" if st.session_state.language == 'id' else "Enter custom value:", key=f"custom_{col}")
+                            if custom_value:
+                                try:
+                                    if col_type == "numerical":
+                                        custom_value = float(custom_value)
+                                    data[col] = data[col].fillna(custom_value)
+                                except ValueError:
+                                    st.error("Nilai kustom tidak valid untuk tipe data ini" if st.session_state.language == 'id' else "Invalid custom value for this data type")
+                        
+                        # Show preview after handling
+                        if st.button("Tampilkan Preview" if st.session_state.language == 'id' else "Show Preview", key=f"preview_{col}"):
+                            missing_after = data[col].isnull().sum()
+                            st.info(f"Sisa nilai hilang di {col}: {missing_after}" if st.session_state.language == 'id' else f"Remaining missing values in {col}: {missing_after}")
+                            st.write(data[col].describe() if col_type == "numerical" else data[col].value_counts())
+                            
+                            # Visual comparison before and after
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Sebelum:**" if st.session_state.language == 'id' else "**Before:**")
+                                if col_type == "numerical":
+                                    fig, ax = plt.subplots(figsize=(4, 3))
+                                    data[col].hist(bins=20, ax=ax)
+                                    ax.set_title(f"{col} - Original")
+                                    st.pyplot(fig)
+                                else:
+                                    st.write("Original distribution")
+                            
+                            with col2:
+                                st.write("**Sesudah:**" if st.session_state.language == 'id' else "**After:**")
+                                if col_type == "numerical":
+                                    fig, ax = plt.subplots(figsize=(4, 3))
+                                    data[col].hist(bins=20, ax=ax)
+                                    ax.set_title(f"{col} - After Imputation")
+                                    st.pyplot(fig)
+                                else:
+                                    st.write("After imputation")
         else:
             st.success("Tidak ditemukan nilai yang hilang dalam dataset." if st.session_state.language == 'id' else "No missing values found in the dataset.")
+
+        # Summary section
+        st.markdown("---")
+        st.subheader("📊 Ringkasan Penanganan Nilai Hilang" if st.session_state.language == 'id' else "📊 Missing Value Handling Summary")
+        
+        missing_summary = pd.DataFrame({
+            'Column': data.columns,
+            'Missing_Before': st.session_state.get('original_missing_counts', {}),
+            'Missing_After': data.isnull().sum(),
+            'Percentage_Imputed': [(st.session_state.get('original_missing_counts', {}).get(col, 0) - data[col].isnull().sum()) / len(data) * 100 for col in data.columns]
+        })
+        
+        missing_summary = missing_summary[missing_summary['Missing_Before'] > 0]
+        
+        if not missing_summary.empty:
+            st.dataframe(missing_summary)
+            
+            # Download handled data
+            csv = data.to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download Data yang Sudah Diperbaiki" if st.session_state.language == 'id' else "⬇️ Download Cleaned Data",
+                data=csv,
+                file_name="data_tanpa_missing.csv" if st.session_state.language == 'id' else "cleaned_data.csv",
+                mime="text/csv"
+            )
         
         # Handle Outliers
         st.subheader("Atasi Data Outlier" if st.session_state.language == 'id' else "Handle Outliers")
