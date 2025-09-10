@@ -95,65 +95,7 @@ def prepare_timeseries_data(data, date_column, target_column, freq=None):
     
     # Resampling data jika frekuensi ditentukan
     if freq is not None:
-<<<<<<< HEAD
-        # Hitung estimasi jumlah data setelah resampling
-        date_range = ts_data.index.max() - ts_data.index.min()
-        if freq.upper() == 'D':
-            expected_points = max(1, date_range.days)
-        elif freq.upper() == 'W':
-            expected_points = max(1, date_range.days // 7)
-        elif freq.upper() == 'M':
-            expected_points = max(1, date_range.days // 30)
-        elif freq.upper() == 'Y':
-            expected_points = max(1, date_range.days // 365)
-        else:
-            expected_points = len(ts_data)
-        
-        # Warning jika diperkirakan akan terlalu sedikit data
-        if expected_points < 2:
-            raise ValueError(f"Periode data terlalu pendek untuk frekuensi '{freq}'. "
-                           f"Rentang data hanya {date_range.days} hari. "
-                           f"Coba gunakan frekuensi yang lebih tinggi.")
-        
-=======
->>>>>>> 82a9a7837d554aa663a3debb5b0cd475375882e8
-        # Handle different aggregation methods based on frequency
-        if freq.upper() in ['D', 'W', 'M', 'Y']:
-            # For daily, weekly, monthly, yearly - use mean for continuous data
-            ts_data = ts_data.resample(freq.upper())[target_column].mean().to_frame()
-        elif freq.upper() == 'H':
-            # For hourly - use mean
-            ts_data = ts_data.resample('H')[target_column].mean().to_frame()
-        else:
-            # Default resampling
-            ts_data = ts_data.resample(freq)[target_column].mean().to_frame()
-        
-        # Handle missing values after resampling
-        if ts_data[target_column].isnull().sum() > 0:
-            # Forward fill for missing values, then backward fill
-            ts_data[target_column] = ts_data[target_column].fillna(method='ffill').fillna(method='bfill')
-            
-            # If still missing, use interpolation
-            if ts_data[target_column].isnull().sum() > 0:
-                ts_data[target_column] = ts_data[target_column].interpolate(method='linear')
-    
-    # Remove any remaining NaN values
-    ts_data = ts_data.dropna()
-    
-<<<<<<< HEAD
-    # Ensure we have enough data points - allow minimum 2 points for basic analysis
-    if len(ts_data) < 2:
-        # Provide more helpful error message
-        raise ValueError(f"Data terlalu sedikit setelah resampling ({len(ts_data)} data points). "
-                        f"Pastikan data mencukupi untuk frekuensi '{freq}'. "
-                        f"Coba gunakan frekuensi yang lebih tinggi (contoh: 'D' untuk daily, 'M' untuk monthly) atau pastikan data mencakup periode yang lebih lama.")
-=======
-    # Ensure we have enough data points
-    if len(ts_data) < 3:
-        raise ValueError(f"Data terlalu sedikit setelah resampling ({len(ts_data)} data points). Pastikan data mencukupi untuk frekuensi {freq}")
->>>>>>> 82a9a7837d554aa663a3debb5b0cd475375882e8
-    
-    return ts_data
+        ts_data = ts_data.resample(freq)[target_column].mean().to_frame()
     
     return ts_data
 

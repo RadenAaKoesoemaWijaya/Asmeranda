@@ -12,106 +12,6 @@ import math
 import warnings
 warnings.filterwarnings('ignore')
 
-# Utility untuk deteksi frekuensi data
-def detect_frequency(data, date_column=None):
-    """
-    Mendeteksi frekuensi data timeseries secara otomatis
-    
-    Parameters:
-    -----------
-    data : pandas.DataFrame
-        DataFrame dengan kolom tanggal atau index datetime
-    date_column : str, optional
-        Nama kolom tanggal jika bukan index
-        
-    Returns:
-    --------
-    str
-        Frekuensi terdeteksi ('D', 'W', 'M', 'Q', 'Y', atau 'H')
-    """
-    if date_column is not None:
-        dates = pd.to_datetime(data[date_column])
-    else:
-        if isinstance(data.index, pd.DatetimeIndex):
-            dates = data.index
-        else:
-            return 'D'  # Default fallback
-    
-    # Hitung selisih antar tanggal
-    diffs = dates.diff().dropna()
-    
-    # Hitung median selisih dalam hari
-    median_diff_days = diffs.dt.total_seconds().median() / (24 * 3600)
-    
-    # Deteksi frekuensi berdasarkan median selisih
-    if median_diff_days < 0.05:  # Kurang dari ~1.2 jam
-        return 'H'  # Hourly
-    elif median_diff_days < 1.5:  # Sekitar 1 hari
-        return 'D'  # Daily
-    elif median_diff_days < 3.5:  # Sekitar 1 minggu
-        return 'W'  # Weekly
-    elif median_diff_days < 15:  # Sekitar 1 bulan
-        return 'M'  # Monthly
-    elif median_diff_days < 45:  # Sekitar 1 kuartal
-        return 'Q'  # Quarterly
-    else:
-        return 'Y'  # Yearly
-
-def get_frequency_info(freq):
-    """
-    Mendapatkan informasi detail tentang frekuensi
-    
-    Parameters:
-    -----------
-    freq : str
-        Kode frekuensi
-        
-    Returns:
-    --------
-    dict
-        Informasi frekuensi (nama, periode dalam setahun, dll)
-    """
-    freq_map = {
-        'H': {'name': 'Hourly', 'periods_per_year': 8760, 'period_name': 'hour'},
-        'D': {'name': 'Daily', 'periods_per_year': 365, 'period_name': 'day'},
-        'W': {'name': 'Weekly', 'periods_per_year': 52, 'period_name': 'week'},
-        'M': {'name': 'Monthly', 'periods_per_year': 12, 'period_name': 'month'},
-        'Q': {'name': 'Quarterly', 'periods_per_year': 4, 'period_name': 'quarter'},
-        'Y': {'name': 'Yearly', 'periods_per_year': 1, 'period_name': 'year'}
-    }
-    return freq_map.get(freq, freq_map['D'])
-
-def adjust_seasonal_periods(freq, seasonal_periods=None):
-    """
-    Menyesuaikan periode musiman berdasarkan frekuensi data
-    
-    Parameters:
-    -----------
-    freq : str
-        Frekuensi data
-    seasonal_periods : int, optional
-        Periode musiman yang ingin digunakan
-        
-    Returns:
-    --------
-    int
-        Periode musiman yang disesuaikan
-    """
-    if seasonal_periods is not None:
-        return seasonal_periods
-    
-    # Default seasonal periods berdasarkan frekuensi
-    seasonal_map = {
-        'H': 24,      # 24 jam dalam sehari
-        'D': 7,       # 7 hari dalam seminggu
-        'W': 52,      # 52 minggu dalam setahun
-        'M': 12,      # 12 bulan dalam setahun
-        'Q': 4,       # 4 kuartal dalam setahun
-        'Y': 1        # Tidak ada musiman untuk data tahunan
-    }
-    
-    return seasonal_map.get(freq, 12)
-
 # Import fungsi-fungsi dari utils.py
 from utils import (
     is_timeseries, detect_timeseries_columns, prepare_timeseries_data,
@@ -236,108 +136,60 @@ def evaluate_forecast_model(model, test_data, target_column, date_column=None):
     dict
         Hasil evaluasi model
     """
-    try:
-        # Validasi input data
-        if test_data is None or test_data.empty:
-            raise ValueError("Data testing kosong")
+    if hasattr(model, 'predict'):
+        # Untuk model ML (Random Forest, Gradient Boosting, dll)
+        if date_column is not None:
+            # Buat fitur untuk data testing
+            from utils import create_features_from_date, create_lag_features, create_rolling_features
             
-        # Validasi kolom target
-        if target_column not in test_data.columns:
-            raise ValueError(f"Kolom '{target_column}' tidak ditemukan dalam data testing")
-        
-        # Validasi timestamp untuk mencegah out of bounds
-        test_data_valid = test_data.copy()
-        
-        # Cek dan validasi index datetime
-        if hasattr(test_data_valid, 'index') and isinstance(test_data_valid.index, pd.DatetimeIndex):
-            try:
-                # Batasi tanggal agar tidak terlalu jauh di masa depan/lampau
-                current_year = pd.Timestamp.now().year
-                min_year = current_year - 50  # Maksimum 50 tahun ke belakang
-                max_year = current_year + 10  # Maksimum 10 tahun ke depan
-                
-                # Filter tanggal yang valid
-                mask = (test_data_valid.index.year >= min_year) & (test_data_valid.index.year <= max_year)
-                test_data_valid = test_data_valid[mask]
-                
-                if test_data_valid.empty:
-                    raise ValueError("Data testing mengandung tanggal yang tidak valid (di luar batas yang diizinkan)")
-                    
-            except Exception as e:
-                if "Out of bounds" in str(e) or "timestamp" in str(e).lower():
-                    # Fallback ke data numerik jika datetime bermasalah
-                    test_data_valid = test_data_valid.reset_index(drop=True)
-        
-        # Dapatkan prediksi untuk data test dengan handling yang aman
-        if hasattr(model, 'predict') and date_column is not None:
-            # Untuk model ML (Random Forest, Gradient Boosting, dll)
-            try:
-                # Buat fitur untuk data testing
-                from utils import create_features_from_date, create_lag_features, create_rolling_features
-                
-                df = test_data_valid.copy()
-                df[date_column] = pd.to_datetime(df[date_column])
-                df = df.sort_values(by=date_column)
-                
-                # Buat fitur
-                df = create_features_from_date(df, date_column)
-                df = create_lag_features(df, target_column)
-                df = create_rolling_features(df, target_column)
-                
-                # Hapus NaN
-                df = df.dropna()
-                
-                # Dapatkan fitur yang digunakan
-                features = [col for col in df.columns if col != target_column and col != date_column]
-                
-                if len(df) > 0:
-                    X_test = df[features]
-                    y_actual = df[target_column]
-                    y_pred = model.predict(X_test)
-                    
-                    return calculate_forecast_metrics(y_actual, y_pred)
-                else:
-                    return {'error': 'Tidak cukup data untuk evaluasi'}
-                    
-            except Exception as e:
-                return {'error': f'Error dalam evaluasi model ML: {str(e)}'}
-        
-        elif hasattr(model, 'forecast'):
-            # Untuk model ARIMA, SARIMA, Exponential Smoothing
-            try:
-                # Dapatkan prediksi untuk periode testing
-                steps = len(test_data_valid)
-                forecast_result = model.forecast(steps=steps)
-                
-                if hasattr(forecast_result, 'values'):
-                    y_pred = forecast_result.values
-                else:
-                    y_pred = np.array(forecast_result)
-                
-                y_actual = test_data_valid[target_column].values
+            df = test_data.copy()
+            df[date_column] = pd.to_datetime(df[date_column])
+            df = df.sort_values(by=date_column)
+            
+            # Buat fitur
+            df = create_features_from_date(df, date_column)
+            df = create_lag_features(df, target_column)
+            df = create_rolling_features(df, target_column)
+            
+            # Hapus NaN
+            df = df.dropna()
+            
+            # Dapatkan fitur yang digunakan
+            features = [col for col in df.columns if col != target_column and col != date_column]
+            
+            if len(df) > 0:
+                X_test = df[features]
+                y_actual = df[target_column]
+                y_pred = model.predict(X_test)
                 
                 return calculate_forecast_metrics(y_actual, y_pred)
-                
-            except Exception as e:
-                return {'error': f'Error dalam evaluasi model: {str(e)}'}
-        
-        else:
-            return {'error': 'Tipe model tidak dikenali'}
+            else:
+                return {'error': 'Tidak cukup data untuk evaluasi'}
+    
+    elif hasattr(model, 'forecast'):
+        # Untuk model ARIMA, SARIMA, Exponential Smoothing
+        try:
+            # Dapatkan prediksi untuk periode testing
+            steps = len(test_data)
+            forecast_result = model.forecast(steps=steps)
             
-    except Exception as e:
-        # Error handling terakhir
-        error_msg = str(e)
-        if "Out of bounds" in error_msg or "timestamp" in error_msg:
-            error_msg = "Error: Timestamp out of bounds. Silakan periksa tanggal dalam data Anda."
-        
-        return {
-            'error': error_msg,
-            'MAE': None,
-            'MSE': None,
-            'RMSE': None,
-            'MAPE': None,
-            'R2': None
-        }
+            if hasattr(forecast_result, 'values'):
+                y_pred = forecast_result.values
+            else:
+                y_pred = np.array(forecast_result)
+            
+            y_actual = test_data[target_column].values
+            
+            return calculate_forecast_metrics(y_actual, y_pred)
+            
+        except Exception as e:
+            return {'error': f'Error dalam evaluasi model: {str(e)}'}
+    
+    else:
+        return {'error': 'Tipe model tidak dikenali'}
+
+
+    return model_fit
 
 def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1,12)):
     """
@@ -519,9 +371,9 @@ def train_ml_forecaster(data, date_column, target_column, features=None, model_t
         'model_type': model_type
     }
 
-def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_frequency=None):
+def forecast_future(model_info, periods=10, freq='D'):
     """
-    Membuat prediksi untuk periode di masa depan dengan support berbagai frekuensi data
+    Membuat prediksi untuk periode di masa depan
     
     Parameters:
     -----------
@@ -531,36 +383,12 @@ def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_f
         Jumlah periode yang akan diprediksi
     freq : str, optional
         Frekuensi data ('D' untuk harian, 'W' untuk mingguan, 'M' untuk bulanan, dll.)
-        Jika None, akan otomatis dideteksi dari data
-    max_years_ahead : int, optional
-        Batas maksimum tahun ke depan untuk prediksi (default: 2 tahun)
-    data_frequency : str, optional
-        Frekuensi data yang terdeteksi secara otomatis
         
     Returns:
     --------
     pandas.DataFrame
-        DataFrame dengan tanggal dan hasil prediksi yang sesuai dengan frekuensi data
+        DataFrame dengan tanggal dan hasil prediksi
     """
-    # Deteksi frekuensi jika tidak ditentukan
-    if freq is None:
-        if data_frequency is not None:
-            freq = data_frequency
-        else:
-            freq = 'D'  # Default ke harian
-    
-    # Validasi dan map frekuensi yang valid
-    freq_map = {
-        'harian': 'D', 'daily': 'D', 'D': 'D',
-        'mingguan': 'W', 'weekly': 'W', 'W': 'W',
-        'bulanan': 'M', 'monthly': 'M', 'M': 'M',
-        'kuartal': 'Q', 'quarterly': 'Q', 'Q': 'Q',
-        'tahunan': 'Y', 'yearly': 'Y', 'Y': 'Y'
-    }
-    
-    # Gunakan frekuensi yang valid
-    safe_freq = freq_map.get(str(freq).lower(), freq) if str(freq).lower() in freq_map else freq
-    
     # Cek tipe model
     if isinstance(model_info, dict) and 'model_type' in model_info:  # ML model
         # Ambil informasi dari model_info
@@ -570,22 +398,8 @@ def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_f
         target_column = model_info['target_column']
         last_date = model_info['last_date']
         
-        # Validasi batas tanggal prediksi
-        max_date = last_date + pd.DateOffset(years=max_years_ahead)
-        
-        # Hitung periode yang valid dengan frekuensi yang sesuai
-        try:
-            future_dates = pd.date_range(start=last_date, periods=periods+1, freq=safe_freq)[1:]
-            valid_dates = future_dates[future_dates <= max_date]
-        except ValueError:
-            # Fallback ke frekuensi harian jika error
-            future_dates = pd.date_range(start=last_date, periods=periods+1, freq='D')[1:]
-            valid_dates = future_dates[future_dates <= max_date]
-        
-        if len(valid_dates) < periods:
-            print(f"Peringatan: Prediksi dibatasi hingga {max_years_ahead} tahun ke depan ({len(valid_dates)} dari {periods} periode)")
-            
-        future_dates = valid_dates
+        # Buat tanggal untuk periode masa depan
+        future_dates = pd.date_range(start=last_date, periods=periods+1, freq=freq)[1:]
         
         # Buat DataFrame untuk prediksi
         future_df = pd.DataFrame({date_column: future_dates})
@@ -615,7 +429,7 @@ def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_f
         # Prediksi menggunakan model statsmodels
         forecast = model_info.forecast(steps=periods)
         
-        # Buat tanggal untuk periode masa depan dengan validasi timestamp
+        # Buat tanggal untuk periode masa depan
         try:
             if hasattr(model_info, 'model') and hasattr(model_info.model, 'data'):
                 # Handle both regular DataFrame and PandasData object
@@ -667,160 +481,21 @@ def forecast_future(model_info, periods=10, freq=None, max_years_ahead=2, data_f
                 'forecast': forecast
             })
         
-        # Validasi dan batasi tanggal prediksi dengan multiple safety checks
+        # Buat tanggal untuk periode masa depan
         if isinstance(last_date, pd.Timestamp):
-            try:
-                # Cek apakah tanggal terakhir sudah reasonable
-                current_year = pd.Timestamp.now().year
-                last_year = last_date.year
-                
-                # Batasi range tahun yang reasonable (50 tahun ke belakang, 10 tahun ke depan)
-                if last_year < current_year - 50 or last_year > current_year + 10:
-                    print(f"Warning: Tanggal terakhir ({last_date}) di luar range yang diizinkan")
-                    # Gunakan fallback ke indeks numerik
-                    return pd.DataFrame({
-                        'forecast_index': range(min(periods, 365)),
-                        'forecast': forecast[:min(periods, 365)]
-                    })
-                
-                # Batasi prediksi maksimum 2 tahun ke depan (lebih konservatif)
-                max_prediction_date = last_date + pd.DateOffset(years=2)
-                
-                # Gunakan frekuensi yang aman dengan mapping yang lebih baik
-                safe_freq = safe_freq if safe_freq in ['D', 'W', 'M', 'Q', 'Y', 'H'] else 'D'
-                
-                try:
-                    future_dates = pd.date_range(start=last_date, periods=periods+1, freq=safe_freq)[1:]
-                except (OverflowError, OSError, ValueError) as e:
-                    # Jika error dengan frekuensi tertentu, gunakan frekuensi harian
-                    future_dates = pd.date_range(start=last_date, periods=min(periods+1, 730))[1:]  # Maksimum 2 tahun
-                
-                # Filter tanggal yang tidak out of bounds dengan validasi yang ketat
-                valid_dates = []
-                for date in future_dates:
-                    try:
-                        # Validasi timestamp bounds (32-bit limits)
-                        timestamp = date.timestamp()
-                        if -2147483648 <= timestamp <= 2147483647:  # 32-bit timestamp limits
-                            # Validasi tahun
-                            if current_year - 50 <= date.year <= current_year + 10:
-                                valid_dates.append(date)
-                            else:
-                                break
-                        else:
-                            break
-                    except (OverflowError, OSError, ValueError):
-                        # Tanggal out of bounds, hentikan prediksi
-                        break
-                
-                if len(valid_dates) == 0:
-                    # Jika semua tanggal invalid, gunakan indeks numerik
-                    return pd.DataFrame({
-                        'forecast_index': range(min(periods, 365)),  # Batasi maksimum 1 tahun
-                        'forecast': forecast[:min(periods, 365)]
-                    })
-                
-                future_dates = pd.DatetimeIndex(valid_dates)
-                
-            except (OverflowError, OSError, ValueError) as e:
-                # Tangani error timestamp dengan fallback ke indeks numerik
-                print(f"Warning: Timestamp error - {str(e)}")
-                return pd.DataFrame({
-                    'forecast_index': range(min(periods, 365)),
-                    'forecast': forecast[:min(periods, 365)]
-                })
+            future_dates = pd.date_range(start=last_date, periods=periods+1, freq=freq)[1:]
         else:
-            # Gunakan indeks numerik jika bukan timestamp
-            future_dates = range(min(periods, 365))
+            future_dates = range(periods)
         
-        # Kembalikan hasil prediksi dengan handling yang aman
-        try:
-            if isinstance(future_dates, pd.DatetimeIndex):
-                return pd.DataFrame({
-                    'ds': future_dates,
-                    'yhat': forecast[:len(future_dates)]
-                })
-            else:
-                return pd.DataFrame({
-                    'forecast_index': list(future_dates),
-                    'forecast': forecast[:len(list(future_dates))]
-                })
-        except Exception as e:
-            # Fallback terakhir
-            return pd.DataFrame({
-                'forecast_index': range(min(periods, 100)),
-                'forecast': forecast[:min(periods, 100)]
-            })
-
-def validate_timestamp_data(data, target_column=None):
-    """
-    Validasi data untuk memastikan tidak ada timestamp yang out of bounds
-    
-    Parameters:
-    -----------
-    data : pandas.DataFrame
-        Data yang akan divalidasi
-    target_column : str, optional
-        Nama kolom target untuk validasi tambahan
-        
-    Returns:
-    --------
-    pandas.DataFrame
-        Data yang sudah divalidasi dan difilter
-    """
-    if data is None or data.empty:
-        return data
-    
-    data_valid = data.copy()
-    
-    # Validasi index datetime
-    if hasattr(data_valid, 'index') and isinstance(data_valid.index, pd.DatetimeIndex):
-        try:
-            # Batasi range tanggal yang reasonable
-            current_year = pd.Timestamp.now().year
-            min_year = current_year - 50
-            max_year = current_year + 10
-            
-            # Filter berdasarkan tahun
-            mask = (data_valid.index.year >= min_year) & (data_valid.index.year <= max_year)
-            data_valid = data_valid[mask]
-            
-            # Validasi individual timestamps
-            valid_indices = []
-            for idx in data_valid.index:
-                try:
-                    idx.timestamp()
-                    valid_indices.append(idx)
-                except (OverflowError, OSError, ValueError):
-                    continue
-            
-            if valid_indices:
-                data_valid = data_valid.loc[valid_indices]
-            else:
-                # Fallback ke index numerik
-                data_valid = data_valid.reset_index(drop=True)
-                
-        except Exception as e:
-            # Jika error, gunakan index numerik
-            data_valid = data_valid.reset_index(drop=True)
-    
-    # Validasi kolom tanggal jika ada
-    date_columns = data_valid.select_dtypes(include=['datetime64']).columns
-    for col in date_columns:
-        try:
-            data_valid[col] = pd.to_datetime(data_valid[col])
-            # Filter tanggal yang reasonable
-            mask = (data_valid[col].dt.year >= current_year - 50) & (data_valid[col].dt.year <= current_year + 10)
-            data_valid = data_valid[mask]
-        except Exception:
-            # Jika error, skip kolom ini
-            continue
-    
-    return data_valid
+        # Kembalikan hasil prediksi
+        return pd.DataFrame({
+            'ds': future_dates,
+            'yhat': forecast
+        })
 
 def evaluate_forecast_model(model, test_data, target_column):
     """
-    Mengevaluasi model forecasting menggunakan data test dengan validasi timestamp
+    Mengevaluasi model forecasting menggunakan data test
     
     Parameters:
     -----------
@@ -834,121 +509,93 @@ def evaluate_forecast_model(model, test_data, target_column):
     Returns:
     --------
     dict
-        Dictionary berisi metrik evaluasi atau error message
+        Dictionary berisi metrik evaluasi
     """
-    try:
-        # Validasi input
-        if test_data is None or test_data.empty:
-            return {'error': 'Data testing kosong atau tidak valid'}
-            
-        if target_column not in test_data.columns:
-            return {'error': f"Kolom '{target_column}' tidak ditemukan dalam data testing"}
+    # Cek tipe model
+    if isinstance(model, dict) and 'model_type' in model:  # ML model
+        # Ambil informasi dari model
+        ml_model = model['model']
+        features = model['features']
         
-        # Validasi timestamp data
-        test_data_valid = validate_timestamp_data(test_data, target_column)
+        # Pastikan semua fitur ada di test_data
+        missing_features = [f for f in features if f not in test_data.columns]
+        if missing_features:
+            raise ValueError(f"Fitur berikut tidak ada di test_data: {missing_features}")
         
-        if test_data_valid.empty:
-            return {'error': 'Data testing tidak valid setelah validasi timestamp'}
-        
-        # Cek tipe model
-        if isinstance(model, dict) and 'model_type' in model:  # ML model
-            ml_model = model['model']
-            features = model['features']
-            
-            # Pastikan semua fitur ada
-            missing_features = [f for f in features if f not in test_data_valid.columns]
-            if missing_features:
-                return {'error': f"Fitur tidak ditemukan: {missing_features}"}
-            
-            # Prediksi
-            y_pred = ml_model.predict(test_data_valid[features])
-            y_true = test_data_valid[target_column]
-            
-        else:  # Statsmodels model
-            # Prediksi dengan handling yang aman
-            try:
-                y_pred = model.forecast(steps=len(test_data_valid))
-                y_true = test_data_valid[target_column]
-            except Exception as e:
-                return {'error': f"Error saat forecasting: {str(e)}"}
-        
-        # Hitung metrik dengan validasi
-        y_true = np.array(y_true)
-        y_pred = np.array(y_pred)
-        
-        # Hapus nilai yang tidak valid
-        mask = ~(np.isnan(y_true) | np.isnan(y_pred) | np.isinf(y_true) | np.isinf(y_pred))
-        y_true = y_true[mask]
-        y_pred = y_pred[mask]
-        
-        if len(y_true) == 0:
-            return {'error': 'Tidak ada data yang valid untuk evaluasi'}
-        
-        # Hitung metrik
-        mse = mean_squared_error(y_true, y_pred)
-        rmse = np.sqrt(mse)
-        mae = mean_absolute_error(y_true, y_pred)
-        
-        # MAPE dengan handling division by zero
-        mask_nonzero = y_true != 0
-        if np.sum(mask_nonzero) > 0:
-            mape = np.mean(np.abs((y_true[mask_nonzero] - y_pred[mask_nonzero]) / y_true[mask_nonzero])) * 100
-        else:
-            mape = None
-        
-        r2 = r2_score(y_true, y_pred)
-        
-        return {
-            'MSE': mse,
-            'RMSE': rmse,
-            'MAE': mae,
-            'MAPE': mape,
-            'R2': r2,
-            'n_samples': len(y_true)
-        }
-        
-    except Exception as e:
-        error_msg = str(e).lower()
-        if any(keyword in error_msg for keyword in ['out of bounds', 'timestamp', 'overflow', 'datetime']):
-            return {'error': 'Error timestamp: Tanggal di luar batas yang diizinkan'}
-        else:
-            return {'error': f"Error evaluasi model: {str(e)}"}
+        # Prediksi menggunakan model ML
+        y_pred = ml_model.predict(test_data[features])
+        y_true = test_data[target_column]
+    
+    else:  # Statsmodels model
+        # Prediksi menggunakan model statsmodels
+        y_pred = model.forecast(steps=len(test_data))
+        y_true = test_data[target_column]
+    
+    # Hitung metrik evaluasi
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    
+    # Kembalikan metrik evaluasi
+    return {
+        'MSE': mse,
+        'RMSE': rmse,
+        'MAE': mae,
+        'R2': r2
+    }
 
-def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8), frequency=None):
+def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8)):
+    """
+    Membuat plot hasil forecasting
+    
+    Parameters:
+    -----------
+    train_data : pandas.DataFrame
+        Data training
+    test_data : pandas.DataFrame
+        Data testing
+    forecast_data : pandas.DataFrame
+        Data hasil forecasting
+    target_column : str
+        Nama kolom target
+    date_column : str, optional
+        Nama kolom tanggal (jika tidak menggunakan index)
+    figsize : tuple, optional
+        Ukuran gambar
+        
+    Returns:
+    --------
+    matplotlib.figure.Figure
+        Figure yang berisi plot hasil forecasting
+    """
     fig, ax = plt.subplots(figsize=figsize)
     
-    # Handle data preparation
-    if date_column and date_column in train_data.columns:
+    # Plot data training
+    if date_column is not None and date_column in train_data.columns:
         train_data = train_data.set_index(date_column)
-    if date_column and date_column in test_data.columns:
+    
+    ax.plot(train_data.index, train_data[target_column], label='Data Training')
+    
+    # Plot data testing
+    if date_column is not None and date_column in test_data.columns:
         test_data = test_data.set_index(date_column)
     
-    # Plot data
-    ax.plot(train_data.index, train_data[target_column], label='Training', linewidth=2)
-    ax.plot(test_data.index, test_data[target_column], label='Testing', color='green', linewidth=2)
+    ax.plot(test_data.index, test_data[target_column], label='Data Testing', color='green')
     
-    # Plot forecast
+    # Plot hasil forecasting
     if 'ds' in forecast_data.columns and 'yhat' in forecast_data.columns:
-        ax.plot(forecast_data['ds'], forecast_data['yhat'], label='Forecast', color='red', linewidth=2, linestyle='--')
+        # Format dari forecast_future untuk model statsmodels
+        ax.plot(forecast_data['ds'], forecast_data['yhat'], label='Forecast', color='red')
     elif date_column in forecast_data.columns and f'predicted_{target_column}' in forecast_data.columns:
-        ax.plot(forecast_data[date_column], forecast_data[f'predicted_{target_column}'], 
-               label='Forecast', color='red', linewidth=2, linestyle='--')
+        # Format dari forecast_future untuk model ML
+        ax.plot(forecast_data[date_column], forecast_data[f'predicted_{target_column}'], label='Forecast', color='red')
     
-    # Format based on frequency
-    if frequency == 'D':
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.xticks(rotation=45)
-    elif frequency == 'M':
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-        plt.xticks(rotation=45)
-    elif frequency == 'Y':
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    
-    ax.set_title(f'Forecasting Results ({frequency or "Auto"})')
-    ax.set_xlabel('Date')
+    ax.set_title('Hasil Forecasting')
+    ax.set_xlabel('Tanggal')
     ax.set_ylabel(target_column)
     ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax.grid(True)
     
     plt.tight_layout()
     return fig
