@@ -3029,9 +3029,9 @@ with tab4:
                 freq_info = get_frequency_info(detected_freq)
                 
                 if st.session_state.language == 'id':
-                    freq_display = f"Frekuensi terdeteksi: {freq_info['description']} ({detected_freq})"
+                    freq_display = f"Frekuensi terdeteksi: {freq_info['name']} ({detected_freq})"
                 else:
-                    freq_display = f"Detected frequency: {freq_info['description']} ({detected_freq})"
+                    freq_display = f"Detected frequency: {freq_info['name']} ({detected_freq})"
                 
                 st.info(freq_display)
                 
