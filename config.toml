@@ -1,2 +1,6 @@
+<<<<<<< HEAD
 [server]
+=======
+[server]
+>>>>>>> 82a9a7837d554aa663a3debb5b0cd475375882e8
 maxUploadSize = 2048
