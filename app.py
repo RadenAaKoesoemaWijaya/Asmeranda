@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, StratifiedKFold, LeaveOneOut, LeavePOut, KFold
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, cross_val_score, StratifiedKFold, LeaveOneOut, LeavePOut, KFold
 from sklearn.preprocessing import StandardScaler, LabelEncoder, PolynomialFeatures, RobustScaler, MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, GradientBoostingClassifier, BaggingRegressor, VotingRegressor, StackingRegressor
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -48,6 +48,12 @@ try:
     IMB_AVAILABLE = True
 except ImportError:
     IMB_AVAILABLE = False
+
+try:
+    import optuna
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    OPTUNA_AVAILABLE = False
 
 # Initialize translation
 TRANSLATIONS = {
@@ -152,6 +158,105 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 def adjusted_r2_score(r2, n, k):
     """Hitung Adjusted R².""" if st.session_state.language == 'id' else """Calculate Adjusted R²."""
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
+
+def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
+    """Membuat study Optuna untuk Bayesian Optimization""" if st.session_state.language == 'id' else """Create Optuna study for Bayesian Optimization"""
+    direction = "maximize" if problem_type == "Classification" else "maximize"
+    
+    def objective(trial):
+        if problem_type == "Classification":
+            if model_type == "Random Forest":
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'max_depth': trial.suggest_int('max_depth', 3, 20),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
+                    'random_state': 42
+                }
+                model = RandomForestClassifier(**params)
+            elif model_type == "Logistic Regression":
+                params = {
+                    'C': trial.suggest_float('C', 0.01, 10.0, log=True),
+                    'max_iter': trial.suggest_int('max_iter', 100, 1000),
+                    'random_state': 42
+                }
+                model = LogisticRegression(**params)
+            elif model_type == "SVM":
+                params = {
+                    'C': trial.suggest_float('C', 0.1, 10.0, log=True),
+                    'kernel': trial.suggest_categorical('kernel', ['linear', 'rbf', 'poly']),
+                    'gamma': trial.suggest_categorical('gamma', ['scale', 'auto']),
+                    'random_state': 42
+                }
+                model = SVC(**params)
+            elif model_type == "KNN":
+                params = {
+                    'n_neighbors': trial.suggest_int('n_neighbors', 1, 20),
+                    'weights': trial.suggest_categorical('weights', ['uniform', 'distance']),
+                    'algorithm': trial.suggest_categorical('algorithm', ['auto', 'ball_tree', 'kd_tree']),
+                    'p': trial.suggest_int('p', 1, 2)
+                }
+                model = KNeighborsClassifier(**params)
+            elif model_type == "Decision Tree":
+                params = {
+                    'max_depth': trial.suggest_int('max_depth', 3, 20),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
+                    'criterion': trial.suggest_categorical('criterion', ['gini', 'entropy']),
+                    'random_state': 42
+                }
+                model = DecisionTreeClassifier(**params)
+            elif model_type == "Gradient Boosting":
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                    'random_state': 42
+                }
+                model = GradientBoostingClassifier(**params)
+            else:
+                return 0
+                
+            score = cross_val_score(model, X_train, y_train, cv=cv_params['cv'], scoring='accuracy').mean()
+            return score
+            
+        else:  # Regression
+            if model_type == "Random Forest":
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'max_depth': trial.suggest_int('max_depth', 3, 20),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
+                    'random_state': 42
+                }
+                model = RandomForestRegressor(**params)
+            elif model_type == "Linear Regression":
+                return 0  # Linear regression has no hyperparameters
+            elif model_type == "Gradient Boosting":
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                    'random_state': 42
+                }
+                model = GradientBoostingRegressor(**params)
+            elif model_type == "SVR":
+                params = {
+                    'C': trial.suggest_float('C', 0.1, 10.0, log=True),
+                    'kernel': trial.suggest_categorical('kernel', ['linear', 'rbf', 'poly']),
+                    'gamma': trial.suggest_categorical('gamma', ['scale', 'auto']),
+                    'epsilon': trial.suggest_float('epsilon', 0.01, 1.0)
+                }
+                model = SVR(**params)
+            else:
+                return 0
+                
+            score = cross_val_score(model, X_train, y_train, cv=cv_params['cv'], scoring='r2').mean()
+            return score
+    
+    return objective
 
 def calculate_vif(X):
     """Hitung Variance Inflation Factor (VIF) untuk setiap fitur. """ if st.session_state.language == 'id' else """Calculate VIF for each feature."""
@@ -1512,11 +1617,15 @@ with tab3:
         st.markdown("---")
         st.subheader("📊 Ringkasan Penanganan Nilai Hilang" if st.session_state.language == 'id' else "📊 Missing Value Handling Summary")
         
+        # Create missing summary with proper Series alignment
+        original_missing = pd.Series(st.session_state.get('original_missing_counts', {}))
+        missing_after = data.isnull().sum()
+        
         missing_summary = pd.DataFrame({
             'Column': data.columns,
-            'Missing_Before': st.session_state.get('original_missing_counts', {}),
-            'Missing_After': data.isnull().sum(),
-            'Percentage_Imputed': [(st.session_state.get('original_missing_counts', {}).get(col, 0) - data[col].isnull().sum()) / len(data) * 100 for col in data.columns]
+            'Missing_Before': [original_missing.get(col, 0) for col in data.columns],
+            'Missing_After': missing_after.values,
+            'Percentage_Imputed': [(original_missing.get(col, 0) - missing_after[col]) / len(data) * 100 for col in data.columns]
         })
         
         missing_summary = missing_summary[missing_summary['Missing_Before'] > 0]
@@ -1948,6 +2057,7 @@ with tab3:
             "Metode seleksi fitur:" if st.session_state.language == 'id' else "Feature selection method:",
             [
                 "Manual",
+                "SelectKBest (Statistical)",
                 "Mutual Information", 
                 "Pearson Correlation",
                 "Recursive Feature Elimination (RFE)",
@@ -2037,6 +2147,122 @@ with tab3:
                 all_columns,
                 default=all_columns
             )
+
+        elif feature_selection_method == "SelectKBest (Statistical)":
+            st.subheader("SelectKBest Feature Selection" if st.session_state.language == 'id' else "SelectKBest Feature Selection")
+            st.info("Menggunakan SelectKBest untuk seleksi fitur berdasarkan uji statistik" if st.session_state.language == 'id' else "Using SelectKBest for feature selection based on statistical tests")
+            
+            # Choose scoring function based on problem type
+            if problem_type == "Regression":
+                score_options = {
+                    "f_regression": f_regression,
+                    "mutual_info_regression": mutual_info_regression
+                }
+                score_func_name = st.selectbox(
+                    "Fungsi skor untuk regresi:" if st.session_state.language == 'id' else "Scoring function for regression:",
+                    list(score_options.keys()),
+                    index=0
+                )
+                score_func = score_options[score_func_name]
+            else:  # Classification
+                score_options = {
+                    "f_classif": f_classif,
+                    "mutual_info_classif": mutual_info_classif
+                }
+                score_func_name = st.selectbox(
+                    "Fungsi skor untuk klasifikasi:" if st.session_state.language == 'id' else "Scoring function for classification:",
+                    list(score_options.keys()),
+                    index=0
+                )
+                score_func = score_options[score_func_name]
+            
+            # Choose number of features
+            max_features = len(all_columns)
+            default_k = min(10, max_features)
+            
+            k_features = st.number_input(
+                "Jumlah fitur terbaik yang ingin dipilih:" if st.session_state.language == 'id' else "Number of best features to select:",
+                min_value=1,
+                max_value=max_features,
+                value=default_k,
+                step=1
+            )
+            
+            if st.button("Jalankan SelectKBest" if st.session_state.language == 'id' else "Run SelectKBest"):
+                try:
+                    # Initialize SelectKBest
+                    selector = SelectKBest(score_func=score_func, k=k_features)
+                    
+                    # Fit and transform the training data
+                    X_train_selected = selector.fit_transform(X_train_for_selection, y_train_for_selection)
+                    
+                    # Get selected feature names
+                    selected_mask = selector.get_support()
+                    selected_features = [all_columns[i] for i, selected in enumerate(selected_mask) if selected]
+                    
+                    # Get feature scores
+                    feature_scores = pd.DataFrame({
+                        'Feature': all_columns,
+                        'Score': selector.scores_,
+                        'Selected': selected_mask
+                    }).sort_values('Score', ascending=False)
+                    
+                    # Display results
+                    st.success("SelectKBest selesai!" if st.session_state.language == 'id' else "SelectKBest completed!")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Jumlah fitur terpilih" if st.session_state.language == 'id' else "Selected features count", 
+                                len(selected_features))
+                        st.metric("Total fitur" if st.session_state.language == 'id' else "Total features", 
+                                len(all_columns))
+                    
+                    with col2:
+                        st.metric("Persentase fitur terpilih" if st.session_state.language == 'id' else "Feature selection ratio", 
+                                f"{len(selected_features)/len(all_columns)*100:.1f}%")
+                    
+                    # Display selected features
+                    st.write("**Fitur yang dipilih:**" if st.session_state.language == 'id' else "**Selected features:**")
+                    st.write(selected_features)
+                    
+                    # Display feature scores
+                    st.write("**Skor fitur:**" if st.session_state.language == 'id' else "**Feature scores:**")
+                    st.dataframe(feature_scores[['Feature', 'Score', 'Selected']])
+                    
+                    # Visualize feature scores
+                    if len(all_columns) > 1:
+                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                        
+                        # Top features bar plot
+                        top_features = feature_scores.head(min(15, len(feature_scores)))
+                        ax1.barh(top_features['Feature'], top_features['Score'])
+                        ax1.set_xlabel('Score' if st.session_state.language == 'id' else 'Score')
+                        ax1.set_title('Top 15 Fitur Berdasarkan Skor' if st.session_state.language == 'id' else 'Top 15 Features by Score')
+                        ax1.invert_yaxis()
+                        
+                        # Selected vs not selected
+                        selection_counts = feature_scores['Selected'].value_counts()
+                        labels = ['Terpilih' if st.session_state.language == 'id' else 'Selected', 
+                                'Tidak Terpilih' if st.session_state.language == 'id' else 'Not Selected']
+                        colors = ['green', 'red']
+                        ax2.pie(selection_counts.values, labels=labels, colors=colors, autopct='%1.1f%%')
+                        ax2.set_title('Distribusi Seleksi Fitur' if st.session_state.language == 'id' else 'Feature Selection Distribution')
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        
+                        # Download feature selection results
+                        csv = feature_scores.to_csv(index=False)
+                        st.download_button(
+                            label="Unduh hasil seleksi fitur (CSV)" if st.session_state.language == 'id' else "Download feature selection results (CSV)",
+                            data=csv,
+                            file_name="selectkbest_results.csv",
+                            mime="text/csv"
+                        )
+                        
+                except Exception as e:
+                    st.error(f"Error saat menjalankan SelectKBest: {str(e)}" if st.session_state.language == 'id' else 
+                            f"Error running SelectKBest: {str(e)}")
         
         elif feature_selection_method == "Genetic Algorithm (PyGAD)":
             st.subheader("Genetic Algorithm Feature Selection (PyGAD)" if st.session_state.language == 'id' else "Genetic Algorithm Feature Selection (PyGAD)")
@@ -3680,8 +3906,11 @@ with tab4:
             
             st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
-            # Tambahkan opsi untuk menggunakan GridSearchCV
-            use_grid_search = st.checkbox("Gunakan GridSearchCV untuk hyperparameter tuning" if st.session_state.language == 'id' else "Use GridSearchCV for hyperparameter tuning", value=False)
+            # Opsi untuk hyperparameter optimization
+            optimization_method = st.selectbox(
+                "Metode Hyperparameter Optimization:" if st.session_state.language == 'id' else "Hyperparameter Optimization Method:",
+                ["None", "GridSearchCV", "RandomizedSearchCV", "Bayesian Optimization (Optuna)"]
+            )
             
             # Model selection
             if problem_type == "Classification":
@@ -3697,7 +3926,7 @@ with tab4:
                     
                     base_model = RandomForestClassifier(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'max_depth': [5, 10, 15] if max_depth == 10 else [max(1, max_depth-5), max_depth, min(50, max_depth+5)],
@@ -3706,6 +3935,22 @@ with tab4:
                         }
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_estimators': list(range(50, 301, 25)),
+                            'max_depth': list(range(3, 21)) + [None],
+                            'min_samples_split': [2, 5, 10, 15, 20],
+                            'min_samples_leaf': [1, 2, 4, 8, 16],
+                            'max_features': ['sqrt', 'log2', None]
+                        }
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=50, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=50, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = RandomForestClassifier(**best_params, random_state=42)
                     else:
                         model = RandomForestClassifier(
                             n_estimators=n_estimators,
@@ -3719,7 +3964,7 @@ with tab4:
                     
                     base_model = LogisticRegression(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'C': [0.1, 1.0, 10.0] if C == 1.0 else [max(0.01, C/2), C, min(10.0, C*2)],
                             'solver': ['liblinear', 'lbfgs', 'saga'],
@@ -3727,6 +3972,21 @@ with tab4:
                         }
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+                            'solver': ['liblinear', 'lbfgs', 'saga'],
+                            'max_iter': [100, 500, 1000],
+                            'penalty': ['l1', 'l2', 'elasticnet']
+                        }
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "Logistic Regression", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = LogisticRegression(**best_params, random_state=42)
                     else:
                         model = LogisticRegression(
                             C=C,
@@ -3741,7 +4001,7 @@ with tab4:
                     
                     base_model = SVC(probability=True, random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'C': [0.1, 1.0, 10.0] if C == 1.0 else [max(0.1, C/2), C, min(10.0, C*2)],
                             'kernel': [kernel] if kernel != "rbf" else ['linear', 'rbf'],
@@ -3749,6 +4009,21 @@ with tab4:
                         }
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'C': [0.01, 0.1, 1, 10, 100],
+                            'kernel': ['linear', 'rbf', 'poly', 'sigmoid'],
+                            'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
+                            'degree': [2, 3, 4, 5]  # untuk kernel poly
+                        }
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "SVM", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = SVC(**best_params, probability=True, random_state=42)
                     else:
                         model = SVC(
                             C=C,
@@ -3765,7 +4040,7 @@ with tab4:
                     
                     base_model = KNeighborsClassifier()
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_neighbors': [3, 5, 7] if n_neighbors == 5 else [max(1, n_neighbors-2), n_neighbors, min(20, n_neighbors+2)],
                             'weights': ['uniform', 'distance'],
@@ -3773,6 +4048,20 @@ with tab4:
                             'p': [1, 2]  # Manhattan or Euclidean distance
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_neighbors': list(range(3, 21)),
+                            'weights': ['uniform', 'distance'],
+                            'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                            'p': [1, 2, 3, 4, 5]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=20, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = KNeighborsClassifier(**best_params)
                     else:
                         model = KNeighborsClassifier(
                             n_neighbors=n_neighbors,
@@ -3787,7 +4076,7 @@ with tab4:
                     
                     base_model = DecisionTreeClassifier(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'max_depth': [5, 10, 15] if max_depth == 10 else [max(1, max_depth-5), max_depth, min(50, max_depth+5)],
                             'min_samples_split': [2, 5, 10],
@@ -3795,6 +4084,20 @@ with tab4:
                             'criterion': ['gini', 'entropy']
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'max_depth': list(range(1, 21)) + [None],
+                            'min_samples_split': [2, 5, 10, 15, 20, 25, 30],
+                            'min_samples_leaf': [1, 2, 4, 8, 16, 32],
+                            'criterion': ['gini', 'entropy', 'log_loss']
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "Decision Tree", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = DecisionTreeClassifier(**best_params, random_state=42)
                     else:
                         model = DecisionTreeClassifier(
                             max_depth=max_depth,
@@ -3808,11 +4111,22 @@ with tab4:
                     
                     base_model = GaussianNB()
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'var_smoothing': [1e-10, 1e-9, 1e-8]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'var_smoothing': [1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=10, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "Naive Bayes", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=10, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = GaussianNB(**best_params)
                     else:
                         model = GaussianNB(
                             var_smoothing=var_smoothing
@@ -3825,7 +4139,7 @@ with tab4:
                     
                     base_model = GradientBoostingClassifier(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'learning_rate': [0.01, 0.1, 0.2] if learning_rate == 0.1 else [max(0.01, learning_rate/2), learning_rate, min(0.3, learning_rate*2)],
@@ -3833,6 +4147,22 @@ with tab4:
                             'subsample': [0.8, 0.9, 1.0]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_estimators': list(range(50, 301, 25)),
+                            'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3],
+                            'max_depth': list(range(3, 16)),
+                            'subsample': [0.6, 0.7, 0.8, 0.9, 1.0],
+                            'min_samples_split': [2, 5, 10, 15, 20],
+                            'min_samples_leaf': [1, 2, 4, 8, 16]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=40, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=40, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = GradientBoostingClassifier(**best_params, random_state=42)
                     else:
                         model = GradientBoostingClassifier(
                             n_estimators=n_estimators,
@@ -3956,7 +4286,7 @@ with tab4:
                     
                     base_model = MLPClassifier()
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'hidden_layer_sizes': [
                                 (50,), (100,), (200,),
@@ -3970,10 +4300,26 @@ with tab4:
                             'max_iter': [200, 500, 1000]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'hidden_layer_sizes': [(50,), (100,), (150,), (200,), (100,50), (150,100), (200,100), (100,50,25), (200,100,50)],
+                            'activation': ['relu', 'tanh', 'logistic', 'identity'],
+                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'alpha': [0.00001, 0.0001, 0.001, 0.01, 0.1],
+                            'learning_rate_init': [0.0001, 0.001, 0.01, 0.1],
+                            'max_iter': [200, 500, 1000, 1500]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = MLPClassifier(**best_params)
                     else:
                         model = MLPClassifier(**mlp_params)
                                            
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'hidden_layer_sizes': [(100,), (100,50), (50,50,50)],
                             'activation': ['relu', 'tanh', 'logistic'],
@@ -3982,6 +4328,22 @@ with tab4:
                             'max_iter': [200, 500, 1000]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'hidden_layer_sizes': [(50,), (100,), (150,), (200,), (100,50), (50,50,50), (100,100), (100,50,25)],
+                            'activation': ['relu', 'tanh', 'logistic'],
+                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'alpha': [0.0001, 0.001, 0.01, 0.1],
+                            'max_iter': [200, 500, 1000, 1500],
+                            'learning_rate_init': [0.001, 0.01, 0.1]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Classification", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = MLPClassifier(**best_params)
 
             else:  # Regression
                 # Regular regression models (non-time series)
@@ -3994,7 +4356,7 @@ with tab4:
                     
                     base_model = RandomForestRegressor(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'max_depth': [5, 10, 15] if max_depth == 10 else [max(1, max_depth-5), max_depth, min(50, max_depth+5)],
@@ -4003,6 +4365,22 @@ with tab4:
                         }
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_estimators': list(range(50, 301, 25)),
+                            'max_depth': list(range(3, 21)) + [None],
+                            'min_samples_split': [2, 5, 10, 15, 20],
+                            'min_samples_leaf': [1, 2, 4, 8, 16],
+                            'max_features': ['sqrt', 'log2', None]
+                        }
+                        cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
+                        model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='r2', n_jobs=-1, n_iter=50, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=50, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = RandomForestRegressor(**best_params, random_state=42)
                     else:
                         model = RandomForestRegressor(
                             n_estimators=n_estimators,
@@ -4017,7 +4395,7 @@ with tab4:
                     
                     base_model = GradientBoostingRegressor(random_state=42)
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_estimators': [50, 100, 200] if n_estimators == 100 else [max(10, n_estimators-50), n_estimators, min(500, n_estimators+50)],
                             'learning_rate': [0.01, 0.1, 0.2] if learning_rate == 0.1 else [max(0.01, learning_rate/2), learning_rate, min(0.3, learning_rate*2)],
@@ -4025,6 +4403,22 @@ with tab4:
                             'subsample': [0.8, 0.9, 1.0]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_estimators': list(range(50, 301, 25)),
+                            'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3],
+                            'max_depth': list(range(2, 16)),
+                            'subsample': [0.6, 0.7, 0.8, 0.9, 1.0],
+                            'min_samples_split': [2, 5, 10, 15, 20],
+                            'min_samples_leaf': [1, 2, 4, 8, 16]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=40, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=40, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = GradientBoostingRegressor(**best_params, random_state=42)
                     else:
                         model = GradientBoostingRegressor(
                             n_estimators=n_estimators,
@@ -4038,12 +4432,23 @@ with tab4:
                     
                     base_model = LinearRegression()
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'fit_intercept': [True, False]
                             # 'normalize' parameter removed to avoid error
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'fit_intercept': [True, False]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=5, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "Linear Regression", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=5, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = LinearRegression(**best_params)
                     else:
                         model = LinearRegression(
                             fit_intercept=fit_intercept
@@ -4057,7 +4462,7 @@ with tab4:
 
                     base_model = SVR()
 
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'C': [0.1, 1.0, 10.0] if C == 1.0 else [max(0.1, C/2), C, min(10.0, C*2)],
                             'kernel': [kernel] if kernel != "rbf" else ['linear', 'rbf'],
@@ -4065,6 +4470,21 @@ with tab4:
                             'epsilon': [epsilon]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'C': [0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0],
+                            'kernel': ['linear', 'rbf', 'poly', 'sigmoid'],
+                            'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1.0],
+                            'epsilon': [0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0],
+                            'degree': [2, 3, 4, 5]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=25, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "SVR", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=25, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = SVR(**best_params)
                     else:
                         model = SVR(
                             C=C,
@@ -4121,7 +4541,7 @@ with tab4:
                     weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
                     algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
                     base_model = KNeighborsRegressor()
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_neighbors': [3, 5, 7] if n_neighbors == 5 else [max(1, n_neighbors-2), n_neighbors, min(20, n_neighbors+2)],
                             'weights': ['uniform', 'distance'],
@@ -4129,6 +4549,21 @@ with tab4:
                             'p': [1, 2]  # Manhattan or Euclidean distance
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'n_neighbors': list(range(1, 31)),
+                            'weights': ['uniform', 'distance'],
+                            'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                            'p': [1, 2, 3],  # Manhattan, Euclidean, or Minkowski distance
+                            'leaf_size': list(range(10, 51, 5))
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=20, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        model = KNeighborsRegressor(**best_params)
                     else:
                         model = KNeighborsRegressor(
                             n_neighbors=n_neighbors,
@@ -4251,7 +4686,7 @@ with tab4:
                     
                     base_model = MLPRegressor()
                     
-                    if use_grid_search:
+                    if optimization_method == "GridSearchCV":
                         param_grid = {
                             'hidden_layer_sizes': [
                                 (50,), (100,), (200,),
@@ -4265,6 +4700,29 @@ with tab4:
                             'max_iter': [200, 500, 1000]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
+                    elif optimization_method == "RandomizedSearchCV":
+                        param_dist = {
+                            'hidden_layer_sizes': [
+                                (50,), (100,), (150,), (200,), (250,),
+                                (50, 50), (100, 50), (100, 100), (150, 100),
+                                (100, 50, 25), (150, 100, 50)
+                            ],
+                            'activation': ['relu', 'tanh', 'logistic', 'identity'],
+                            'solver': ['adam', 'sgd', 'lbfgs'],
+                            'alpha': [0.00001, 0.0001, 0.001, 0.01, 0.1],
+                            'learning_rate_init': [0.0001, 0.001, 0.01, 0.1],
+                            'max_iter': [200, 500, 1000, 1500]
+                        }
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=20, random_state=42)
+                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
+                        objective = create_optuna_study("Regression", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
+                        best_params = study.best_params
+                        # Convert hidden_layer_sizes back to tuple
+                        if 'hidden_layer_sizes' in best_params:
+                            best_params['hidden_layer_sizes'] = tuple(best_params['hidden_layer_sizes'])
+                        model = MLPRegressor(**best_params)
                     else:
                         model = MLPRegressor(**mlp_params)
                 else:
@@ -4292,9 +4750,9 @@ with tab4:
                         except Exception as e:
                             st.error(f"Model error: {str(e)}. Silakan latih ulang model." if st.session_state.language == 'id' else f"Model error: {str(e)}. Please retrain the model.")
 
-                        # Jika menggunakan GridSearchCV, tampilkan parameter terbaik
-                        if use_grid_search and hasattr(model, "best_params_"):
-                            st.success(f"Pelatihan model selesai dalam {training_time:.2f} detik dengan GridSearchCV. Parameter terbaik: {model.best_params_}" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds with GridSearchCV!")
+                        # Jika menggunakan optimasi hyperparameter, tampilkan parameter terbaik
+                        if optimization_method != "None" and hasattr(model, "best_params_"):
+                            st.success(f"Pelatihan model selesai dalam {training_time:.2f} detik dengan {optimization_method}. Parameter terbaik: {model.best_params_}" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds with {optimization_method}!")
                             st.subheader("Parameter Terbaik" if st.session_state.language == 'id' else "Best Parameters:")
                             st.write(model.best_params_)
                             st.write(f"Skor terbaik (CV): {model.best_score_:.4f}" if st.session_state.language == 'id' else f"Best Score (CV): {model.best_score_:.4f}")
@@ -4313,8 +4771,8 @@ with tab4:
                             
                             with st.spinner("Menghitung cross-validation..." if st.session_state.language == 'id' else "Calculating cross-validation..."):
                                 try:
-                                    # Get the actual model (best estimator if GridSearchCV)
-                                    eval_model = model.best_estimator_ if use_grid_search else model
+                                    # Get the actual model (best estimator if using optimization)
+                                    eval_model = model.best_estimator_ if optimization_method != "None" else model
                                     
                                     # Perform cross-validation
                                     cv_scores = cross_val_score(
