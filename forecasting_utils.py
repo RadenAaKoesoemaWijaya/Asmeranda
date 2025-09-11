@@ -5,12 +5,24 @@ import seaborn as sns
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.holtwinters import ExponentialSmoothing as HWES
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import math
 import warnings
 warnings.filterwarnings('ignore')
+
+# Import untuk LSTM
+try:
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.optimizers import Adam
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("TensorFlow tidak tersedia. LSTM tidak dapat digunakan.")
 
 # Import fungsi-fungsi dari utils.py
 from utils import (
@@ -289,7 +301,7 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
     order : tuple, optional
         Order ARIMA (p,d,q)
     seasonal_order : tuple, optional
-        Order musiman SARIMA (P,D,Q,s)
+        Order SARIMA (P,D,Q,s)
         
     Returns:
     --------
@@ -303,8 +315,8 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
     if len(data) == 0:
         raise ValueError("Tidak ada data yang valid untuk training model SARIMA")
     
-    if len(data) < 5:
-        raise ValueError(f"Data terlalu sedikit untuk training model SARIMA. Minimal 5 data, tersedia: {len(data)}")
+    if len(data) < 10:
+        raise ValueError(f"Data terlalu sedikit untuk training model SARIMA. Minimal 10 data, tersedia: {len(data)}")
     
     # Validasi apakah kolom target memiliki nilai yang valid
     if data[target_column].isnull().all():
@@ -312,11 +324,213 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
     
     # Latih model SARIMA
     try:
-        model = SARIMAX(data[target_column], order=order, seasonal_order=seasonal_order)
+        model = SARIMAX(
+            data[target_column],
+            order=order,
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False
+        )
         model_fit = model.fit(disp=False)
         return model_fit
     except Exception as e:
         raise ValueError(f"Gagal melatih model SARIMA: {str(e)}")
+
+def train_sarimax_model(data, target_column, exog_columns=None, order=(1,1,1), seasonal_order=(1,1,1,12)):
+    """
+    Melatih model SARIMAX dengan variabel eksternal
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        DataFrame dengan index tanggal/waktu dan kolom target
+    target_column : str
+        Nama kolom target yang akan diprediksi
+    exog_columns : list, optional
+        Daftar kolom eksternal yang akan digunakan
+    order : tuple, optional
+        Order ARIMA (p,d,q)
+    seasonal_order : tuple, optional
+        Order SARIMA (P,D,Q,s)
+        
+    Returns:
+    --------
+    model : statsmodels.tsa.statespace.sarimax.SARIMAXResults
+        Model SARIMAX yang telah dilatih
+    """
+    # Pastikan data tidak memiliki nilai yang hilang
+    data = data.dropna()
+    
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model SARIMAX")
+    
+    if len(data) < 10:
+        raise ValueError(f"Data terlalu sedikit untuk training model SARIMAX. Minimal 10 data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
+    # Validasi kolom eksternal
+    if exog_columns is None:
+        exog_columns = []
+    
+    for col in exog_columns:
+        if col not in data.columns:
+            raise ValueError(f"Kolom eksternal '{col}' tidak ditemukan dalam data")
+    
+    # Latih model SARIMAX
+    try:
+        if exog_columns:
+            exog_data = data[exog_columns]
+        else:
+            exog_data = None
+            
+        model = SARIMAX(
+            data[target_column],
+            exog=exog_data,
+            order=order,
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False
+        )
+        model_fit = model.fit(disp=False)
+        return model_fit
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model SARIMAX: {str(e)}")
+
+def train_holt_winters(data, target_column, trend='add', seasonal='add', seasonal_periods=12):
+    """
+    Melatih model Holt-Winters Exponential Smoothing
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        DataFrame dengan index tanggal/waktu dan kolom target
+    target_column : str
+        Nama kolom target yang akan diprediksi
+    trend : str, optional
+        Tipe trend ('add', 'mul')
+    seasonal : str, optional
+        Tipe seasonal ('add', 'mul')
+    seasonal_periods : int, optional
+        Jumlah periode dalam satu siklus musiman
+        
+    Returns:
+    --------
+    model : statsmodels.tsa.holtwinters.ExponentialSmoothingResults
+        Model Holt-Winters yang telah dilatih
+    """
+    # Pastikan data tidak memiliki nilai yang hilang
+    data = data.dropna()
+    
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model Holt-Winters")
+    
+    if len(data) < 2 * seasonal_periods:
+        raise ValueError(f"Data terlalu sedikit untuk training model Holt-Winters. Minimal {2 * seasonal_periods} data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
+    # Latih model Holt-Winters
+    try:
+        model = HWES(
+            data[target_column],
+            trend=trend,
+            seasonal=seasonal,
+            seasonal_periods=seasonal_periods
+        )
+        model_fit = model.fit()
+        return model_fit
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model Holt-Winters: {str(e)}")
+
+def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=32):
+    """
+    Melatih model LSTM untuk forecasting time series
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        DataFrame dengan index tanggal/waktu dan kolom target
+    target_column : str
+        Nama kolom target yang akan diprediksi
+    look_back : int, optional
+        Jumlah time steps untuk look back window
+    epochs : int, optional
+        Jumlah epochs untuk training
+    batch_size : int, optional
+        Batch size untuk training
+        
+    Returns:
+    --------
+    model : dict
+        Dictionary berisi model LSTM, scaler, dan parameter
+    """
+    if not TENSORFLOW_AVAILABLE:
+        raise ValueError("TensorFlow tidak tersedia. Silakan install TensorFlow terlebih dahulu.")
+    
+    # Pastikan data tidak memiliki nilai yang hilang
+    data = data.dropna()
+    
+    # Validasi apakah ada data yang cukup untuk training
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model LSTM")
+    
+    if len(data) < look_back + 10:
+        raise ValueError(f"Data terlalu sedikit untuk training model LSTM. Minimal {look_back + 10} data, tersedia: {len(data)}")
+    
+    # Validasi apakah kolom target memiliki nilai yang valid
+    if data[target_column].isnull().all():
+        raise ValueError(f"Kolom target '{target_column}' tidak memiliki nilai yang valid")
+    
+    try:
+        # Normalisasi data
+        scaler = StandardScaler()
+        scaled_data = scaler.fit_transform(data[[target_column]])
+        
+        # Buat sequences untuk LSTM
+        X, y = [], []
+        for i in range(look_back, len(scaled_data)):
+            X.append(scaled_data[i-look_back:i, 0])
+            y.append(scaled_data[i, 0])
+        
+        X, y = np.array(X), np.array(y)
+        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+        
+        # Split data
+        split_index = int(0.8 * len(X))
+        X_train, X_test = X[:split_index], X[split_index:]
+        y_train, y_test = y[:split_index], y[split_index:]
+        
+        # Buat model LSTM
+        model = Sequential()
+        model.add(LSTM(50, return_sequences=True, input_shape=(look_back, 1)))
+        model.add(Dropout(0.2))
+        model.add(LSTM(50, return_sequences=False))
+        model.add(Dropout(0.2))
+        model.add(Dense(1))
+        
+        model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
+        
+        # Training model
+        model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, 
+                  validation_data=(X_test, y_test), verbose=0)
+        
+        return {
+            'model': model,
+            'scaler': scaler,
+            'X_test': X_test,
+            'y_test': y_test,
+            'look_back': look_back
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Gagal melatih model LSTM: {str(e)}")
 
 def train_exponential_smoothing(data, target_column, trend=None, seasonal=None, seasonal_periods=None):
     """
@@ -578,57 +792,155 @@ def forecast_future(model_info, periods=10, freq='D'):
             'yhat': forecast
         })
 
-def evaluate_forecast_model(model, test_data, target_column):
+def evaluate_forecast_model(model, test_data, target_column, date_column=None):
     """
     Mengevaluasi model forecasting menggunakan data test
     
     Parameters:
     -----------
-    model : statsmodels model atau dict
-        Model yang telah dilatih
+    model : dict atau statsmodels model
+        Model yang telah dilatih atau dictionary dengan informasi model ML
     test_data : pandas.DataFrame
-        Data test untuk evaluasi
+        DataFrame dengan data test
     target_column : str
         Nama kolom target
+    date_column : str, optional
+        Nama kolom tanggal (untuk model ML)
         
     Returns:
     --------
     dict
-        Dictionary berisi metrik evaluasi
+        Dictionary dengan metrik evaluasi (MSE, RMSE, MAE, R2)
     """
-    # Cek tipe model
-    if isinstance(model, dict) and 'model_type' in model:  # ML model
-        # Ambil informasi dari model
-        ml_model = model['model']
-        features = model['features']
+    try:
+        # Cek tipe model
+        if isinstance(model, dict):
+            if 'model_type' in model:  # ML model
+                # Untuk model ML
+                model_info = model
+                features = model_info['features']
+                date_column = model_info['date_column']
+                target_column = model_info['target_column']
+                
+                # Pastikan kolom tanggal adalah datetime
+                test_data[date_column] = pd.to_datetime(test_data[date_column])
+                
+                # Buat fitur dari tanggal
+                test_data = create_features_from_date(test_data, date_column)
+                
+                # Buat fitur lag dan rolling
+                test_data = create_lag_features(test_data, target_column)
+                test_data = create_rolling_features(test_data, target_column)
+                test_data = test_data.dropna()
+                
+                # Prediksi menggunakan model ML
+                predictions = model_info['model'].predict(test_data[features])
+                actual = test_data[target_column]
+                
+            elif 'model' in model and 'scaler' in model:  # LSTM model
+                # Untuk model LSTM
+                lstm_model = model['model']
+                scaler = model['scaler']
+                X_test = model['X_test']
+                y_test = model['y_test']
+                
+                # Prediksi menggunakan model LSTM
+                predictions_scaled = lstm_model.predict(X_test, verbose=0)
+                predictions = scaler.inverse_transform(predictions_scaled.reshape(-1, 1)).flatten()
+                actual = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+                
+            else:  # Statsmodels model (ARIMA, SARIMA, Exponential Smoothing, etc.)
+                # Prediksi menggunakan model statsmodels
+                actual = test_data[target_column]
+                
+                # Validasi panjang data test
+                if len(test_data) == 0:
+                    raise ValueError("Data test kosong")
+                
+                # Prediksi untuk periode test
+                forecast = model.forecast(steps=len(test_data))
+                predictions = forecast
+                
+        else:  # Statsmodels model direct
+            # Prediksi menggunakan model statsmodels
+            actual = test_data[target_column]
+            
+            # Validasi panjang data test
+            if len(test_data) == 0:
+                raise ValueError("Data test kosong")
+            
+            # Prediksi untuk periode test
+            forecast = model.forecast(steps=len(test_data))
+            predictions = forecast
         
-        # Pastikan semua fitur ada di test_data
-        missing_features = [f for f in features if f not in test_data.columns]
-        if missing_features:
-            raise ValueError(f"Fitur berikut tidak ada di test_data: {missing_features}")
+        # Konversi ke numpy array untuk perhitungan
+        actual = np.array(actual).flatten()
+        predictions = np.array(predictions).flatten()
         
-        # Prediksi menggunakan model ML
-        y_pred = ml_model.predict(test_data[features])
-        y_true = test_data[target_column]
-    
-    else:  # Statsmodels model
-        # Prediksi menggunakan model statsmodels
-        y_pred = model.forecast(steps=len(test_data))
-        y_true = test_data[target_column]
-    
-    # Hitung metrik evaluasi
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-    
-    # Kembalikan metrik evaluasi
-    return {
-        'MSE': mse,
-        'RMSE': rmse,
-        'MAE': mae,
-        'R2': r2
-    }
+        # Validasi panjang data
+        if len(actual) != len(predictions):
+            # Potong sesuai panjang terpendek
+            min_len = min(len(actual), len(predictions))
+            actual = actual[:min_len]
+            predictions = predictions[:min_len]
+        
+        # Validasi data kosong
+        if len(actual) == 0 or len(predictions) == 0:
+            raise ValueError("Tidak ada data untuk evaluasi")
+        
+        # Hitung metrik evaluasi dengan penanganan error
+        try:
+            mse = mean_squared_error(actual, predictions)
+            rmse = np.sqrt(mse)
+            mae = mean_absolute_error(actual, predictions)
+            
+            # Hitung R2 dengan penanganan error
+            try:
+                r2 = r2_score(actual, predictions)
+            except Exception:
+                r2 = np.nan
+                
+            # Hitung MAPE (Mean Absolute Percentage Error)
+            try:
+                mape = np.mean(np.abs((actual - predictions) / actual)) * 100
+            except Exception:
+                mape = np.nan
+                
+            # Hitung SMAPE (Symmetric Mean Absolute Percentage Error)
+            try:
+                smape = np.mean(2 * np.abs(predictions - actual) / (np.abs(actual) + np.abs(predictions))) * 100
+            except Exception:
+                smape = np.nan
+                
+        except Exception as e:
+            raise ValueError(f"Gagal menghitung metrik evaluasi: {str(e)}")
+        
+        return {
+            'MSE': mse,
+            'RMSE': rmse,
+            'MAE': mae,
+            'R2': r2,
+            'MAPE': mape,
+            'SMAPE': smape,
+            'actual': actual,
+            'predictions': predictions,
+            'n_samples': len(actual)
+        }
+        
+    except Exception as e:
+        # Return error message in evaluation format
+        return {
+            'MSE': np.nan,
+            'RMSE': np.nan,
+            'MAE': np.nan,
+            'R2': np.nan,
+            'MAPE': np.nan,
+            'SMAPE': np.nan,
+            'actual': [],
+            'predictions': [],
+            'n_samples': 0,
+            'error': str(e)
+        }
 
 def plot_forecast_results(train_data, test_data, forecast_data, target_column, date_column=None, figsize=(15, 8)):
     """

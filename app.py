@@ -1417,13 +1417,19 @@ with tab3:
         st.session_state.target_column = target_column
         
         # Determine problem type
+        # Check if time series data is available
+        time_columns = [col for col in data.columns if any(keyword in str(col).lower() for keyword in ['date', 'time', 'tanggal', 'waktu', 'year', 'month', 'day'])]
+        
         if data[target_column].dtype in ['int64', 'float64']:
             if len(data[target_column].unique()) <= 10:
-                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", ["Classification", "Regression"], index=0)
+                problem_type_options = ["Classification", "Regression", "Forecasting"] if time_columns else ["Classification", "Regression"]
+                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", problem_type_options, index=0)
             else:
-                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", ["Classification", "Regression"], index=1)
+                problem_type_options = ["Classification", "Regression", "Forecasting"] if time_columns else ["Classification", "Regression"]
+                problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", problem_type_options, index=1)
         else:
-            problem_type = "Classification"
+            problem_type_options = ["Classification", "Forecasting"] if time_columns else ["Classification"]
+            problem_type = st.radio("Pilih jenis masalah:" if st.session_state.language == 'id' else "Select problem type:", problem_type_options, index=0)
         
         st.session_state.problem_type = problem_type
         
@@ -3419,7 +3425,8 @@ with tab4:
             
             # Select forecasting model
             model_type = st.selectbox("Pilih model forecasting:" if st.session_state.language == 'id' else "Select forecasting model:", 
-                                     ["ARIMA", "Exponential Smoothing", "Prophet", "Random Forest", "Gradient Boosting"])
+                                     ["ARIMA", "SARIMA", "Exponential Smoothing", "Prophet", "Random Forest", 
+                                      "Gradient Boosting", "Linear Regression", "SARIMAX", "Holt-Winters", "LSTM"])
             
             # Import required modules
             try:
@@ -3492,6 +3499,17 @@ with tab4:
                         
                         st.write(f"Data dibagi menjadi {len(train_data)} sampel training dan {len(test_data)} sampel testing" if st.session_state.language == 'id' else f"Data split into {len(train_data)} training samples and {len(test_data)} testing samples.")
                         
+                        # Import all required forecasting functions
+                        try:
+                            from forecasting_utils import (
+                                train_arima_model, train_exponential_smoothing, train_sarima_model,
+                                train_sarimax_model, train_holt_winters, train_lstm_model,
+                                train_ml_forecaster, forecast_future, evaluate_forecast_model, 
+                                plot_forecast_results
+                            )
+                        except ImportError as e:
+                            st.error(f"Error importing forecasting functions: {str(e)}")
+                        
                         # Train model based on selection
                         if model_type == "ARIMA" and STATSMODELS_AVAILABLE:
                             p = st.slider("Parameter p (AR):", 0, 5, 1)
@@ -3499,9 +3517,56 @@ with tab4:
                             q = st.slider("Parameter q (MA):", 0, 5, 1)
                             
                             with st.spinner("Melatih model ARIMA..." if st.session_state.language == 'id' else "Training ARIMA model..."):
-                                model = train_arima_model(train_data, target_column, order=(p, d, q))
-                                st.session_state.model = model
-                                st.success("Model ARIMA berhasil dilatih!" if st.session_state.language == 'id' else "ARIMA model trained successfully!")
+                                try:
+                                    model = train_arima_model(train_data, target_column, order=(p, d, q))
+                                    st.session_state.model = model
+                                    st.success("Model ARIMA berhasil dilatih!" if st.session_state.language == 'id' else "ARIMA model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training ARIMA: {str(e)}")
+                        
+                        elif model_type == "SARIMA" and STATSMODELS_AVAILABLE:
+                            p = st.slider("Parameter p (AR):", 0, 5, 1)
+                            d = st.slider("Parameter d (differencing):", 0, 2, 1)
+                            q = st.slider("Parameter q (MA):", 0, 5, 1)
+                            P = st.slider("Parameter P (Seasonal AR):", 0, 2, 1)
+                            D = st.slider("Parameter D (Seasonal differencing):", 0, 2, 1)
+                            Q = st.slider("Parameter Q (Seasonal MA):", 0, 2, 1)
+                            s = st.slider("Periode musiman (s):", 1, 52, 12)
+                            
+                            with st.spinner("Melatih model SARIMA..." if st.session_state.language == 'id' else "Training SARIMA model..."):
+                                try:
+                                    model = train_sarima_model(
+                                        train_data, 
+                                        target_column, 
+                                        order=(p, d, q), 
+                                        seasonal_order=(P, D, Q, s)
+                                    )
+                                    st.session_state.model = model
+                                    st.success("Model SARIMA berhasil dilatih!" if st.session_state.language == 'id' else "SARIMA model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training SARIMA: {str(e)}")
+                        
+                        elif model_type == "SARIMAX" and STATSMODELS_AVAILABLE:
+                            p = st.slider("Parameter p (AR):", 0, 5, 1)
+                            d = st.slider("Parameter d (differencing):", 0, 2, 1)
+                            q = st.slider("Parameter q (MA):", 0, 5, 1)
+                            P = st.slider("Parameter P (Seasonal AR):", 0, 2, 1)
+                            D = st.slider("Parameter D (Seasonal differencing):", 0, 2, 1)
+                            Q = st.slider("Parameter Q (Seasonal MA):", 0, 2, 1)
+                            s = st.slider("Periode musiman (s):", 1, 52, 12)
+                            
+                            with st.spinner("Melatih model SARIMAX..." if st.session_state.language == 'id' else "Training SARIMAX model..."):
+                                try:
+                                    model = train_sarimax_model(
+                                        train_data, 
+                                        target_column, 
+                                        order=(p, d, q), 
+                                        seasonal_order=(P, D, Q, s)
+                                    )
+                                    st.session_state.model = model
+                                    st.success("Model SARIMAX berhasil dilatih!" if st.session_state.language == 'id' else "SARIMAX model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training SARIMAX: {str(e)}")
                         
                         elif model_type == "Exponential Smoothing" and STATSMODELS_AVAILABLE:
                             trend = st.selectbox("Tipe trend:", ["add", "mul", None])
@@ -3509,15 +3574,37 @@ with tab4:
                             seasonal_periods = st.slider("Periode seasonal:", 0, 52, 12)
                             
                             with st.spinner("Melatih model Exponential Smoothing..." if st.session_state.language == 'id' else "Training Exponential Smoothing model..."):
-                                model = train_exponential_smoothing(
-                                    train_data, 
-                                    target_column, 
-                                    trend=trend, 
-                                    seasonal=seasonal, 
-                                    seasonal_periods=seasonal_periods
-                                )
-                                st.session_state.model = model
-                                st.success("Model Exponential Smoothing berhasil dilatih!" if st.session_state.language == 'id' else "Exponential Smoothing model trained successfully!")
+                                try:
+                                    model = train_exponential_smoothing(
+                                        train_data, 
+                                        target_column, 
+                                        trend=trend, 
+                                        seasonal=seasonal, 
+                                        seasonal_periods=seasonal_periods
+                                    )
+                                    st.session_state.model = model
+                                    st.success("Model Exponential Smoothing berhasil dilatih!" if st.session_state.language == 'id' else "Exponential Smoothing model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training Exponential Smoothing: {str(e)}")
+                        
+                        elif model_type == "Holt-Winters" and STATSMODELS_AVAILABLE:
+                            trend = st.selectbox("Tipe trend:", ["add", "mul"])
+                            seasonal = st.selectbox("Tipe seasonal:", ["add", "mul"])
+                            seasonal_periods = st.slider("Periode seasonal:", 1, 52, 12)
+                            
+                            with st.spinner("Melatih model Holt-Winters..." if st.session_state.language == 'id' else "Training Holt-Winters model..."):
+                                try:
+                                    model = train_holt_winters(
+                                        train_data, 
+                                        target_column, 
+                                        trend=trend, 
+                                        seasonal=seasonal, 
+                                        seasonal_periods=seasonal_periods
+                                    )
+                                    st.session_state.model = model
+                                    st.success("Model Holt-Winters berhasil dilatih!" if st.session_state.language == 'id' else "Holt-Winters model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training Holt-Winters: {str(e)}")
                         
                         elif model_type == "Prophet" and PROPHET_AVAILABLE:
                             yearly_seasonality = st.selectbox("Seasonality tahunan:" if st.session_state.language == 'id' else "Yearly seasonality:", ["auto", True, False])
@@ -3527,35 +3614,62 @@ with tab4:
                             # Implementasi Prophet akan dilakukan di forecasting_utils.py
                             st.info("Implementasi Prophet akan menggunakan forecasting_utils.py" if st.session_state.language == 'id' else "Prophet implementation will use forecasting_utils.py")
                         
-                        elif model_type in ["Random Forest", "Gradient Boosting"]:
-                            n_estimators = st.slider("Jumlah trees:" if st.session_state.language == 'id' else "Number of trees:", 10, 500, 100)
-                            max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
+                        elif model_type == "LSTM":
+                            look_back = st.slider("Jumlah time steps untuk look back:", 10, 100, 60)
+                            epochs = st.slider("Jumlah epochs:", 10, 200, 100)
+                            batch_size = st.slider("Batch size:", 16, 128, 32)
                             
+                            with st.spinner("Melatih model LSTM..." if st.session_state.language == 'id' else "Training LSTM model..."):
+                                try:
+                                    model = train_lstm_model(
+                                        train_data, 
+                                        target_column, 
+                                        look_back=look_back, 
+                                        epochs=epochs, 
+                                        batch_size=batch_size
+                                    )
+                                    st.session_state.model = model
+                                    st.success("Model LSTM berhasil dilatih!" if st.session_state.language == 'id' else "LSTM model trained successfully!")
+                                except ImportError as e:
+                                    st.error(f"TensorFlow tidak tersedia: {str(e)}")
+                                except Exception as e:
+                                    st.error(f"Error training LSTM: {str(e)}")
+                        
+                        elif model_type in ["Random Forest", "Gradient Boosting", "Linear Regression"]:
                             if model_type == "Random Forest":
+                                n_estimators = st.slider("Jumlah trees:" if st.session_state.language == 'id' else "Number of trees:", 10, 500, 100)
+                                max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
                                 model_params = {
                                     'n_estimators': n_estimators,
                                     'max_depth': max_depth,
                                     'random_state': 42
                                 }
-                            else:  # Gradient Boosting
+                            elif model_type == "Gradient Boosting":
+                                n_estimators = st.slider("Jumlah trees:" if st.session_state.language == 'id' else "Number of trees:", 10, 500, 100)
                                 learning_rate = st.slider("Learning rate:", 0.01, 0.3, 0.1)
+                                max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
                                 model_params = {
                                     'n_estimators': n_estimators,
                                     'learning_rate': learning_rate,
                                     'max_depth': max_depth,
                                     'random_state': 42
                                 }
+                            else:  # Linear Regression
+                                model_params = {'random_state': 42}
                             
                             with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
-                                model_info = train_ml_forecaster(
-                                    st.session_state.data,
-                                    date_column,
-                                    target_column,
-                                    model_type=model_type.lower().replace(" ", "_"),
-                                    **model_params
-                                )
-                                st.session_state.model = model_info
-                                st.success(f"Model {model_type} berhasil dilatih!" if st.session_state.language == 'id' else f"{model_type} model trained successfully!")
+                                try:
+                                    model_info = train_ml_forecaster(
+                                        st.session_state.data,
+                                        date_column,
+                                        target_column,
+                                        model_type=model_type.lower().replace(" ", "_"),
+                                        **model_params
+                                    )
+                                    st.session_state.model = model_info
+                                    st.success(f"Model {model_type} berhasil dilatih!" if st.session_state.language == 'id' else f"{model_type} model trained successfully!")
+                                except Exception as e:
+                                    st.error(f"Error training {model_type}: {str(e)}")
                         
                         # Evaluate model if available
                         if st.session_state.model is not None:
@@ -3563,48 +3677,85 @@ with tab4:
                                 try:
                                     eval_results = evaluate_forecast_model(st.session_state.model, test_data, target_column)
                                     
-                                    # Cek apakah ada error dalam evaluasi
+                                    # Tampilkan hasil evaluasi dengan penanganan nilai None
+                                    st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
+                                    
+                                    # Buat tabel evaluasi yang lebih rapi
+                                    eval_df = pd.DataFrame()
+                                    
+                                    if eval_results.get('MAE') is not None:
+                                        eval_df['MAE'] = [f"{eval_results['MAE']:.4f}"]
+                                    else:
+                                        eval_df['MAE'] = ["N/A"]
+                                        
+                                    if eval_results.get('MSE') is not None:
+                                        eval_df['MSE'] = [f"{eval_results['MSE']:.4f}"]
+                                    else:
+                                        eval_df['MSE'] = ["N/A"]
+                                        
+                                    if eval_results.get('RMSE') is not None:
+                                        eval_df['RMSE'] = [f"{eval_results['RMSE']:.4f}"]
+                                    else:
+                                        eval_df['RMSE'] = ["N/A"]
+                                        
+                                    if eval_results.get('MAPE') is not None:
+                                        eval_df['MAPE (%)'] = [f"{eval_results['MAPE']:.2f}%"]
+                                    else:
+                                        eval_df['MAPE (%)'] = ["N/A"]
+                                        
+                                    if eval_results.get('R2') is not None:
+                                        eval_df['R²'] = [f"{eval_results['R2']:.4f}"]
+                                    else:
+                                        eval_df['R²'] = ["N/A"]
+                                        
+                                    st.dataframe(eval_df, use_container_width=True)
+                                    
+                                    # Tampilkan pesan error jika ada
                                     if 'error' in eval_results:
                                         st.warning(f"⚠️ {eval_results['error']}" if st.session_state.language == 'id' else f"⚠️ {eval_results['error']}")
-                                        # Tetap tampilkan hasil yang tersedia
-                                        st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
-                                        st.write("- MAE: N/A")
-                                        st.write("- MSE: N/A") 
-                                        st.write("- RMSE: N/A")
-                                        st.write("- MAPE: N/A")
-                                        st.write("- R²: N/A")
-                                    else:
-                                        st.write("Hasil Evaluasi Model:" if st.session_state.language == 'id' else "Model Evaluation Results:")
-                                        st.write(f"- MAE: {eval_results['MAE']:.4f}" if eval_results['MAE'] is not None else "- MAE: N/A")
-                                        st.write(f"- MSE: {eval_results['MSE']:.4f}" if eval_results['MSE'] is not None else "- MSE: N/A")
-                                        st.write(f"- RMSE: {eval_results['RMSE']:.4f}" if eval_results['RMSE'] is not None else "- RMSE: N/A")
-                                        if eval_results['MAPE'] is not None:
-                                            st.write(f"- MAPE: {eval_results['MAPE']:.2f}%")
-                                        else:
-                                            st.write("- MAPE: Tidak dapat dihitung" if st.session_state.language == 'id' else "- MAPE: Cannot be calculated")
-                                        st.write(f"- R²: {eval_results['R2']:.4f}" if eval_results['R2'] is not None else "- R²: N/A")
                                     
                                     # Generate forecast
                                     try:
                                         forecast_data = forecast_future(st.session_state.model, periods=forecast_periods)
-                                        # Perbaikan: Konversi kolom tanggal ke string jika tipe datetime64[ns] dan out of bounds
-                                        if 'date' in forecast_data.columns:
-                                            # Cek dan konversi semua nilai tanggal yang out of bounds ke string
-                                            def safe_to_datetime(val):
+                                        
+                                        # Validasi dan perbaikan data forecast
+                                        if forecast_data is not None and not forecast_data.empty:
+                                            # Pastikan kolom tanggal dalam format yang benar
+                                            if 'date' in forecast_data.columns:
                                                 try:
-                                                    return pd.to_datetime(val)
-                                                except (pd.errors.OutOfBoundsDatetime, ValueError, OverflowError):
-                                                    return str(val)
-                                            forecast_data['date'] = forecast_data['date'].apply(safe_to_datetime)
+                                                    forecast_data['date'] = pd.to_datetime(forecast_data['date'], errors='coerce')
+                                                    forecast_data = forecast_data.dropna(subset=['date'])
+                                                except Exception:
+                                                    # Jika gagal, biarkan sebagai string
+                                                    pass
+                                            
+                                            # Pastikan kolom forecast ada dan valid
+                                            if 'forecast' not in forecast_data.columns:
+                                                st.warning("Data forecast tidak memiliki kolom 'forecast'")
+                                                forecast_data = None
+                                            else:
+                                                # Hapus nilai forecast yang tidak valid
+                                                forecast_data = forecast_data.dropna(subset=['forecast'])
+                                                if forecast_data.empty:
+                                                    st.warning("Data forecast kosong setelah validasi")
+                                                    forecast_data = None
+                                        else:
+                                            st.warning("Data forecast kosong atau tidak valid")
+                                            forecast_data = None
+                                            
                                     except Exception as e:
                                         st.error(f"Error saat membuat forecast: {str(e)}" if st.session_state.language == 'id' else f"Error generating forecast: {str(e)}")
                                         forecast_data = None
 
-                                    # Plot results
-                                    if forecast_data is not None:
+                                    # Plot results dengan penanganan error yang lebih baik
+                                    if forecast_data is not None and not forecast_data.empty:
                                         try:
                                             fig = plot_forecast_results(train_data, test_data, forecast_data, target_column)
-                                            st.pyplot(fig)
+                                            if fig is not None:
+                                                st.pyplot(fig)
+                                                plt.close(fig)  # Tutup figure untuk menghemat memory
+                                            else:
+                                                st.warning("Gagal membuat plot forecast")
                                             
                                             # Store data for visualization
                                             st.session_state.forecast_data = forecast_data
@@ -3615,14 +3766,25 @@ with tab4:
                                             
                                         except Exception as e:
                                             st.error(f"Error saat memplot hasil: {str(e)}" if st.session_state.language == 'id' else f"Error plotting results: {str(e)}")
+                                            st.info("Menampilkan data forecast dalam bentuk tabel..." if st.session_state.language == 'id' else "Displaying forecast data in table format...")
 
-                                    # Show forecast data
-                                    if forecast_data is not None:
+                                    # Show forecast data dengan preview
+                                    if forecast_data is not None and not forecast_data.empty:
                                         st.write("Data Hasil Forecasting:" if st.session_state.language == 'id' else "Forecast Data:")
-                                        st.dataframe(forecast_data)
+                                        st.dataframe(forecast_data.head(50))  # Tampilkan maksimal 50 baris
+                                        
+                                        # Download button untuk forecast data
+                                        csv = forecast_data.to_csv(index=False)
+                                        st.download_button(
+                                            label="Download Forecast Data (CSV)" if st.session_state.language == 'id' else "Download Forecast Data (CSV)",
+                                            data=csv,
+                                            file_name=f"forecast_{model_type.lower().replace(' ', '_')}.csv",
+                                            mime="text/csv"
+                                        )
 
                                 except Exception as e:
                                     st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error evaluating model: {str(e)}")
+                                    st.info("Pastikan model telah dilatih dengan benar dan data yang digunakan sesuai." if st.session_state.language == 'id' else "Please ensure the model is properly trained and data is appropriate.")
 
                         # Button for detailed visualization
                         if hasattr(st.session_state, 'forecast_data') and st.session_state.forecast_data is not None:
