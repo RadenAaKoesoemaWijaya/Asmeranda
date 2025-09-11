@@ -9,6 +9,7 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing as HWES
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import StandardScaler
 import math
 import warnings
 warnings.filterwarnings('ignore')

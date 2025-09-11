@@ -6304,13 +6304,13 @@ with tab6:
                                     label_idx = list(class_names).index(predicted)
                                 else:
                                     label_idx = int(predicted)
-                                explanation.as_pyplot_figure(label=label_idx)
+                                lime_fig = explanation.as_pyplot_figure(label=label_idx)
                             else:
-                                explanation.as_pyplot_figure()
+                                lime_fig = explanation.as_pyplot_figure()
                         else:
-                            explanation.as_pyplot_figure()  # Untuk regresi, JANGAN beri argumen label
+                            lime_fig = explanation.as_pyplot_figure()  # Untuk regresi, JANGAN beri argumen label
                         plt.tight_layout()
-                        st.pyplot(fig)
+                        st.pyplot(lime_fig)
 
                         st.subheader("Penjelasan dalam Bentuk Tabel" if st.session_state.language == 'id' else "Explanation in Table Format")
                         explanation_df = pd.DataFrame(explanation.as_list(), columns=["Feature", "Kontribusi"])
