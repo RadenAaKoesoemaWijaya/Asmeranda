@@ -6590,7 +6590,7 @@ with tab7:
                                         ax.set_ylabel('Value')
                                         ax.legend()
                                         ax.grid(True, alpha=0.3)
-                                        plt.xicks(rotation=45)
+                                        plt.xticks(rotation=45)
                                         plt.tight_layout()
                                         st.pyplot(fig)
                                     
