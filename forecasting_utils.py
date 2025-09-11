@@ -720,10 +720,10 @@ def forecast_future(model_info, periods=10, freq='D'):
             future_df[feature] = 0
         
         # Prediksi menggunakan model ML
-        future_df[f'predicted_{target_column}'] = model.predict(future_df[features])
+        future_df['forecast'] = model.predict(future_df[features])
         
         # Kembalikan hasil prediksi
-        return future_df[[date_column, f'predicted_{target_column}']]
+        return future_df[[date_column, 'forecast']]
     
     else:  # Statsmodels model (ARIMA, SARIMA, Exponential Smoothing)
         # Prediksi menggunakan model statsmodels
@@ -764,20 +764,20 @@ def forecast_future(model_info, periods=10, freq='D'):
                 # If still no date, use numerical index
                 if last_date is None:
                     return pd.DataFrame({
-                        'forecast_index': range(periods),
+                        'date': range(periods),
                         'forecast': forecast
                     })
                     
             else:
                 # Fallback to numerical index
                 return pd.DataFrame({
-                    'forecast_index': range(periods),
+                    'date': range(periods),
                     'forecast': forecast
                 })
         except Exception:
             # Fallback to numerical index if any error occurs
             return pd.DataFrame({
-                'forecast_index': range(periods),
+                'date': range(periods),
                 'forecast': forecast
             })
         
@@ -789,8 +789,8 @@ def forecast_future(model_info, periods=10, freq='D'):
         
         # Kembalikan hasil prediksi
         return pd.DataFrame({
-            'ds': future_dates,
-            'yhat': forecast
+            'date': future_dates,
+            'forecast': forecast
         })
 
 def evaluate_forecast_model(model, test_data, target_column, date_column=None):
@@ -889,29 +889,42 @@ def evaluate_forecast_model(model, test_data, target_column, date_column=None):
         if len(actual) == 0 or len(predictions) == 0:
             raise ValueError("Tidak ada data untuk evaluasi")
         
-        # Hitung metrik evaluasi dengan penanganan error
+        # Hitung metrik evaluasi dengan penanganan error dan NaN
         try:
-            mse = mean_squared_error(actual, predictions)
+            # Validasi data untuk NaN atau infinite values
+            mask = ~np.isnan(actual) & ~np.isnan(predictions) & ~np.isinf(actual) & ~np.isinf(predictions)
+            actual_clean = actual[mask]
+            predictions_clean = predictions[mask]
+            
+            if len(actual_clean) == 0 or len(predictions_clean) == 0:
+                raise ValueError("Data evaluasi mengandung NaN/Inf values")
+            
+            mse = mean_squared_error(actual_clean, predictions_clean)
             rmse = np.sqrt(mse)
-            mae = mean_absolute_error(actual, predictions)
+            mae = mean_absolute_error(actual_clean, predictions_clean)
             
             # Hitung R2 dengan penanganan error
             try:
-                r2 = r2_score(actual, predictions)
+                r2 = r2_score(actual_clean, predictions_clean)
             except Exception:
-                r2 = np.nan
+                r2 = 0.0
                 
             # Hitung MAPE (Mean Absolute Percentage Error)
             try:
-                mape = np.mean(np.abs((actual - predictions) / actual)) * 100
+                # Hindari pembagian dengan nol
+                mape_mask = actual_clean != 0
+                if np.any(mape_mask):
+                    mape = np.mean(np.abs((actual_clean[mape_mask] - predictions_clean[mape_mask]) / actual_clean[mape_mask])) * 100
+                else:
+                    mape = 0.0
             except Exception:
-                mape = np.nan
+                mape = 0.0
                 
             # Hitung SMAPE (Symmetric Mean Absolute Percentage Error)
             try:
-                smape = np.mean(2 * np.abs(predictions - actual) / (np.abs(actual) + np.abs(predictions))) * 100
+                smape = np.mean(2 * np.abs(predictions_clean - actual_clean) / (np.abs(actual_clean) + np.abs(predictions_clean))) * 100
             except Exception:
-                smape = np.nan
+                smape = 0.0
                 
         except Exception as e:
             raise ValueError(f"Gagal menghitung metrik evaluasi: {str(e)}")

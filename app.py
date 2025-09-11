@@ -3683,30 +3683,21 @@ with tab4:
                                     # Buat tabel evaluasi yang lebih rapi
                                     eval_df = pd.DataFrame()
                                     
-                                    if eval_results.get('MAE') is not None:
-                                        eval_df['MAE'] = [f"{eval_results['MAE']:.4f}"]
-                                    else:
-                                        eval_df['MAE'] = ["N/A"]
-                                        
-                                    if eval_results.get('MSE') is not None:
-                                        eval_df['MSE'] = [f"{eval_results['MSE']:.4f}"]
-                                    else:
-                                        eval_df['MSE'] = ["N/A"]
-                                        
-                                    if eval_results.get('RMSE') is not None:
-                                        eval_df['RMSE'] = [f"{eval_results['RMSE']:.4f}"]
-                                    else:
-                                        eval_df['RMSE'] = ["N/A"]
-                                        
-                                    if eval_results.get('MAPE') is not None:
-                                        eval_df['MAPE (%)'] = [f"{eval_results['MAPE']:.2f}%"]
-                                    else:
-                                        eval_df['MAPE (%)'] = ["N/A"]
-                                        
-                                    if eval_results.get('R2') is not None:
-                                        eval_df['R²'] = [f"{eval_results['R2']:.4f}"]
-                                    else:
-                                        eval_df['R²'] = ["N/A"]
+                                    import math
+                                    
+                                    def format_metric(value, format_str="{:.4f}"):
+                                        if value is None or (isinstance(value, float) and (math.isnan(value) or math.isinf(value))):
+                                            return "N/A"
+                                        try:
+                                            return format_str.format(value)
+                                        except:
+                                            return "N/A"
+                                    
+                                    eval_df['MAE'] = [format_metric(eval_results.get('MAE'))]
+                                    eval_df['MSE'] = [format_metric(eval_results.get('MSE'))]
+                                    eval_df['RMSE'] = [format_metric(eval_results.get('RMSE'))]
+                                    eval_df['MAPE (%)'] = [format_metric(eval_results.get('MAPE'), "{:.2f}%")]
+                                    eval_df['R²'] = [format_metric(eval_results.get('R2'))]
                                         
                                     st.dataframe(eval_df, use_container_width=True)
                                     
