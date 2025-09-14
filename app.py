@@ -1418,7 +1418,7 @@ with tab3:
         
         # Determine problem type
         # Check if time series data is available
-        time_columns = [col for col in data.columns if any(keyword in str(col).lower() for keyword in ['date', 'time', 'tanggal', 'waktu', 'year', 'week','month', 'day', 'tahun', 'minggu','bulan', 'hari'])]
+        time_columns = [col for col in data.columns if any(keyword in str(col).lower() for keyword in ['date', 'time', 'tanggal', 'waktu', 'year', 'month', 'day'])]
         
         if data[target_column].dtype in ['int64', 'float64']:
             if len(data[target_column].unique()) <= 10:
