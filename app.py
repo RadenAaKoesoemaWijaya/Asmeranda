@@ -4356,15 +4356,24 @@ with tab4:
                         - **Hidden Layers**: Kompleksitas model (1-5 layers)
                         """)
                     
-                    # Architecture Configuration
-                    st.write("**Arsitektur Jaringan Klasifikasi:**" if st.session_state.language == 'id' else "**Classification Network Architecture:**")
+                    # Mode konfigurasi parameter
+                    config_mode = st.radio(
+                        "Mode Konfigurasi Parameter:" if st.session_state.language == 'id' else "Parameter Configuration Mode:",
+                        ["Quick Setup", "Advanced Settings"],
+                        horizontal=True,
+                        help="Quick Setup: Parameter dasar | Advanced Settings: Kontrol penuh semua parameter"
+                    )
                     
-                    # Hidden layers configuration
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 5, 2)
-                    with col2:
-                        neurons_per_layer = st.text_input("Neurons per layer:", "128,128")
+                    if config_mode == "Quick Setup":
+                        # Architecture Configuration - Quick Setup
+                        st.write("**Arsitektur Jaringan Klasifikasi:**" if st.session_state.language == 'id' else "**Classification Network Architecture:**")
+                        
+                        # Hidden layers configuration
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 5, 2)
+                        with col2:
+                            neurons_per_layer = st.text_input("Neurons per layer:", "128,128")
                         try:
                             neurons_list = [int(x.strip()) for x in neurons_per_layer.split(",")]
                             if len(neurons_list) < num_hidden_layers:
@@ -4410,6 +4419,61 @@ with tab4:
                             max_iter = st.slider("Maximum iterations:", 100, 2000, 200)
                             tol = st.slider("Tolerance:", 1e-6, 1e-2, 1e-4, format="%.1e")
                     
+                    # Parameter validation
+                    validation_errors = []
+                    
+                    # Validate hidden layer sizes
+                    if any(size <= 0 for size in hidden_layer_sizes):
+                        validation_errors.append("Hidden layer sizes must be positive integers")
+                    
+                    # Validate learning rate
+                    if learning_rate_init <= 0 or learning_rate_init > 1:
+                        validation_errors.append("Learning rate must be between 0 and 1")
+                    
+                    # Validate regularization
+                    if alpha < 0:
+                        validation_errors.append("Alpha (regularization) must be non-negative")
+                    
+                    # Validate max iterations
+                    if max_iter <= 0:
+                        validation_errors.append("Max iterations must be positive")
+                    
+                    # Validate tolerance
+                    if tol <= 0:
+                        validation_errors.append("Tolerance must be positive")
+                    
+                    # Validate batch size
+                    if isinstance(actual_batch_size, int) and actual_batch_size <= 0:
+                        validation_errors.append("Batch size must be positive")
+                    
+                    # Validate solver-specific parameters
+                    if solver == "adam":
+                        if not (0 < beta_1 < 1):
+                            validation_errors.append("Beta 1 must be between 0 and 1")
+                        if not (0 < beta_2 < 1):
+                            validation_errors.append("Beta 2 must be between 0 and 1")
+                        if epsilon <= 0:
+                            validation_errors.append("Epsilon must be positive")
+                    elif solver == "sgd":
+                        if not (0 <= momentum <= 1):
+                            validation_errors.append("Momentum must be between 0 and 1")
+                        if power_t <= 0:
+                            validation_errors.append("Power t must be positive")
+                    
+                    # Validate early stopping parameters
+                    if early_stopping:
+                        if not (0 < validation_fraction < 1):
+                            validation_errors.append("Validation fraction must be between 0 and 1")
+                        if n_iter_no_change <= 0:
+                            validation_errors.append("Iterations no change must be positive")
+                    
+                    # Show validation errors if any
+                    if validation_errors:
+                        st.error("**Parameter Validation Errors:**")
+                        for error in validation_errors:
+                            st.error(f"• {error}")
+                        st.stop()
+                    
                     # Create comprehensive parameters
                     mlp_params = {
                         'hidden_layer_sizes': hidden_layer_sizes,
@@ -4436,6 +4500,17 @@ with tab4:
                             'momentum': momentum,
                             'power_t': power_t if learning_rate == "invscaling" else 0.5
                         })
+                    
+                    # Add early stopping parameters if enabled
+                    if early_stopping:
+                        mlp_params.update({
+                            'early_stopping': early_stopping,
+                            'validation_fraction': validation_fraction,
+                            'n_iter_no_change': n_iter_no_change
+                        })
+                    
+                    # Add shuffle parameter
+                    mlp_params['shuffle'] = shuffle
                     
                     base_model = MLPClassifier()
                     
@@ -4756,59 +4831,153 @@ with tab4:
                         - **Hidden Layers**: Kompleksitas model (1-5 layers)
                         """)
                     
+                    # Parameter configuration mode
+                    param_config_mode = st.radio(
+                        "Mode konfigurasi parameter:" if st.session_state.language == 'id' else "Parameter configuration mode:",
+                        ["Quick Setup", "Advanced Settings"],
+                        horizontal=True,
+                        help="Pilih mode konfigurasi: Quick Setup untuk pengaturan cepat, Advanced Settings untuk kontrol penuh"
+                    )
+                    
                     # Architecture Configuration
                     st.write("**Arsitektur Jaringan Regresi:**" if st.session_state.language == 'id' else "**Regression Network Architecture:**")
                     
-                    # Hidden layers configuration
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 5, 2)
-                    with col2:
-                        neurons_per_layer = st.text_input("Neurons per layer:", "100,50")
-                        try:
-                            neurons_list = [int(x.strip()) for x in neurons_per_layer.split(",")]
-                            if len(neurons_list) < num_hidden_layers:
-                                neurons_list.extend([neurons_list[-1]] * (num_hidden_layers - len(neurons_list)))
-                            elif len(neurons_list) > num_hidden_layers:
-                                neurons_list = neurons_list[:num_hidden_layers]
-                            hidden_layer_sizes = tuple(neurons_list)
-                        except:
-                            hidden_layer_sizes = (100, 50)
-                    with col3:
-                        activation = st.selectbox("Activation function:", 
-                                                ["relu", "tanh", "logistic", "identity"],
-                                                help="ReLU: max(0,x) | Sigmoid: 1/(1+e^-x) | Tanh: (e^x-e^-x)/(e^x+e^-x) | Identity: x")
-                    
-                    # Advanced parameters
-                    with st.expander("Advanced Parameters"):
-                        col4, col5 = st.columns(2)
-                        with col4:
+                    if param_config_mode == "Quick Setup":
+                        # Quick Setup - simplified interface
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 5, 2)
+                            neurons_per_layer = st.text_input("Neurons per layer:", "100,50")
+                            try:
+                                neurons_list = [int(x.strip()) for x in neurons_per_layer.split(",")]
+                                if len(neurons_list) < num_hidden_layers:
+                                    neurons_list.extend([neurons_list[-1]] * (num_hidden_layers - len(neurons_list)))
+                                elif len(neurons_list) > num_hidden_layers:
+                                    neurons_list = neurons_list[:num_hidden_layers]
+                                hidden_layer_sizes = tuple(neurons_list)
+                            except:
+                                hidden_layer_sizes = (100, 50)
+                        with col2:
+                            activation = st.selectbox("Activation function:", 
+                                                    ["relu", "tanh", "logistic", "identity"],
+                                                    help="ReLU: max(0,x) | Sigmoid: 1/(1+e^-x) | Tanh: (e^x-e^-x)/(e^x+e^-x) | Identity: x")
+                        
+                        # Basic parameters
+                        col3, col4 = st.columns(2)
+                        with col3:
                             solver = st.selectbox("Optimizer:", ["adam", "sgd", "lbfgs"])
-                            
-                            if solver == "adam":
-                                beta_1 = st.slider("Beta 1:", 0.8, 0.999, 0.9, format="%.3f")
-                                beta_2 = st.slider("Beta 2:", 0.9, 0.9999, 0.999, format="%.4f")
-                                epsilon = st.slider("Epsilon:", 1e-8, 1e-3, 1e-8, format="%.1e")
-                            elif solver == "sgd":
-                                momentum = st.slider("Momentum:", 0.0, 0.9, 0.9)
-                                power_t = st.slider("Power t:", 0.1, 0.9, 0.5)
-                                
-                        with col5:
-                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.001, 0.0003, format="%.4f")
-                            learning_rate = st.selectbox("Learning rate schedule:", ["constant", "invscaling", "adaptive"])
-                            
-                        col6, col7 = st.columns(2)
-                        with col6:
-                            alpha = st.slider("L2 regularization (alpha):", 0.00001, 0.1, 0.0001, format="%.5f")
-                            batch_size = st.selectbox("Batch size:", ["auto", 16, 32, 64, 128, 256])
-                            if batch_size == "auto":
-                                actual_batch_size = min(200, len(st.session_state.X_train))
-                            else:
-                                actual_batch_size = batch_size
-                                
-                        with col7:
+                            learning_rate_init = st.slider("Initial learning rate:", 0.0001, 0.1, 0.001, format="%.4f")
+                        with col4:
                             max_iter = st.slider("Maximum iterations:", 100, 2000, 200)
-                            tol = st.slider("Tolerance:", 1e-6, 1e-2, 1e-4, format="%.1e")
+                            alpha = st.slider("L2 regularization (alpha):", 0.00001, 0.01, 0.0001, format="%.5f")
+                        
+                        # Set default values for other parameters
+                        learning_rate = "constant"
+                        batch_size = "auto"
+                        actual_batch_size = min(200, len(st.session_state.X_train))
+                        tol = 1e-4
+                        beta_1 = 0.9
+                        beta_2 = 0.999
+                        epsilon = 1e-8
+                        momentum = 0.9
+                        power_t = 0.5
+                        shuffle = True
+                        early_stopping = False
+                        validation_fraction = 0.1
+                        n_iter_no_change = 10
+                        
+                    else:  # Advanced Settings
+                        # Advanced Settings - full control
+                        st.write("**Arsitektur Jaringan Regresi - Advanced:**" if st.session_state.language == 'id' else "**Regression Network Architecture - Advanced:**")
+                        
+                        # Hidden layers configuration
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            num_hidden_layers = st.slider("Jumlah hidden layers:", 1, 10, 2, help="Jumlah lapisan tersembunyi dalam jaringan")
+                        with col2:
+                            neurons_per_layer = st.text_input("Neurons per layer:", "100,50", help="Jumlah neuron di setiap lapisan, pisahkan dengan koma")
+                            try:
+                                neurons_list = [int(x.strip()) for x in neurons_per_layer.split(",")]
+                                if len(neurons_list) < num_hidden_layers:
+                                    neurons_list.extend([neurons_list[-1]] * (num_hidden_layers - len(neurons_list)))
+                                elif len(neurons_list) > num_hidden_layers:
+                                    neurons_list = neurons_list[:num_hidden_layers]
+                                hidden_layer_sizes = tuple(neurons_list)
+                            except:
+                                hidden_layer_sizes = (100, 50)
+                                st.error("Format neurons per layer tidak valid. Gunakan format: 100,50,25")
+                        with col3:
+                            activation = st.selectbox("Activation function:", 
+                                                    ["relu", "tanh", "logistic", "identity"],
+                                                    help="ReLU: max(0,x) | Sigmoid: 1/(1+e^-x) | Tanh: (e^x-e^-x)/(e^x+e^-x) | Identity: x")
+                        
+                        # Advanced parameters
+                        with st.expander("🔧 Advanced Parameters", expanded=True):
+                            col4, col5 = st.columns(2)
+                            with col4:
+                                solver = st.selectbox("Optimizer:", ["adam", "sgd", "lbfgs"], 
+                                                    help="Algoritma optimasi untuk training")
+                                
+                                if solver == "adam":
+                                    st.write("**Adam Optimizer Parameters:**")
+                                    beta_1 = st.slider("Beta 1 (exponential decay rate):", 0.8, 0.999, 0.9, format="%.3f",
+                                                       help="Faktor decay untuk estimasi pertama (default: 0.9)")
+                                    beta_2 = st.slider("Beta 2 (exponential decay rate):", 0.9, 0.9999, 0.999, format="%.4f",
+                                                       help="Faktor decay untuk estimasi kedua (default: 0.999)")
+                                    epsilon = st.slider("Epsilon (numerical stability):", 1e-8, 1e-3, 1e-8, format="%.1e",
+                                                        help="Nilai kecil untuk menghindari division by zero")
+                                elif solver == "sgd":
+                                    st.write("**SGD Optimizer Parameters:**")
+                                    momentum = st.slider("Momentum:", 0.0, 0.9, 0.9,
+                                                         help="Faktor momentum untuk mempercepat konvergensi")
+                                    power_t = st.slider("Power t (inverse scaling exponent):", 0.1, 0.9, 0.5,
+                                                        help="Eksponen untuk inverse scaling learning rate")
+                                else:  # lbfgs
+                                    st.info("L-BFGS tidak memiliki parameter tambahan")
+                                    beta_1 = 0.9
+                                    beta_2 = 0.999
+                                    epsilon = 1e-8
+                                    momentum = 0.9
+                                    power_t = 0.5
+                                    
+                            with col5:
+                                learning_rate_init = st.slider("Initial learning rate:", 0.00001, 0.1, 0.001, format="%.5f",
+                                                               help="Learning rate awal untuk optimasi")
+                                learning_rate = st.selectbox("Learning rate schedule:", 
+                                                           ["constant", "invscaling", "adaptive"],
+                                                           help="Strategi penyesuaian learning rate selama training")
+                                
+                                col6, col7 = st.columns(2)
+                                with col6:
+                                    alpha = st.slider("L2 regularization (alpha):", 0.000001, 0.1, 0.0001, format="%.6f",
+                                                      help="Regularisasi L2 untuk mencegah overfitting")
+                                    batch_size_options = ["auto", 8, 16, 32, 64, 128, 256, 512, 1024]
+                                    batch_size = st.selectbox("Batch size:", batch_size_options,
+                                                            help="Jumlah sampel per update weight")
+                                    if batch_size == "auto":
+                                        actual_batch_size = min(200, len(st.session_state.X_train))
+                                    else:
+                                        actual_batch_size = batch_size
+                                        
+                                with col7:
+                                    max_iter = st.slider("Maximum iterations:", 100, 5000, 200,
+                                                         help="Maksimum iterasi training")
+                                    tol = st.slider("Tolerance (convergence threshold):", 1e-6, 1e-2, 1e-4, format="%.1e",
+                                                    help="Threshold untuk menghentikan training")
+                                    
+                                # Additional advanced parameters
+                                st.write("**Additional Parameters:**")
+                                col8, col9 = st.columns(2)
+                                with col8:
+                                    shuffle = st.checkbox("Shuffle samples", value=True,
+                                                        help="Mengacak sampel di setiap iterasi")
+                                    early_stopping = st.checkbox("Early stopping", value=False,
+                                                               help="Menghentikan training jika validasi tidak membaik")
+                                with col9:
+                                    validation_fraction = st.slider("Validation fraction:", 0.05, 0.5, 0.1, format="%.2f",
+                                                                  help="Fraksi data untuk validasi (jika early stopping=True)")
+                                    n_iter_no_change = st.slider("Iterations no change:", 5, 50, 10,
+                                                                 help="Jumlah iterasi tanpa perbaikan sebelum stopping")
                     
                     # Create comprehensive parameters
                     mlp_params = {
