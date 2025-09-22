@@ -17,10 +17,14 @@ from sklearn.feature_selection import SelectKBest, f_regression, f_classif, mutu
 from sklearn.decomposition import PCA
 from sklearn.inspection import partial_dependence, PartialDependenceDisplay
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
-from sklearn.metrics import silhouette_score, adjusted_rand_score
+from sklearn.metrics import silhouette_score, adjusted_rand_score, calinski_harabasz_score, davies_bouldin_score
 from sklearn.preprocessing import StandardScaler
 from scipy.cluster.hierarchy import dendrogram, linkage
 from kmodes.kprototypes import KPrototypes
+from sklearn.metrics.pairwise import euclidean_distances
+from scipy.spatial.distance import pdist, squareform
+import warnings
+warnings.filterwarnings('ignore')
 import shap
 import pickle
 import os
@@ -155,13 +159,331 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "⚠️ Time Series Anomaly Detection"
 ])
 
+def calculate_comprehensive_clustering_metrics(X, labels, method_name=""):
+    """Menghitung metrik evaluasi clustering yang komprehensif""" if st.session_state.language == 'id' else """Calculate comprehensive clustering evaluation metrics"""
+    metrics = {}
+    
+    if len(set(labels)) <= 1:
+        return {"error": "Hanya satu cluster atau noise ditemukan" if st.session_state.language == 'id' else "Only one cluster or noise found"}
+    
+    try:
+        # Internal Validation Metrics
+        metrics['silhouette_score'] = silhouette_score(X, labels)
+        metrics['calinski_harabasz_score'] = calinski_harabasz_score(X, labels)
+        metrics['davies_bouldin_score'] = davies_bouldin_score(X, labels)
+        
+        # Additional metrics
+        metrics['n_clusters'] = len(set(labels)) - (1 if -1 in labels else 0)
+        metrics['n_noise_points'] = (labels == -1).sum() if -1 in labels else 0
+        
+        # Cluster size distribution
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        metrics['cluster_sizes'] = dict(zip(unique_labels.tolist(), counts.tolist()))
+        metrics['cluster_size_std'] = np.std(counts)
+        metrics['cluster_size_mean'] = np.mean(counts)
+        
+        # Compactness (average within-cluster sum of squares)
+        compactness = 0
+        for label in unique_labels:
+            if label != -1:  # Exclude noise points
+                cluster_points = X[labels == label]
+                if len(cluster_points) > 0:
+                    centroid = np.mean(cluster_points, axis=0)
+                    compactness += np.sum((cluster_points - centroid) ** 2)
+        metrics['within_cluster_ss'] = compactness
+        
+        # Separation (minimum distance between cluster centroids)
+        if len(unique_labels) > 2 or (len(unique_labels) == 2 and -1 not in unique_labels):
+            centroids = []
+            for label in unique_labels:
+                if label != -1:
+                    cluster_points = X[labels == label]
+                    if len(cluster_points) > 0:
+                        centroids.append(np.mean(cluster_points, axis=0))
+            
+            if len(centroids) > 1:
+                centroid_distances = euclidean_distances(centroids)
+                np.fill_diagonal(centroid_distances, np.inf)
+                metrics['min_centroid_distance'] = np.min(centroid_distances)
+        
+    except Exception as e:
+        metrics['error'] = str(e)
+    
+    return metrics
+
+def find_optimal_clusters_kmeans(X, max_k=10):
+    """Mencari jumlah cluster optimal untuk K-Means""" if st.session_state.language == 'id' else """Find optimal number of clusters for K-Means"""
+    if len(X) < 3:
+        return 2, {}
+    
+    max_k = min(max_k, len(X) - 1)
+    metrics = {'k': [], 'inertia': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': []}
+    
+    for k in range(2, max_k + 1):
+        try:
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(X)
+            
+            metrics['k'].append(k)
+            metrics['inertia'].append(kmeans.inertia_)
+            
+            if len(set(labels)) > 1:
+                metrics['silhouette'].append(silhouette_score(X, labels))
+                metrics['calinski_harabasz'].append(calinski_harabasz_score(X, labels))
+                metrics['davies_bouldin'].append(davies_bouldin_score(X, labels))
+            else:
+                metrics['silhouette'].append(0)
+                metrics['calinski_harabasz'].append(0)
+                metrics['davies_bouldin'].append(np.inf)
+                
+        except Exception as e:
+            continue
+    
+    # Find optimal k using multiple criteria
+    optimal_k = 2
+    if metrics['silhouette']:
+        # Weighted combination of metrics
+        silhouette_scores = np.array(metrics['silhouette'])
+        calinski_scores = np.array(metrics['calinski_harabasz'])
+        davies_bouldin_scores = np.array(metrics['davies_bouldin'])
+        
+        # Normalize scores
+        silhouette_norm = (silhouette_scores - np.min(silhouette_scores)) / (np.max(silhouette_scores) - np.min(silhouette_scores) + 1e-10)
+        calinski_norm = (calinski_scores - np.min(calinski_scores)) / (np.max(calinski_scores) - np.min(calinski_scores) + 1e-10)
+        davies_bouldin_norm = 1 - ((davies_bouldin_scores - np.min(davies_bouldin_scores)) / (np.max(davies_bouldin_scores) - np.min(davies_bouldin_scores) + 1e-10))
+        
+        # Combined score (higher is better)
+        combined_score = silhouette_norm + calinski_norm + davies_bouldin_norm
+        optimal_idx = np.argmax(combined_score)
+        optimal_k = metrics['k'][optimal_idx]
+    
+    return optimal_k, metrics
+
+def find_optimal_eps_dbscan(X, min_samples_range=range(3, 8)):
+    """Mencari parameter eps optimal untuk DBSCAN""" if st.session_state.language == 'id' else """Find optimal eps parameter for DBSCAN"""
+    if len(X) < 3:
+        return 0.5, 3, {}
+    
+    # Calculate k-distance graph for eps estimation
+    k = 4  # Default k for k-distance
+    if len(X) > k:
+        distances = np.sort(np.mean(euclidean_distances(X)[:k], axis=1))
+        # Find elbow point in k-distance graph
+        diffs = np.diff(distances)
+        elbow_idx = np.argmax(diffs) + 1 if len(diffs) > 0 else len(distances) // 2
+        suggested_eps = distances[min(elbow_idx, len(distances) - 1)]
+    else:
+        suggested_eps = 0.5
+    
+    # Test different eps and min_samples combinations
+    eps_range = np.linspace(max(0.1, suggested_eps * 0.5), min(5.0, suggested_eps * 2), 10)
+    
+    best_score = -1
+    best_params = {'eps': 0.5, 'min_samples': 3}
+    results = {'eps': [], 'min_samples': [], 'n_clusters': [], 'silhouette': [], 'n_noise': []}
+    
+    for eps in eps_range:
+        for min_samples in min_samples_range:
+            try:
+                dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                labels = dbscan.fit_predict(X)
+                
+                n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+                n_noise = (labels == -1).sum()
+                
+                results['eps'].append(eps)
+                results['min_samples'].append(min_samples)
+                results['n_clusters'].append(n_clusters)
+                results['n_noise'].append(n_noise)
+                
+                if n_clusters > 1 and n_noise < len(X) * 0.3:  # Not too much noise
+                    silhouette = silhouette_score(X, labels)
+                    results['silhouette'].append(silhouette)
+                    
+                    if silhouette > best_score:
+                        best_score = silhouette
+                        best_params = {'eps': eps, 'min_samples': min_samples}
+                else:
+                    results['silhouette'].append(0)
+                    
+            except Exception as e:
+                continue
+    
+    return best_params['eps'], best_params['min_samples'], results
+
+def analyze_cluster_stability(X, labels, n_bootstrap=10, noise_level=0.05):
+    """Analisis stabilitas clustering dengan bootstrap""" if st.session_state.language == 'id' else """Analyze clustering stability with bootstrap"""
+    if len(set(labels)) <= 1:
+        return {"stability_score": 0, "message": "Tidak cukup cluster untuk analisis stabilitas" if st.session_state.language == 'id' else "Not enough clusters for stability analysis"}
+    
+    original_labels = labels.copy()
+    stability_scores = []
+    
+    for i in range(n_bootstrap):
+        # Add small random noise to data
+        X_noisy = X + np.random.normal(0, noise_level * np.std(X, axis=0), X.shape)
+        
+        try:
+            # Re-cluster with same method (simplified for K-Means)
+            if len(set(original_labels)) > 1:
+                kmeans = KMeans(n_clusters=len(set(original_labels)), random_state=42 + i, n_init=10)
+                new_labels = kmeans.fit_predict(X_noisy)
+                
+                # Calculate adjusted rand score between original and new labels
+                if len(set(new_labels)) > 1:
+                    stability_score = adjusted_rand_score(original_labels, new_labels)
+                    stability_scores.append(stability_score)
+        except Exception as e:
+            continue
+    
+    if stability_scores:
+        return {
+            "stability_score": np.mean(stability_scores),
+            "stability_std": np.std(stability_scores),
+            "n_bootstrap": len(stability_scores)
+        }
+    else:
+        return {"stability_score": 0, "message": "Tidak dapat menghitung stabilitas" if st.session_state.language == 'id' else "Cannot calculate stability"}
+
+def analyze_cluster_characteristics(X, labels, feature_names=None):
+    """Analisis karakteristik cluster berdasarkan fitur-fitur utama""" if st.session_state.language == 'id' else """Analyze cluster characteristics based on key features"""
+    
+    if feature_names is None:
+        feature_names = X.columns if hasattr(X, 'columns') else [f'Feature_{i}' for i in range(X.shape[1])]
+    
+    cluster_profiles = {}
+    unique_labels = np.unique(labels)
+    
+    for cluster_id in unique_labels:
+        if cluster_id == -1:  # Skip noise points in DBSCAN
+            continue
+            
+        cluster_mask = labels == cluster_id
+        cluster_data = X[cluster_mask] if hasattr(X, 'iloc') else X[cluster_mask]
+        
+        if len(cluster_data) == 0:
+            continue
+            
+        profile = {
+            'size': np.sum(cluster_mask),
+            'percentage': np.sum(cluster_mask) / len(labels) * 100,
+            'mean_values': np.mean(cluster_data, axis=0) if hasattr(cluster_data, 'mean') else np.mean(cluster_data),
+            'std_values': np.std(cluster_data, axis=0) if hasattr(cluster_data, 'std') else np.std(cluster_data),
+            'min_values': np.min(cluster_data, axis=0) if hasattr(cluster_data, 'min') else np.min(cluster_data),
+            'max_values': np.max(cluster_data, axis=0) if hasattr(cluster_data, 'max') else np.max(cluster_data)
+        }
+        
+        # Add feature-specific statistics
+        if hasattr(cluster_data, 'shape') and len(cluster_data.shape) > 1:
+            feature_stats = {}
+            for i, feature_name in enumerate(feature_names[:cluster_data.shape[1]]):
+                feature_stats[feature_name] = {
+                    'mean': float(cluster_data[:, i].mean()),
+                    'std': float(cluster_data[:, i].std()),
+                    'min': float(cluster_data[:, i].min()),
+                    'max': float(cluster_data[:, i].max())
+                }
+            profile['feature_stats'] = feature_stats
+        
+        cluster_profiles[f'Cluster_{cluster_id}'] = profile
+    
+    return cluster_profiles
+
+def generate_cluster_report(X, labels, algorithm_name, evaluation_metrics, stability_results, cluster_profiles):
+    """Hasilkan laporan komprehensif clustering""" if st.session_state.language == 'id' else """Generate comprehensive clustering report"""
+    
+    report = []
+    report.append("="*60)
+    report.append(f"CLUSTERING ANALYSIS REPORT - {algorithm_name.upper()}")
+    report.append("="*60)
+    
+    # Dataset overview
+    report.append(f"\nDATASET OVERVIEW:")
+    report.append(f"Total samples: {len(labels)}")
+    report.append(f"Number of features: {X.shape[1] if hasattr(X, 'shape') else len(X[0])}")
+    report.append(f"Number of clusters: {len(np.unique(labels))}")
+    
+    # Cluster distribution
+    unique_labels, counts = np.unique(labels, return_counts=True)
+    report.append(f"\nCLUSTER DISTRIBUTION:")
+    for label, count in zip(unique_labels, counts):
+        if label == -1:
+            report.append(f"  Noise points: {count} ({count/len(labels)*100:.1f}%)")
+        else:
+            report.append(f"  Cluster {label}: {count} samples ({count/len(labels)*100:.1f}%)")
+    
+    # Evaluation metrics
+    report.append(f"\nEVALUATION METRICS:")
+    for metric_name, value in evaluation_metrics.items():
+        if value is not None:
+            report.append(f"  {metric_name}: {value:.4f}")
+        else:
+            report.append(f"  {metric_name}: Not available")
+    
+    # Stability analysis
+    report.append(f"\nSTABILITY ANALYSIS:")
+    if stability_results:
+        report.append(f"  Average Adjusted Rand Index: {stability_results.get('avg_ari', 'N/A')}")
+        report.append(f"  Average Normalized Mutual Info: {stability_results.get('avg_nmi', 'N/A')}")
+        report.append(f"  Stability Score: {stability_results.get('stability_score', 'N/A')}")
+    else:
+        report.append("  Stability analysis not performed")
+    
+    # Cluster characteristics
+    if cluster_profiles:
+        report.append(f"\nCLUSTER CHARACTERISTICS:")
+        for cluster_name, profile in cluster_profiles.items():
+            report.append(f"\n  {cluster_name}:")
+            report.append(f"    Size: {profile['size']} samples ({profile['percentage']:.1f}%)")
+            
+            if 'feature_stats' in profile:
+                report.append(f"    Key features:")
+                # Show top 3 most distinctive features
+                feature_means = [(name, stats['mean']) for name, stats in profile['feature_stats'].items()]
+                feature_means.sort(key=lambda x: abs(x[1]), reverse=True)
+                
+                for feature_name, mean_val in feature_means[:3]:
+                    report.append(f"      {feature_name}: {mean_val:.2f}")
+    
+    # Recommendations
+    report.append(f"\nRECOMMENDATIONS:")
+    
+    # Based on cluster distribution
+    if len(unique_labels) == 1:
+        report.append("  ⚠️  Only one cluster found - consider adjusting parameters")
+    elif any(count < len(labels) * 0.05 for count in counts):
+        report.append("  ⚠️  Some clusters are very small - check for outliers")
+    
+    # Based on silhouette score
+    if 'Silhouette Score' in evaluation_metrics and evaluation_metrics['Silhouette Score'] is not None:
+        silhouette = evaluation_metrics['Silhouette Score']
+        if silhouette > 0.5:
+            report.append("  ✅ Strong cluster separation (Silhouette > 0.5)")
+        elif silhouette > 0.25:
+            report.append("  ℹ️  Moderate cluster separation (0.25 < Silhouette < 0.5)")
+        else:
+            report.append("  ⚠️  Weak cluster separation (Silhouette < 0.25)")
+    
+    # Based on stability
+    if stability_results and 'stability_score' in stability_results:
+        stability_score = stability_results['stability_score']
+        if isinstance(stability_score, (int, float)):
+            if stability_score > 0.8:
+                report.append("  ✅ High cluster stability")
+            elif stability_score > 0.6:
+                report.append("  ℹ️  Moderate cluster stability")
+            else:
+                report.append("  ⚠️  Low cluster stability - results may vary")
+    
+    report.append("\n" + "="*60)
+    
+    return "\n".join(report)
+
 def adjusted_r2_score(r2, n, k):
     """Hitung Adjusted R².""" if st.session_state.language == 'id' else """Calculate Adjusted R²."""
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
 
 def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
-    """Membuat study Optuna untuk Bayesian Optimization""" if st.session_state.language == 'id' else """Create Optuna study for Bayesian Optimization"""
-    direction = "maximize" if problem_type == "Classification" else "maximize"
     
     def objective(trial):
         if problem_type == "Classification":
@@ -1111,73 +1433,221 @@ with tab2:
                     ["K-Means", "K-Prototypes", "Hierarchical", "DBSCAN", "Spectral"]
                 )
                 
+                # Add automatic parameter optimization option
+                auto_optimize = st.checkbox(
+                    "Optimalkan parameter otomatis" if st.session_state.language == 'id' else "Auto-optimize parameters",
+                    value=True
+                )
+                
                 if clustering_method == "K-Means":
                     # K-Means Clustering
-                    max_k = min(10, len(clustering_data) - 1)
-                    k_value = st.slider(
-                        "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
-                        2, max_k, 3
-                    )
+                    if auto_optimize:
+                        with st.spinner("Mencari jumlah cluster optimal..." if st.session_state.language == 'id' else "Finding optimal number of clusters..."):
+                            optimal_k, kmeans_metrics = find_optimal_clusters_kmeans(scaled_data)
+                        st.success(f"Jumlah cluster optimal: {optimal_k}")
+                        k_value = optimal_k
+                    else:
+                        max_k = min(10, len(clustering_data) - 1)
+                        k_value = st.slider(
+                            "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
+                            2, max_k, 3
+                        )
                     
                     kmeans = KMeans(n_clusters=k_value, random_state=42, n_init=10)
                     clusters = kmeans.fit_predict(scaled_data)
                     
-                    # Calculate silhouette score
-                    if len(set(clusters)) > 1:
-                        silhouette = silhouette_score(scaled_data, clusters)
-                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    # Calculate comprehensive metrics
+                    clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "K-Means")
+                    
+                    # Display comprehensive evaluation
+                    st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if 'silhouette_score' in clustering_metrics:
+                            st.metric("Silhouette Score", f"{clustering_metrics['silhouette_score']:.3f}")
+                    with col2:
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            st.metric("Calinski-Harabasz", f"{clustering_metrics['calinski_harabasz_score']:.1f}")
+                    with col3:
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
+                    
+                    # Add cluster stability analysis
+                    if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
+                        stability = analyze_cluster_stability(scaled_data, clusters)
+                        if 'stability_score' in stability:
+                            st.write(f"Stabilitas Cluster: {stability['stability_score']:.3f} ± {stability.get('stability_std', 0):.3f}")
+                    
+                    # Analyze cluster characteristics
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        cluster_profiles = analyze_cluster_characteristics(scaled_data, clusters, selected_features)
+                        
+                        # Display cluster profiles
+                        st.write("**Profil Cluster:**" if st.session_state.language == 'id' else "**Cluster Profiles:**")
+                        for cluster_name, profile in cluster_profiles.items():
+                            with st.expander(f"{cluster_name} ({profile['size']} samples, {profile['percentage']:.1f}%)"):
+                                if 'feature_stats' in profile:
+                                    for feature_name, stats in profile['feature_stats'].items():
+                                        st.write(f"- {feature_name}: Mean={stats['mean']:.2f}, Std={stats['std']:.2f}")
+                    
+                    # Generate comprehensive report
+                    if st.checkbox("Hasilkan Laporan Komprehensif" if st.session_state.language == 'id' else "Generate Comprehensive Report"):
+                        cluster_profiles = analyze_cluster_characteristics(scaled_data, clusters, selected_features)
+                        report = generate_cluster_report(
+                            scaled_data, clusters, "K-Means", clustering_metrics, stability, cluster_profiles
+                        )
+                        st.text(report)
+                        
+                        # Add download button for report
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report,
+                            file_name=f"kmeans_clustering_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
                     
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
-                    
-                    # Visualize clusters
-                    if len(selected_features) >= 2:
-                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+                    # Add cluster characteristics analysis
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
                         
-                        # Scatter plot of first two features
-                        scatter = ax1.scatter(
+                        for cluster_id, char in characteristics.items():
+                            with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
+                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                st.write("**Statistik Fitur:**")
+                                st.json(char['feature_stats'])
+                    
+                    # Generate comprehensive cluster report
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        st.text_area(
+                            "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
+                            value=report,
+                            height=300
+                        )
+                        
+                        # Download report button
+                        report_bytes = report.encode()
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report_bytes,
+                            file_name=f"cluster_report_dbscan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
+                    
+                    # Visualize clusters with enhanced plotting
+                    if len(selected_features) >= 2:
+                        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+                        
+                        # Original feature scatter plot
+                        scatter = axes[0,0].scatter(
                             clustering_data.iloc[:, 0], 
                             clustering_data.iloc[:, 1], 
                             c=clusters, 
                             cmap='viridis', 
                             alpha=0.6
                         )
-                        ax1.set_xlabel(selected_features[0])
-                        ax1.set_ylabel(selected_features[1])
-                        ax1.set_title('Visualisasi Cluster' if st.session_state.language == 'id' else 'Cluster Visualization')
-                        plt.colorbar(scatter, ax=ax1)
+                        axes[0,0].set_xlabel(selected_features[0])
+                        axes[0,0].set_ylabel(selected_features[1])
+                        axes[0,0].set_title('Visualisasi Cluster' if st.session_state.language == 'id' else 'Cluster Visualization')
+                        plt.colorbar(scatter, ax=axes[0,0])
                         
                         # PCA visualization
                         if len(selected_features) > 2:
                             pca = PCA(n_components=2)
                             pca_data = pca.fit_transform(scaled_data)
-                            scatter2 = ax2.scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
-                            ax2.set_xlabel('PC1')
-                            ax2.set_ylabel('PC2')
-                            ax2.set_title('PCA - Visualisasi Cluster' if st.session_state.language == 'id' else 'PCA - Cluster Visualization')
-                            plt.colorbar(scatter2, ax=ax2)
+                            scatter2 = axes[0,1].scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                            axes[0,1].set_xlabel('PC1')
+                            axes[0,1].set_ylabel('PC2')
+                            axes[0,1].set_title('PCA - Visualisasi Cluster' if st.session_state.language == 'id' else 'PCA - Cluster Visualization')
+                            plt.colorbar(scatter2, ax=axes[0,1])
                         
+                        # Cluster size distribution
+                        cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                        axes[1,0].bar(cluster_counts.index, cluster_counts.values)
+                        axes[1,0].set_xlabel('Cluster')
+                        axes[1,0].set_ylabel('Jumlah Data' if st.session_state.language == 'id' else 'Data Count')
+                        axes[1,0].set_title('Distribusi Cluster' if st.session_state.language == 'id' else 'Cluster Distribution')
+                        
+                        # Elbow method visualization (if auto-optimized)
+                        if auto_optimize and 'kmeans_metrics' in locals() and kmeans_metrics.get('inertia'):
+                            axes[1,1].plot(kmeans_metrics['k'], kmeans_metrics['inertia'], 'bo-')
+                            axes[1,1].axvline(x=optimal_k, color='red', linestyle='--', label=f'Optimal k={optimal_k}')
+                            axes[1,1].set_xlabel('Jumlah Cluster (k)' if st.session_state.language == 'id' else 'Number of Clusters (k)')
+                            axes[1,1].set_ylabel('Inertia')
+                            axes[1,1].set_title('Elbow Method')
+                            axes[1,1].legend()
+                            axes[1,1].grid(True)
+                        else:
+                            # Show cluster statistics summary
+                            axes[1,1].text(0.1, 0.9, f"Jumlah Cluster: {clustering_metrics.get('n_clusters', 0)}", transform=axes[1,1].transAxes)
+                            axes[1,1].text(0.1, 0.8, f"Rata-rata Ukuran: {clustering_metrics.get('cluster_size_mean', 0):.1f}", transform=axes[1,1].transAxes)
+                            axes[1,1].text(0.1, 0.7, f"Std Ukuran: {clustering_metrics.get('cluster_size_std', 0):.1f}", transform=axes[1,1].transAxes)
+                            axes[1,1].set_title('Ringkasan Cluster' if st.session_state.language == 'id' else 'Cluster Summary')
+                        
+                        plt.tight_layout()
                         st.pyplot(fig)
-                    
-                    # Show cluster statistics
-                    st.write("Statistik per cluster:" if st.session_state.language == 'id' else "Cluster statistics:")
-                    cluster_stats = clustering_data.groupby('Cluster').agg({
-                        col: ['count', 'mean', 'std'] for col in selected_features
-                    }).round(3)
-                    st.dataframe(cluster_stats)
                 
                 elif clustering_method == "K-Prototypes":
                     # K-Prototypes Clustering for mixed data types
-                    max_k = min(10, len(clustering_data) - 1)
-                    k_value = st.slider(
-                        "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
-                        2, max_k, 3
-                    )
-                    
-                    gamma = st.slider(
-                        "Gamma (bobot kategorikal):" if st.session_state.language == 'id' else "Gamma (categorical weight):",
-                        0.0, 1.0, 0.5, 0.1
-                    )
+                    if auto_optimize:
+                        with st.spinner("Mencari jumlah cluster optimal..." if st.session_state.language == 'id' else "Finding optimal number of clusters..."):
+                            optimal_k = 3  # Default fallback
+                            best_score = -1
+                            best_gamma = 0.5
+                            
+                            # Grid search for optimal k and gamma
+                            for k in range(2, min(8, len(clustering_data) - 1)):
+                                for gamma in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                                    try:
+                                        # Prepare data for K-Prototypes
+                                        categorical_idx = [i for i, col in enumerate(selected_features) 
+                                                         if col in st.session_state.categorical_columns]
+                                        
+                                        # Convert categorical columns to appropriate types
+                                        kproto_data = clustering_data.copy()
+                                        for col in categorical_in_selected:
+                                            kproto_data[col] = kproto_data[col].astype('category').cat.codes
+                                        
+                                        # Initialize and fit K-Prototypes
+                                        kproto = KPrototypes(n_clusters=k, init='Huang', random_state=42, gamma=gamma)
+                                        clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
+                                        
+                                        # Calculate silhouette score (only for numerical features)
+                                        if len(set(clusters)) > 1 and len([col for col in selected_features 
+                                                                              if col in st.session_state.numerical_columns]) > 0:
+                                            # Use only numerical features for silhouette score
+                                            num_features = [col for col in selected_features 
+                                                          if col in st.session_state.numerical_columns]
+                                            if num_features:
+                                                num_data = clustering_data[num_features]
+                                                num_scaled = StandardScaler().fit_transform(num_data)
+                                                score = silhouette_score(num_scaled, clusters)
+                                                if score > best_score:
+                                                    best_score = score
+                                                    optimal_k = k
+                                                    best_gamma = gamma
+                                    except:
+                                        continue
+                        
+                        st.success(f"Jumlah cluster optimal: {optimal_k}, Gamma optimal: {best_gamma}")
+                        k_value = optimal_k
+                        gamma_value = best_gamma
+                    else:
+                        max_k = min(10, len(clustering_data) - 1)
+                        k_value = st.slider(
+                            "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
+                            2, max_k, 3
+                        )
+                        
+                        gamma_value = st.slider(
+                            "Gamma (bobot kategorikal):" if st.session_state.language == 'id' else "Gamma (categorical weight):",
+                            0.0, 1.0, 0.5, 0.1
+                        )
                     
                     # Prepare data for K-Prototypes
                     categorical_idx = [i for i, col in enumerate(selected_features) 
@@ -1189,40 +1659,65 @@ with tab2:
                         kproto_data[col] = kproto_data[col].astype('category').cat.codes
                     
                     # Initialize and fit K-Prototypes
-                    kproto = KPrototypes(n_clusters=k_value, init='Huang', random_state=42, gamma=gamma)
-                    clusters = kproto.fit_predict(kproto_data.values, categorical=categorical_idx)
+                    kproto = KPrototypes(n_clusters=k_value, init='Huang', random_state=42, gamma=gamma_value)
+                    clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
                     
-                    # Calculate silhouette score (only for numerical features)
-                    if len(set(clusters)) > 1 and len([col for col in selected_features 
-                                                      if col in st.session_state.numerical_columns]) > 0:
-                        # Use only numerical features for silhouette score
-                        num_features = [col for col in selected_features 
-                                      if col in st.session_state.numerical_columns]
-                        if num_features:
-                            num_data = clustering_data[num_features]
-                            num_scaled = StandardScaler().fit_transform(num_data)
-                            silhouette = silhouette_score(num_scaled, clusters)
-                            st.write(f"Silhouette Score (numerical): {silhouette:.3f}")
+                    # Calculate comprehensive metrics (using numerical features only)
+                    if len([col for col in selected_features if col in st.session_state.numerical_columns]) > 0:
+                        num_features = [col for col in selected_features if col in st.session_state.numerical_columns]
+                        num_data = clustering_data[num_features]
+                        num_scaled = StandardScaler().fit_transform(num_data)
+                        clustering_metrics = calculate_comprehensive_clustering_metrics(num_scaled, clusters, "K-Prototypes")
+                    else:
+                        # Fallback to basic metrics if no numerical features
+                        clustering_metrics = {
+                            'n_clusters': len(set(clusters)) - (1 if -1 in clusters else 0),
+                            'cluster_size_mean': np.mean(pd.Series(clusters).value_counts()),
+                            'cluster_size_std': np.std(pd.Series(clusters).value_counts())
+                        }
+                    
+                    # Display comprehensive evaluation
+                    st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if 'silhouette_score' in clustering_metrics:
+                            st.metric("Silhouette Score", f"{clustering_metrics['silhouette_score']:.3f}")
+                    with col2:
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            st.metric("Calinski-Harabasz", f"{clustering_metrics['calinski_harabasz_score']:.1f}")
+                    with col3:
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
+                    
+                    # Add cluster stability analysis
+                    if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
+                        if len([col for col in selected_features if col in st.session_state.numerical_columns]) > 0:
+                            stability = analyze_cluster_stability(num_scaled, clusters)
+                            if 'stability_score' in stability:
+                                st.write(f"Stabilitas Cluster: {stability['stability_score']:.3f} ± {stability.get('stability_std', 0):.3f}")
+                        else:
+                            st.write("Analisis stabilitas memerlukan fitur numerikal.")
                     
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
                     
-                    # Visualize clusters
+                    # Enhanced visualization
                     if len(selected_features) >= 2:
-                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
                         
                         # Scatter plot using first two features
-                        scatter = ax1.scatter(
+                        scatter = axes[0,0].scatter(
                             clustering_data.iloc[:, 0], 
                             clustering_data.iloc[:, 1], 
                             c=clusters, 
                             cmap='viridis', 
                             alpha=0.6
                         )
-                        ax1.set_xlabel(selected_features[0])
-                        ax1.set_ylabel(selected_features[1])
-                        ax1.set_title('K-Prototypes Clustering' if st.session_state.language == 'id' else 'K-Prototypes Clustering')
-                        plt.colorbar(scatter, ax=ax1)
+                        axes[0,0].set_xlabel(selected_features[0])
+                        axes[0,0].set_ylabel(selected_features[1])
+                        axes[0,0].set_title('K-Prototypes Clustering' if st.session_state.language == 'id' else 'K-Prototypes Clustering')
+                        plt.colorbar(scatter, ax=axes[0,0])
                         
                         # PCA visualization for numerical features
                         num_features = [col for col in selected_features 
@@ -1230,12 +1725,32 @@ with tab2:
                         if len(num_features) >= 2:
                             pca = PCA(n_components=2)
                             pca_data = pca.fit_transform(clustering_data[num_features])
-                            scatter2 = ax2.scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
-                            ax2.set_xlabel('PC1')
-                            ax2.set_ylabel('PC2')
-                            ax2.set_title('PCA - K-Prototypes Clustering' if st.session_state.language == 'id' else 'PCA - K-Prototypes Clustering')
-                            plt.colorbar(scatter2, ax=ax2)
+                            scatter2 = axes[0,1].scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                            axes[0,1].set_xlabel('PC1')
+                            axes[0,1].set_ylabel('PC2')
+                            axes[0,1].set_title('PCA - K-Prototypes Clustering' if st.session_state.language == 'id' else 'PCA - K-Prototypes Clustering')
+                            plt.colorbar(scatter2, ax=axes[0,1])
+                        else:
+                            # Show feature importance if not enough numerical features
+                            axes[0,1].text(0.1, 0.5, "Tidak cukup fitur numerikal untuk PCA", transform=axes[0,1].transAxes)
+                            axes[0,1].set_title('PCA - Tidak Tersedia' if st.session_state.language == 'id' else 'PCA - Not Available')
                         
+                        # Cluster size distribution
+                        cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                        axes[1,0].bar(cluster_counts.index, cluster_counts.values)
+                        axes[1,0].set_xlabel('Cluster')
+                        axes[1,0].set_ylabel('Jumlah Data' if st.session_state.language == 'id' else 'Data Count')
+                        axes[1,0].set_title('Distribusi Cluster' if st.session_state.language == 'id' else 'Cluster Distribution')
+                        
+                        # Cluster summary
+                        axes[1,1].text(0.1, 0.9, f"Jumlah Cluster: {clustering_metrics.get('n_clusters', 0)}", transform=axes[1,1].transAxes)
+                        axes[1,1].text(0.1, 0.8, f"Rata-rata Ukuran: {clustering_metrics.get('cluster_size_mean', 0):.1f}", transform=axes[1,1].transAxes)
+                        axes[1,1].text(0.1, 0.7, f"Std Ukuran: {clustering_metrics.get('cluster_size_std', 0):.1f}", transform=axes[1,1].transAxes)
+                        if 'silhouette_score' in clustering_metrics:
+                            axes[1,1].text(0.1, 0.6, f"Silhouette: {clustering_metrics['silhouette_score']:.3f}", transform=axes[1,1].transAxes)
+                        axes[1,1].set_title('Ringkasan Cluster' if st.session_state.language == 'id' else 'Cluster Summary')
+                        
+                        plt.tight_layout()
                         st.pyplot(fig)
                     
                     # Show cluster statistics
@@ -1246,16 +1761,74 @@ with tab2:
                     }).round(3)
                     st.dataframe(cluster_stats)
 
+                    # Add cluster characteristics analysis
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        if len([col for col in selected_features if col in st.session_state.numerical_columns]) > 0:
+                            characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                            st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
+                            
+                            for cluster_id, char in characteristics.items():
+                                with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
+                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                    st.write("**Statistik Fitur:**")
+                                    st.json(char['feature_stats'])
+                        else:
+                            st.write("Analisis karakteristik memerlukan fitur numerikal.")
+                    
+                    # Generate comprehensive cluster report
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        st.text_area(
+                            "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
+                            value=report,
+                            height=300
+                        )
+                        
+                        # Download report button
+                        report_bytes = report.encode()
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report_bytes,
+                            file_name=f"cluster_report_kprototypes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
+
                 elif clustering_method == "Hierarchical":
                     # Hierarchical Clustering
                     linkage_method = st.selectbox(
                         "Metode linkage:" if st.session_state.language == 'id' else "Linkage method:",
                         ["ward", "complete", "average", "single"]
                     )
-                    n_clusters = st.slider(
-                        "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
-                        2, min(10, len(clustering_data) - 1), 3
-                    )
+                    
+                    if auto_optimize:
+                        with st.spinner("Mencari jumlah cluster optimal..." if st.session_state.language == 'id' else "Finding optimal number of clusters..."):
+                            optimal_n_clusters = 3  # Default fallback
+                            best_score = -1
+                            
+                            # Try different numbers of clusters
+                            for n_clusters in range(2, min(8, len(clustering_data) - 1)):
+                                try:
+                                    hierarchical = AgglomerativeClustering(
+                                        n_clusters=n_clusters, 
+                                        linkage=linkage_method
+                                    )
+                                    clusters = hierarchical.fit_predict(scaled_data)
+                                    
+                                    if len(set(clusters)) > 1:
+                                        score = silhouette_score(scaled_data, clusters)
+                                        if score > best_score:
+                                            best_score = score
+                                            optimal_n_clusters = n_clusters
+                                except:
+                                    continue
+                            
+                            st.success(f"Jumlah cluster optimal: {optimal_n_clusters}")
+                            n_clusters = optimal_n_clusters
+                    else:
+                        n_clusters = st.slider(
+                            "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
+                            2, min(10, len(clustering_data) - 1), 3
+                        )
                     
                     hierarchical = AgglomerativeClustering(
                         n_clusters=n_clusters, 
@@ -1263,114 +1836,371 @@ with tab2:
                     )
                     clusters = hierarchical.fit_predict(scaled_data)
                     
-                    # Calculate silhouette score
-                    if len(set(clusters)) > 1:
-                        silhouette = silhouette_score(scaled_data, clusters)
-                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    # Calculate comprehensive metrics
+                    clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "Hierarchical")
                     
-                    # Dendrogram
-                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                    # Display comprehensive evaluation
+                    st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if 'silhouette_score' in clustering_metrics:
+                            st.metric("Silhouette Score", f"{clustering_metrics['silhouette_score']:.3f}")
+                    with col2:
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            st.metric("Calinski-Harabasz", f"{clustering_metrics['calinski_harabasz_score']:.1f}")
+                    with col3:
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
+                    
+                    # Add cluster stability analysis
+                    if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
+                        stability = analyze_cluster_stability(scaled_data, clusters)
+                        if 'stability_score' in stability:
+                            st.write(f"Stabilitas Cluster: {stability['stability_score']:.3f} ± {stability.get('stability_std', 0):.3f}")
+                    
+                    # Enhanced visualization
+                    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
                     
                     # Dendrogram plot
                     linkage_matrix = linkage(scaled_data[:min(100, len(scaled_data))], method=linkage_method)
-                    dendrogram(linkage_matrix, ax=ax1)
-                    ax1.set_title('Dendrogram' if st.session_state.language == 'id' else 'Dendrogram')
-                    ax1.set_xlabel('Sample Index')
-                    ax1.set_ylabel('Distance')
+                    dendrogram(linkage_matrix, ax=axes[0,0])
+                    axes[0,0].set_title('Dendrogram' if st.session_state.language == 'id' else 'Dendrogram')
+                    axes[0,0].set_xlabel('Sample Index')
+                    axes[0,0].set_ylabel('Distance')
                     
                     # Cluster visualization
                     if len(selected_features) >= 2:
-                        scatter = ax2.scatter(
+                        scatter = axes[0,1].scatter(
                             clustering_data.iloc[:, 0], 
                             clustering_data.iloc[:, 1], 
                             c=clusters, 
                             cmap='viridis', 
                             alpha=0.6
                         )
-                        ax2.set_xlabel(selected_features[0])
-                        ax2.set_ylabel(selected_features[1])
-                        ax2.set_title('Hierarchical Clustering' if st.session_state.language == 'id' else 'Hierarchical Clustering')
-                        plt.colorbar(scatter, ax=ax2)
+                        axes[0,1].set_xlabel(selected_features[0])
+                        axes[0,1].set_ylabel(selected_features[1])
+                        axes[0,1].set_title('Hierarchical Clustering' if st.session_state.language == 'id' else 'Hierarchical Clustering')
+                        plt.colorbar(scatter, ax=axes[0,1])
                     
+                    # Cluster size distribution
+                    cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                    axes[1,0].bar(cluster_counts.index, cluster_counts.values)
+                    axes[1,0].set_xlabel('Cluster')
+                    axes[1,0].set_ylabel('Jumlah Data' if st.session_state.language == 'id' else 'Data Count')
+                    axes[1,0].set_title('Distribusi Cluster' if st.session_state.language == 'id' else 'Cluster Distribution')
+                    
+                    # Cluster summary
+                    axes[1,1].text(0.1, 0.9, f"Jumlah Cluster: {clustering_metrics.get('n_clusters', 0)}", transform=axes[1,1].transAxes)
+                    axes[1,1].text(0.1, 0.8, f"Rata-rata Ukuran: {clustering_metrics.get('cluster_size_mean', 0):.1f}", transform=axes[1,1].transAxes)
+                    axes[1,1].text(0.1, 0.7, f"Std Ukuran: {clustering_metrics.get('cluster_size_std', 0):.1f}", transform=axes[1,1].transAxes)
+                    if 'silhouette_score' in clustering_metrics:
+                        axes[1,1].text(0.1, 0.6, f"Silhouette: {clustering_metrics['silhouette_score']:.3f}", transform=axes[1,1].transAxes)
+                    axes[1,1].set_title('Ringkasan Cluster' if st.session_state.language == 'id' else 'Cluster Summary')
+                    
+                    plt.tight_layout()
                     st.pyplot(fig)
                     
                     # Add cluster labels
                     clustering_data['Cluster'] = clusters
                     st.write("Distribusi cluster:" if st.session_state.language == 'id' else "Cluster distribution:")
                     st.write(clustering_data['Cluster'].value_counts())
+
+                    # Add cluster characteristics analysis
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
+                        
+                        for cluster_id, char in characteristics.items():
+                            with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
+                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                st.write("**Statistik Fitur:**")
+                                st.json(char['feature_stats'])
+                    
+                    # Generate comprehensive cluster report
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        st.text_area(
+                            "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
+                            value=report,
+                            height=300
+                        )
+                        
+                        # Download report button
+                        report_bytes = report.encode()
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report_bytes,
+                            file_name=f"cluster_report_hierarchical_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
                 
                 elif clustering_method == "DBSCAN":
                     # DBSCAN Clustering
-                    eps = st.slider("Eps (radius neighborhood):", 0.1, 5.0, 0.5, 0.1)
-                    min_samples = st.slider("Min samples:", 1, 20, 5)
+                    if auto_optimize:
+                        with st.spinner("Mencari parameter DBSCAN optimal..." if st.session_state.language == 'id' else "Finding optimal DBSCAN parameters..."):
+                            optimal_eps, optimal_min_samples, dbscan_metrics = find_optimal_eps_dbscan(scaled_data)
+                        st.success(f"Parameter optimal: eps={optimal_eps:.2f}, min_samples={optimal_min_samples}")
+                        eps = optimal_eps
+                        min_samples = optimal_min_samples
+                    else:
+                        eps = st.slider("Eps (radius neighborhood):", 0.1, 5.0, 0.5, 0.1)
+                        min_samples = st.slider("Min samples:", 1, 20, 5)
                     
                     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
                     clusters = dbscan.fit_predict(scaled_data)
                     
-                    # Calculate silhouette score
-                    if len(set(clusters)) > 1 and -1 not in clusters:
-                        silhouette = silhouette_score(scaled_data, clusters)
-                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    # Calculate comprehensive metrics
+                    clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "DBSCAN")
+                    
+                    # Display comprehensive evaluation
+                    st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if 'silhouette_score' in clustering_metrics:
+                            st.metric("Silhouette Score", f"{clustering_metrics['silhouette_score']:.3f}")
+                    with col2:
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            st.metric("Calinski-Harabasz", f"{clustering_metrics['calinski_harabasz_score']:.1f}")
+                    with col3:
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
                     
                     # Count clusters (excluding noise)
                     n_clusters = len(set(clusters)) - (1 if -1 in clusters else 0)
                     st.write(f"Jumlah cluster: {n_clusters}")
                     st.write(f"Noise points: {(clusters == -1).sum()}")
                     
-                    # Visualize DBSCAN clusters
+                    # Add cluster stability analysis
+                    if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
+                        stability = analyze_cluster_stability(scaled_data, clusters)
+                        if 'stability_score' in stability:
+                            st.write(f"Stabilitas Cluster: {stability['stability_score']:.3f} ± {stability.get('stability_std', 0):.3f}")
+                    
+                    # Enhanced visualization
                     if len(selected_features) >= 2:
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        scatter = ax.scatter(
+                        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+                        
+                        # DBSCAN clusters scatter plot
+                        scatter = axes[0,0].scatter(
                             clustering_data.iloc[:, 0], 
                             clustering_data.iloc[:, 1], 
                             c=clusters, 
                             cmap='viridis', 
                             alpha=0.6
                         )
-                        ax.set_xlabel(selected_features[0])
-                        ax.set_ylabel(selected_features[1])
-                        ax.set_title('DBSCAN Clustering' if st.session_state.language == 'id' else 'DBSCAN Clustering')
-                        plt.colorbar(scatter, ax=ax)
+                        axes[0,0].set_xlabel(selected_features[0])
+                        axes[0,0].set_ylabel(selected_features[1])
+                        axes[0,0].set_title('DBSCAN Clustering' if st.session_state.language == 'id' else 'DBSCAN Clustering')
+                        plt.colorbar(scatter, ax=axes[0,0])
+                        
+                        # PCA visualization
+                        pca = PCA(n_components=2)
+                        pca_data = pca.fit_transform(scaled_data)
+                        scatter2 = axes[0,1].scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                        axes[0,1].set_xlabel('PC1')
+                        axes[0,1].set_ylabel('PC2')
+                        axes[0,1].set_title('PCA - DBSCAN Clustering' if st.session_state.language == 'id' else 'PCA - DBSCAN Clustering')
+                        plt.colorbar(scatter2, ax=axes[0,1])
+                        
+                        # Cluster size distribution (excluding noise)
+                        cluster_counts = pd.Series(clusters[clusters != -1]).value_counts().sort_index()
+                        axes[1,0].bar(cluster_counts.index, cluster_counts.values)
+                        axes[1,0].set_xlabel('Cluster')
+                        axes[1,0].set_ylabel('Jumlah Data' if st.session_state.language == 'id' else 'Data Count')
+                        axes[1,0].set_title('Distribusi Cluster (Tanpa Noise)' if st.session_state.language == 'id' else 'Cluster Distribution (No Noise)')
+                        
+                        # K-distance plot (if auto-optimized)
+                        if auto_optimize and 'kmeans_metrics' in locals() and dbscan_metrics.get('k_distances'):
+                            axes[1,1].plot(dbscan_metrics['k_distances'], 'bo-')
+                            axes[1,1].axhline(y=optimal_eps, color='red', linestyle='--', label=f'Optimal eps={optimal_eps:.2f}')
+                            axes[1,1].set_xlabel('Data Point Index')
+                            axes[1,1].set_ylabel('K-distance')
+                            axes[1,1].set_title('K-distance Graph')
+                            axes[1,1].legend()
+                            axes[1,1].grid(True)
+                        else:
+                            # Show cluster summary
+                            axes[1,1].text(0.1, 0.9, f"Jumlah Cluster: {n_clusters}", transform=axes[1,1].transAxes)
+                            axes[1,1].text(0.1, 0.8, f"Noise Points: {(clusters == -1).sum()}", transform=axes[1,1].transAxes)
+                            if 'silhouette_score' in clustering_metrics:
+                                axes[1,1].text(0.1, 0.7, f"Silhouette: {clustering_metrics['silhouette_score']:.3f}", transform=axes[1,1].transAxes)
+                            axes[1,1].set_title('Ringkasan Cluster' if st.session_state.language == 'id' else 'Cluster Summary')
+                        
+                        plt.tight_layout()
                         st.pyplot(fig)
                     
                     clustering_data['Cluster'] = clusters
+
+                    # Add cluster characteristics analysis
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
+                        
+                        for cluster_id, char in characteristics.items():
+                            with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
+                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                st.write("**Statistik Fitur:**")
+                                st.json(char['feature_stats'])
+                    
+                    # Generate comprehensive cluster report
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        st.text_area(
+                            "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
+                            value=report,
+                            height=300
+                        )
+                        
+                        # Download report button
+                        report_bytes = report.encode()
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report_bytes,
+                            file_name=f"cluster_report_dbscan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
                 
                 elif clustering_method == "Spectral":
                     # Spectral Clustering
-                    n_clusters = st.slider(
-                        "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
-                        2, min(10, len(clustering_data) - 1), 3
-                    )
+                    if auto_optimize:
+                        with st.spinner("Mencari parameter Spectral optimal..." if st.session_state.language == 'id' else "Finding optimal Spectral parameters..."):
+                            # Find optimal number of clusters
+                            best_k = None
+                            best_score = -1
+                            spectral_metrics = {}
+                            
+                            for k in range(2, 11):
+                                try:
+                                    spectral_temp = SpectralClustering(n_clusters=k, random_state=42, n_init=10, affinity='nearest_neighbors')
+                                    clusters_temp = spectral_temp.fit_predict(scaled_data)
+                                    
+                                    # Calculate silhouette score
+                                    if len(set(clusters_temp)) > 1:
+                                        score = silhouette_score(scaled_data, clusters_temp)
+                                        if score > best_score:
+                                            best_score = score
+                                            best_k = k
+                                            spectral_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters_temp, "Spectral")
+                                except:
+                                    continue
+                            
+                            n_clusters = best_k if best_k else 3
+                        st.success(f"Jumlah cluster optimal: {n_clusters}")
+                    else:
+                        n_clusters = st.slider(
+                            "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
+                            2, min(10, len(clustering_data) - 1), 3
+                        )
                     
                     spectral = SpectralClustering(
                         n_clusters=n_clusters, 
                         random_state=42,
+                        n_init=10,
                         affinity='nearest_neighbors'
                     )
                     clusters = spectral.fit_predict(scaled_data)
                     
-                    # Calculate silhouette score
-                    if len(set(clusters)) > 1:
-                        silhouette = silhouette_score(scaled_data, clusters)
-                        st.write(f"Silhouette Score: {silhouette:.3f}")
+                    # Calculate comprehensive metrics
+                    clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "Spectral")
                     
-                    # Visualize Spectral clusters
+                    # Display comprehensive evaluation
+                    st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if 'silhouette_score' in clustering_metrics:
+                            st.metric("Silhouette Score", f"{clustering_metrics['silhouette_score']:.3f}")
+                    with col2:
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            st.metric("Calinski-Harabasz", f"{clustering_metrics['calinski_harabasz_score']:.1f}")
+                    with col3:
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
+                    
+                    # Add cluster stability analysis
+                    if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
+                        stability = analyze_cluster_stability(scaled_data, clusters)
+                        if 'stability_score' in stability:
+                            st.write(f"Stabilitas Cluster: {stability['stability_score']:.3f} ± {stability.get('stability_std', 0):.3f}")
+                    
+                    # Enhanced visualization
                     if len(selected_features) >= 2:
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        scatter = ax.scatter(
+                        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+                        
+                        # Spectral clusters scatter plot
+                        scatter = axes[0,0].scatter(
                             clustering_data.iloc[:, 0], 
                             clustering_data.iloc[:, 1], 
                             c=clusters, 
                             cmap='viridis', 
                             alpha=0.6
                         )
-                        ax.set_xlabel(selected_features[0])
-                        ax.set_ylabel(selected_features[1])
-                        ax.set_title('Spectral Clustering' if st.session_state.language == 'id' else 'Spectral Clustering')
-                        plt.colorbar(scatter, ax=ax)
+                        axes[0,0].set_xlabel(selected_features[0])
+                        axes[0,0].set_ylabel(selected_features[1])
+                        axes[0,0].set_title('Spectral Clustering' if st.session_state.language == 'id' else 'Spectral Clustering')
+                        plt.colorbar(scatter, ax=axes[0,0])
+                        
+                        # PCA visualization
+                        pca = PCA(n_components=2)
+                        pca_data = pca.fit_transform(scaled_data)
+                        scatter2 = axes[0,1].scatter(pca_data[:, 0], pca_data[:, 1], c=clusters, cmap='viridis', alpha=0.6)
+                        axes[0,1].set_xlabel('PC1')
+                        axes[0,1].set_ylabel('PC2')
+                        axes[0,1].set_title('PCA - Spectral Clustering' if st.session_state.language == 'id' else 'PCA - Spectral Clustering')
+                        plt.colorbar(scatter2, ax=axes[0,1])
+                        
+                        # Cluster size distribution
+                        cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                        axes[1,0].bar(cluster_counts.index, cluster_counts.values)
+                        axes[1,0].set_xlabel('Cluster')
+                        axes[1,0].set_ylabel('Jumlah Data' if st.session_state.language == 'id' else 'Data Count')
+                        axes[1,0].set_title('Distribusi Cluster' if st.session_state.language == 'id' else 'Cluster Distribution')
+                        
+                        # Show cluster summary and statistics
+                        axes[1,1].text(0.1, 0.9, f"Jumlah Cluster: {n_clusters}", transform=axes[1,1].transAxes)
+                        if 'silhouette_score' in clustering_metrics:
+                            axes[1,1].text(0.1, 0.8, f"Silhouette: {clustering_metrics['silhouette_score']:.3f}", transform=axes[1,1].transAxes)
+                        if 'calinski_harabasz_score' in clustering_metrics:
+                            axes[1,1].text(0.1, 0.7, f"Calinski-Harabasz: {clustering_metrics['calinski_harabasz_score']:.1f}", transform=axes[1,1].transAxes)
+                        if 'davies_bouldin_score' in clustering_metrics:
+                            axes[1,1].text(0.1, 0.6, f"Davies-Bouldin: {clustering_metrics['davies_bouldin_score']:.3f}", transform=axes[1,1].transAxes)
+                        axes[1,1].set_title('Ringkasan Cluster' if st.session_state.language == 'id' else 'Cluster Summary')
+                        
+                        plt.tight_layout()
                         st.pyplot(fig)
                     
                     clustering_data['Cluster'] = clusters
+
+                    # Add cluster characteristics analysis
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                        characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
+                        
+                        for cluster_id, char in characteristics.items():
+                            with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
+                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                st.write("**Statistik Fitur:**")
+                                st.json(char['feature_stats'])
+                    
+                    # Generate comprehensive cluster report
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        st.text_area(
+                            "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
+                            value=report,
+                            height=300
+                        )
+                        
+                        # Download report button
+                        report_bytes = report.encode()
+                        st.download_button(
+                            label="Unduh Laporan" if st.session_state.language == 'id' else "Download Report",
+                            data=report_bytes,
+                            file_name=f"cluster_report_spectral_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
                 
                 # Elbow Method for K-Means
                 if clustering_method == "K-Means" and st.checkbox("Tampilkan Elbow Method" if st.session_state.language == 'id' else "Show Elbow Method"):
