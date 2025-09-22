@@ -309,16 +309,18 @@ class TimeSeriesAnomalyDetector:
             elif method == 'one_class_svm':
                 result = self.one_class_svm_detection(data, nu=contamination)
             elif method == 'statistical':
-                result = self.statistical_detection(data, threshold=3)
+                result = self.statistical_detection(data, threshold=z_threshold)
             elif method == 'lstm_autoencoder' and TF_AVAILABLE:
                 try:
                     result = self.lstm_autoencoder_detection(data, contamination=contamination)
-                except:
+                except Exception as e:
+                    print(f"LSTM Autoencoder error: {e}")
                     continue
             elif method == 'prophet' and PROPHET_AVAILABLE:
                 try:
                     result = self.prophet_based_detection(data, contamination=contamination)
-                except:
+                except Exception as e:
+                    print(f"Prophet error: {e}")
                     continue
             
             results[method] = result['anomalies']
@@ -425,7 +427,7 @@ class TimeSeriesAnomalyDetector:
         return summary
 
 
-def detect_and_visualize_anomalies(data, target_column, date_column=None, methods=None, contamination=0.1):
+def detect_and_visualize_anomalies(data, target_column, date_column=None, methods=None, contamination=0.1, z_threshold=3.0):
     """
     Complete pipeline for anomaly detection in time series data
     
@@ -435,6 +437,7 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
     - date_column: column name for datetime (optional)
     - methods: list of detection methods to use
     - contamination: proportion of outliers
+    - z_threshold: Z-score threshold for statistical method
     
     Returns:
     - Dictionary with results for each method
@@ -442,11 +445,29 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
     if methods is None:
         methods = ['isolation_forest', 'statistical']
     
+    # Validasi input
+    if data is None or len(data) == 0:
+        raise ValueError("Data tidak boleh kosong")
+    
+    if target_column not in data.columns:
+        raise ValueError(f"Kolom target '{target_column}' tidak ditemukan dalam data")
+    
     # Prepare data
     if date_column and date_column in data.columns:
         ts_data = data.set_index(date_column)[target_column]
     else:
         ts_data = data[target_column]
+    
+    # Validasi data time series
+    if len(ts_data) < 10:
+        raise ValueError("Dataset terlalu pendek. Minimal 10 data points diperlukan")
+    
+    if ts_data.std() == 0:
+        raise ValueError("Data memiliki nilai konstan. Deteksi anomali tidak dapat dilakukan")
+    
+    # Handle missing values
+    if ts_data.isnull().any():
+        ts_data = ts_data.dropna()
     
     # Initialize detector
     detector = TimeSeriesAnomalyDetector()
@@ -475,6 +496,11 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
             }
             
         except Exception as e:
-            results[method] = {'error': str(e)}
+            results[method] = {
+                'error': str(e),
+                'detector': detector,
+                'result': None,
+                'summary': None
+            }
     
     return results

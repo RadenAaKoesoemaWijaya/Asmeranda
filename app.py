@@ -6625,62 +6625,54 @@ with tab7:
                     if st.button("🚀 Jalankan Deteksi Anomali" if st.session_state.language == 'id' else "Run Anomaly Detection", type="primary"):
                         with st.spinner("Menjalankan deteksi anomali..." if st.session_state.language == 'id' else "Running anomaly detection..."):
                             try:
-                                results = {}
-                                
-                                for method in selected_methods:
-                                    try:
-                                        if method == 'isolation_forest':
-                                            # Isolation Forest
-                                            model = IsolationForest(contamination=contamination, random_state=42)
-                                            predictions = model.fit_predict(ts_data.values.reshape(-1, 1))
-                                            anomalies = predictions == -1
+                                # Validasi data
+                                if len(ts_data) < 10:
+                                    st.error("Dataset terlalu pendek. Minimal 10 data points diperlukan." if st.session_state.language == 'id' else "Dataset too short. Minimum 10 data points required.")
+                                elif ts_data.std() == 0:
+                                    st.error("Data memiliki nilai konstan. Deteksi anomali tidak dapat dilakukan." if st.session_state.language == 'id' else "Data has constant values. Anomaly detection cannot be performed.")
+                                else:
+                                    # Gunakan fungsi dari anomaly_detection_utils
+                                    from anomaly_detection_utils import detect_and_visualize_anomalies
+                                    
+                                    results = {}
+                                    
+                                    # Siapkan DataFrame untuk fungsi deteksi
+                                    df_for_detection = pd.DataFrame({
+                                        date_column: ts_data.index,
+                                        target_column: ts_data.values
+                                    })
+                                    
+                                    # Jalankan deteksi untuk setiap metode
+                                    for method in selected_methods:
+                                        try:
+                                            detection_results = detect_and_visualize_anomalies(
+                                                data=df_for_detection,
+                                                target_column=target_column,
+                                                date_column=date_column,
+                                                methods=[method],
+                                                contamination=contamination
+                                            )
                                             
-                                        elif method == 'one_class_svm':
-                                            # One-Class SVM
-                                            model = OneClassSVM(nu=contamination)
-                                            predictions = model.fit_predict(ts_data.values.reshape(-1, 1))
-                                            anomalies = predictions == -1
-                                            
-                                        elif method == 'statistical':
-                                            # Statistical method (Z-score)
-                                            z_scores = np.abs(stats.zscore(ts_data))
-                                            anomalies = z_scores > z_threshold
-                                            
-                                        elif method == 'ensemble':
-                                            # Ensemble method - majority voting
-                                            votes = np.zeros(len(ts_data))
-                                            
-                                            # Isolation Forest vote
-                                            model_if = IsolationForest(contamination=contamination, random_state=42)
-                                            votes += (model_if.fit_predict(ts_data.values.reshape(-1, 1)) == -1).astype(int)
-                                            
-                                            # One-Class SVM vote
-                                            model_svm = OneClassSVM(nu=contamination)
-                                            votes += (model_svm.fit_predict(ts_data.values.reshape(-1, 1)) == -1).astype(int)
-                                            
-                                            # Statistical vote
-                                            z_scores = np.abs(stats.zscore(ts_data))
-                                            votes += (z_scores > z_threshold).astype(int)
-                                            
-                                            anomalies = votes >= 2  # Majority vote
-                                        
-                                        # Calculate summary
-                                        anomaly_count = np.sum(anomalies)
-                                        anomaly_percentage = (anomaly_count / len(ts_data)) * 100
-                                        
-                                        results[method] = {
-                                            'anomalies': anomalies,
-                                            'anomaly_count': anomaly_count,
-                                            'anomaly_percentage': anomaly_percentage,
-                                            'anomaly_indices': ts_data.index[anomalies],
-                                            'anomaly_values': ts_data.values[anomalies]
-                                        }
-                                        
-                                    except Exception as e:
-                                        st.error(f"Error pada metode {method}: {str(e)}")
-                                
-                                # Display results
-                                st.subheader("📋 Hasil Deteksi Anomali" if st.session_state.language == 'id' else "Anomaly Detection Results")
+                                            if method in detection_results and 'result' in detection_results[method]:
+                                                result_data = detection_results[method]['result']
+                                                summary_data = detection_results[method]['summary']
+                                                
+                                                results[method] = {
+                                                    'anomalies': result_data['anomalies'],
+                                                    'anomaly_count': summary_data['anomaly_count'],
+                                                    'anomaly_percentage': summary_data['anomaly_percentage'],
+                                                    'anomaly_indices': ts_data.index[result_data['anomalies']],
+                                                    'anomaly_values': ts_data.values[result_data['anomalies']],
+                                                    'summary': summary_data
+                                                }
+                                            else:
+                                                st.error(f"Error pada metode {method}: Hasil deteksi tidak valid")
+                                                
+                                        except Exception as e:
+                                            st.error(f"Error pada metode {method}: {str(e)}")
+                                    
+                                    # Display results
+                                    st.subheader("📋 Hasil Deteksi Anomali" if st.session_state.language == 'id' else "Anomaly Detection Results")
                                 
                                 # Summary table
                                 if results:
