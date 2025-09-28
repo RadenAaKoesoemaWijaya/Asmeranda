@@ -1511,7 +1511,7 @@ with tab2:
                     clustering_data['Cluster'] = clusters
 
                     # Add cluster characteristics analysis
-                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="kmeans_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
                         st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
                         
@@ -1522,7 +1522,7 @@ with tab2:
                                 st.json(char['feature_stats'])
                     
                     # Generate comprehensive cluster report
-                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kmeans_report"):
                         report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
@@ -1907,7 +1907,7 @@ with tab2:
                     st.write(clustering_data['Cluster'].value_counts())
 
                     # Add cluster characteristics analysis
-                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="kprototypes_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
                         st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
                         
@@ -1918,7 +1918,7 @@ with tab2:
                                 st.json(char['feature_stats'])
                     
                     # Generate comprehensive cluster report
-                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kprototypes_report"):
                         report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
@@ -2034,7 +2034,7 @@ with tab2:
                     clustering_data['Cluster'] = clusters
 
                     # Add cluster characteristics analysis
-                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="hierarchical_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
                         st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
                         
@@ -2045,7 +2045,7 @@ with tab2:
                                 st.json(char['feature_stats'])
                     
                     # Generate comprehensive cluster report
-                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="hierarchical_report"):
                         report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
@@ -2174,7 +2174,7 @@ with tab2:
                     clustering_data['Cluster'] = clusters
 
                     # Add cluster characteristics analysis
-                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis"):
+                    if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="spectral_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
                         st.write("#### Karakteristik Cluster" if st.session_state.language == 'id' else "#### Cluster Characteristics")
                         
@@ -2185,7 +2185,7 @@ with tab2:
                                 st.json(char['feature_stats'])
                     
                     # Generate comprehensive cluster report
-                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="spectral_report"):
                         report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
