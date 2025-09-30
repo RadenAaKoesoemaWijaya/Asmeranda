@@ -1523,7 +1523,8 @@ with tab2:
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kmeans_report"):
-                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        report = generate_cluster_report(clustering_data, clusters, "K-Means", clustering_metrics, None, cluster_profiles)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
                             value=report,
@@ -1777,7 +1778,8 @@ with tab2:
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
-                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        report = generate_cluster_report(clustering_data, clusters, "K-Prototypes", clustering_metrics, None, cluster_profiles)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
                             value=report,
@@ -1919,7 +1921,8 @@ with tab2:
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kprototypes_report"):
-                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        report = generate_cluster_report(clustering_data, clusters, "Hierarchical", clustering_metrics, None, cluster_profiles)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
                             value=report,
@@ -2046,7 +2049,8 @@ with tab2:
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="hierarchical_report"):
-                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        report = generate_cluster_report(clustering_data, clusters, "DBSCAN", clustering_metrics, None, cluster_profiles)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
                             value=report,
@@ -2186,7 +2190,8 @@ with tab2:
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="spectral_report"):
-                        report = generate_cluster_report(clustering_data, clusters, clustering_metrics, selected_features)
+                        cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
+                        report = generate_cluster_report(clustering_data, clusters, "Spectral", clustering_metrics, None, cluster_profiles)
                         st.text_area(
                             "Laporan Analisis Cluster" if st.session_state.language == 'id' else "Cluster Analysis Report",
                             value=report,
