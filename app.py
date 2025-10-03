@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, cross_val_score, StratifiedKFold, LeaveOneOut, LeavePOut, KFold
 from sklearn.preprocessing import StandardScaler, LabelEncoder, PolynomialFeatures, RobustScaler, MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor, GradientBoostingClassifier, BaggingRegressor, VotingRegressor, StackingRegressor
@@ -377,11 +378,22 @@ def analyze_cluster_characteristics(X, labels, feature_names=None):
         if hasattr(cluster_data, 'shape') and len(cluster_data.shape) > 1:
             feature_stats = {}
             for i, feature_name in enumerate(feature_names[:cluster_data.shape[1]]):
+                # Handle different types of data structures (DataFrame vs NumPy array)
+                if hasattr(cluster_data, 'iloc'):
+                    # For pandas DataFrame
+                    if isinstance(feature_name, str) and feature_name in cluster_data.columns:
+                        col_data = cluster_data[feature_name]
+                    else:
+                        col_data = cluster_data.iloc[:, i]
+                else:
+                    # For NumPy array
+                    col_data = cluster_data[:, i]
+                    
                 feature_stats[feature_name] = {
-                    'mean': float(cluster_data[:, i].mean()),
-                    'std': float(cluster_data[:, i].std()),
-                    'min': float(cluster_data[:, i].min()),
-                    'max': float(cluster_data[:, i].max())
+                    'mean': float(col_data.mean()),
+                    'std': float(col_data.std()),
+                    'min': float(col_data.min()),
+                    'max': float(col_data.max())
                 }
             profile['feature_stats'] = feature_stats
         
@@ -416,7 +428,12 @@ def generate_cluster_report(X, labels, algorithm_name, evaluation_metrics, stabi
     report.append(f"\nEVALUATION METRICS:")
     for metric_name, value in evaluation_metrics.items():
         if value is not None:
-            report.append(f"  {metric_name}: {value:.4f}")
+            if isinstance(value, (int, float)):
+                report.append(f"  {metric_name}: {value:.4f}")
+            elif isinstance(value, dict):
+                report.append(f"  {metric_name}: {str(value)}")
+            else:
+                report.append(f"  {metric_name}: {value}")
         else:
             report.append(f"  {metric_name}: Not available")
     
@@ -1517,9 +1534,19 @@ with tab2:
                         
                         for cluster_id, char in characteristics.items():
                             with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
-                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
-                                st.write("**Statistik Fitur:**")
-                                st.json(char['feature_stats'])
+                                # Handle missing 'dominant_features' key
+                                if 'dominant_features' in char:
+                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                elif 'feature_stats' in char:
+                                    # Show top 3 features with highest mean values as dominant features
+                                    feature_means = [(name, stats['mean']) for name, stats in char['feature_stats'].items()]
+                                    feature_means.sort(key=lambda x: abs(x[1]), reverse=True)
+                                    dominant_features = [name for name, _ in feature_means[:3]]
+                                    st.write(f"**Fitur Utama:** {', '.join(dominant_features)}")
+                                
+                                if 'feature_stats' in char:
+                                    st.write("**Statistik Fitur:**")
+                                    st.json(char['feature_stats'])
                     
                     # Generate comprehensive cluster report
                     if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kmeans_report"):
@@ -1770,9 +1797,19 @@ with tab2:
                             
                             for cluster_id, char in characteristics.items():
                                 with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
-                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
-                                    st.write("**Statistik Fitur:**")
-                                    st.json(char['feature_stats'])
+                                    # Handle missing 'dominant_features' key
+                                    if 'dominant_features' in char:
+                                        st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                    elif 'feature_stats' in char:
+                                        # Show top 3 features with highest mean values as dominant features
+                                        feature_means = [(name, stats['mean']) for name, stats in char['feature_stats'].items()]
+                                        feature_means.sort(key=lambda x: abs(x[1]), reverse=True)
+                                        dominant_features = [name for name, _ in feature_means[:3]]
+                                        st.write(f"**Fitur Utama:** {', '.join(dominant_features)}")
+                                    
+                                    if 'feature_stats' in char:
+                                        st.write("**Statistik Fitur:**")
+                                        st.json(char['feature_stats'])
                         else:
                             st.write("Analisis karakteristik memerlukan fitur numerikal.")
                     
@@ -1915,7 +1952,17 @@ with tab2:
                         
                         for cluster_id, char in characteristics.items():
                             with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
-                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                if 'dominant_features' in char:
+                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                else:
+                                    # Extract top 3 features with highest absolute mean values
+                                    feature_stats = char.get('feature_stats', {})
+                                    if feature_stats:
+                                        top_features = sorted(feature_stats.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+                                        dominant_features = ", ".join([f"{feat}: {val:.3f}" for feat, val in top_features])
+                                        st.write(f"**Fitur Utama:** {dominant_features}")
+                                    else:
+                                        st.write("**Fitur Utama:** Tidak tersedia")
                                 st.write("**Statistik Fitur:**")
                                 st.json(char['feature_stats'])
                     
@@ -2043,7 +2090,17 @@ with tab2:
                         
                         for cluster_id, char in characteristics.items():
                             with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
-                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                if 'dominant_features' in char:
+                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                else:
+                                    # Extract top 3 features with highest absolute mean values
+                                    feature_stats = char.get('feature_stats', {})
+                                    if feature_stats:
+                                        top_features = sorted(feature_stats.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+                                        dominant_features = ", ".join([f"{feat}: {val:.3f}" for feat, val in top_features])
+                                        st.write(f"**Fitur Utama:** {dominant_features}")
+                                    else:
+                                        st.write("**Fitur Utama:** Tidak tersedia")
                                 st.write("**Statistik Fitur:**")
                                 st.json(char['feature_stats'])
                     
@@ -2184,7 +2241,17 @@ with tab2:
                         
                         for cluster_id, char in characteristics.items():
                             with st.expander(f"Cluster {cluster_id} (n={char['size']}, {char['percentage']:.1f}%)"):
-                                st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                if 'dominant_features' in char:
+                                    st.write(f"**Fitur Utama:** {char['dominant_features']}")
+                                else:
+                                    # Extract top 3 features with highest absolute mean values
+                                    feature_stats = char.get('feature_stats', {})
+                                    if feature_stats:
+                                        top_features = sorted(feature_stats.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+                                        dominant_features = ", ".join([f"{feat}: {val:.3f}" for feat, val in top_features])
+                                        st.write(f"**Fitur Utama:** {dominant_features}")
+                                    else:
+                                        st.write("**Fitur Utama:** Tidak tersedia")
                                 st.write("**Statistik Fitur:**")
                                 st.json(char['feature_stats'])
                     
