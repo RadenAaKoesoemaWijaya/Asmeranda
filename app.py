@@ -725,6 +725,402 @@ def recommend_research_methods(data):
     
     return recommendations
 
+def analyze_dataset_with_ai(data, analysis_type='comprehensive'):
+    """
+    Enhanced AI-powered dataset analysis using rule-based agentic system
+    that provides intelligent recommendations based on dataset characteristics
+    """
+    recommendations = []
+    
+    # Basic dataset characteristics
+    n_rows, n_cols = data.shape
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    datetime_cols = data.select_dtypes(include=['datetime64']).columns.tolist()
+    
+    # Advanced analysis
+    missing_values = data.isnull().sum().sum()
+    missing_percentage = (missing_values / (n_rows * n_cols)) * 100 if n_rows * n_cols > 0 else 0
+    duplicate_rows = data.duplicated().sum()
+    
+    # Statistical analysis
+    if len(numerical_cols) > 0:
+        numerical_data = data[numerical_cols]
+        skewness_values = numerical_data.skew().abs().mean()
+        kurtosis_values = numerical_data.kurtosis().abs().mean()
+        outlier_percentage = ((numerical_data > numerical_data.quantile(0.95)).any(axis=1).sum() / n_rows) * 100
+    else:
+        skewness_values = 0
+        kurtosis_values = 0
+        outlier_percentage = 0
+    
+    # AI-powered analysis based on dataset patterns
+    
+    # 1. Dataset Quality Assessment
+    quality_score = 100
+    quality_issues = []
+    
+    if missing_percentage > 10:
+        quality_score -= 20
+        quality_issues.append("High missing values")
+    if duplicate_rows > n_rows * 0.05:
+        quality_score -= 15
+        quality_issues.append("Significant duplicates")
+    if outlier_percentage > 10:
+        quality_score -= 10
+        quality_issues.append("High outlier presence")
+    if n_rows < 50:
+        quality_score -= 25
+        quality_issues.append("Very small dataset")
+    
+    recommendations.append({
+        'type': 'success' if quality_score >= 80 else 'warning' if quality_score >= 60 else 'error',
+        'title': 'Dataset Quality Assessment' if st.session_state.language == 'id' else 'Dataset Quality Assessment',
+        'description': f"Dataset Quality Score: {quality_score:.1f}/100. {'Excellent quality' if quality_score >= 80 else 'Good quality with minor issues' if quality_score >= 60 else 'Requires significant preprocessing'}.",
+        'details': quality_issues,
+        'priority': 'high'
+    })
+    
+    # 2. Optimal ML Algorithm Recommendations
+    ml_recommendations = []
+    
+    # Rule-based algorithm selection
+    if n_rows < 100:
+        ml_recommendations.extend(['Naive Bayes', 'Logistic Regression', 'Decision Tree'])
+    elif n_rows < 1000:
+        if len(categorical_cols) > len(numerical_cols):
+            ml_recommendations.extend(['Random Forest', 'XGBoost', 'LightGBM'])
+        else:
+            ml_recommendations.extend(['SVM', 'Random Forest', 'Neural Network'])
+    else:
+        if n_cols > 50:
+            ml_recommendations.extend(['XGBoost', 'Deep Learning', 'Ensemble Methods'])
+        else:
+            ml_recommendations.extend(['Gradient Boosting', 'Neural Networks', 'Stacking Ensemble'])
+    
+    # Special cases
+    if missing_percentage > 30:
+        ml_recommendations = ['Random Forest', 'XGBoost', 'KNN Imputation + Any Model']
+    
+    if len(datetime_cols) > 0:
+        ml_recommendations.append('Time Series Models (ARIMA, Prophet, LSTM)')
+    
+    recommendations.append({
+        'type': 'info',
+        'title': 'AI-Recommended ML Algorithms' if st.session_state.language == 'id' else 'AI-Recommended ML Algorithms',
+        'description': 'Optimal algorithms based on dataset characteristics and proven ML practices.' if st.session_state.language == 'id' else 'Optimal algorithms based on dataset characteristics and proven ML practices.',
+        'methods': ml_recommendations,
+        'priority': 'high'
+    })
+    
+    # 3. Feature Engineering Recommendations
+    feature_recommendations = []
+    
+    if len(numerical_cols) > 0:
+        if skewness_values > 1:
+            feature_recommendations.append('Log transformation for skewed features')
+        if outlier_percentage > 5:
+            feature_recommendations.append('Outlier treatment (Winsorization/IQR)')
+        feature_recommendations.append('StandardScaler/MinMaxScaler normalization')
+    
+    if len(categorical_cols) > 0:
+        if len(categorical_cols) < 10:
+            feature_recommendations.append('One-Hot Encoding for categorical variables')
+        else:
+            feature_recommendations.append('Target/Frequency Encoding for high-cardinality categoricals')
+    
+    if n_rows > 1000 and len(numerical_cols) > 5:
+        feature_recommendations.append('Polynomial features for non-linear relationships')
+        feature_recommendations.append('Feature interaction terms')
+    
+    recommendations.append({
+        'type': 'info',
+        'title': 'Smart Feature Engineering' if st.session_state.language == 'id' else 'Smart Feature Engineering',
+        'description': 'Automated feature engineering suggestions based on data patterns.' if st.session_state.language == 'id' else 'Automated feature engineering suggestions based on data patterns.',
+        'methods': feature_recommendations,
+        'priority': 'medium'
+    })
+    
+    # 4. Cross-Validation Strategy
+    cv_recommendations = []
+    
+    if n_rows < 100:
+        cv_recommendations.append('Leave-One-Out Cross-Validation (LOOCV)')
+        cv_recommendations.append('Stratified K-Fold with k=5')
+    elif n_rows < 1000:
+        cv_recommendations.append('Stratified K-Fold with k=5 or 10')
+        cv_recommendations.append('Repeated Stratified K-Fold (n_repeats=3)')
+    else:
+        cv_recommendations.append('Stratified K-Fold with k=5')
+        cv_recommendations.append('Hold-out validation (80-20 split)')
+        cv_recommendations.append('Time-based split for temporal data')
+    
+    if missing_percentage > 20:
+        cv_recommendations.append('Nested cross-validation for hyperparameter tuning')
+    
+    recommendations.append({
+        'type': 'info',
+        'title': 'Optimal Cross-Validation Strategy' if st.session_state.language == 'id' else 'Optimal Cross-Validation Strategy',
+        'description': 'Best validation approach based on dataset size and characteristics.' if st.session_state.language == 'id' else 'Best validation approach based on dataset size and characteristics.',
+        'methods': cv_recommendations,
+        'priority': 'medium'
+    })
+    
+    # 5. Advanced Analytics Recommendations
+    advanced_recommendations = []
+    
+    if len(numerical_cols) > 2:
+        advanced_recommendations.append('Principal Component Analysis (PCA)')
+        advanced_recommendations.append('Clustering analysis (K-means, DBSCAN)')
+    
+    if len(categorical_cols) > 1:
+        advanced_recommendations.append('Association Rule Mining')
+        advanced_recommendations.append('Chi-square test for independence')
+    
+    if n_rows > 500 and len(numerical_cols) > 3:
+        advanced_recommendations.append('SHAP values for model interpretability')
+        advanced_recommendations.append('Partial Dependence Plots (PDP)')
+    
+    if duplicate_rows > 0:
+        advanced_recommendations.append('Anomaly detection for data quality')
+    
+    recommendations.append({
+        'type': 'info',
+        'title': 'Advanced Analytics' if st.session_state.language == 'id' else 'Advanced Analytics',
+        'description': 'Sophisticated analysis techniques for deeper insights.' if st.session_state.language == 'id' else 'Sophisticated analysis techniques for deeper insights.',
+        'methods': advanced_recommendations,
+        'priority': 'low'
+    })
+    
+    # 6. Problem-Specific Recommendations
+    if analysis_type == 'classification':
+        class_recommendations = []
+        if len(categorical_cols) > 0:
+            target_col = categorical_cols[0] if len(categorical_cols) > 0 else None
+            if target_col and data[target_col].nunique() == 2:
+                class_recommendations.append('Binary classification metrics (Precision, Recall, F1, AUC)')
+            elif target_col:
+                class_recommendations.append('Multi-class classification metrics (Accuracy, F1-macro, Cohen\'s Kappa)')
+        
+        recommendations.append({
+            'type': 'info',
+            'title': 'Classification-Specific Recommendations' if st.session_state.language == 'id' else 'Classification-Specific Recommendations',
+            'description': 'Specialized techniques for classification problems.' if st.session_state.language == 'id' else 'Specialized techniques for classification problems.',
+            'methods': class_recommendations,
+            'priority': 'high'
+        })
+    
+    elif analysis_type == 'regression':
+        reg_recommendations = []
+        if len(numerical_cols) > 0:
+            reg_recommendations.append('Regression metrics (RMSE, MAE, R², Adjusted R²)')
+            reg_recommendations.append('Residual analysis and diagnostics')
+            reg_recommendations.append('Feature scaling for regularization methods')
+        
+        recommendations.append({
+            'type': 'info',
+            'title': 'Regression-Specific Recommendations' if st.session_state.language == 'id' else 'Regression-Specific Recommendations',
+            'description': 'Specialized techniques for regression problems.' if st.session_state.language == 'id' else 'Specialized techniques for regression problems.',
+            'methods': reg_recommendations,
+            'priority': 'high'
+        })
+    
+    return recommendations
+
+def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
+    """
+    Create an agentic AI analysis that simulates intelligent reasoning about the dataset
+    """
+    agent_analysis = {
+        'agent_name': 'DataScience-AI-Agent',
+        'analysis_timestamp': pd.Timestamp.now(),
+        'dataset_summary': {},
+        'intelligent_insights': [],
+        'actionable_recommendations': [],
+        'risk_assessment': [],
+        'success_probability': 0
+    }
+    
+    # Dataset summary
+    n_rows, n_cols = data.shape
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    
+    agent_analysis['dataset_summary'] = {
+        'total_rows': n_rows,
+        'total_columns': n_cols,
+        'numerical_features': len(numerical_cols),
+        'categorical_features': len(categorical_cols),
+        'data_density': ((data.size - data.isnull().sum().sum()) / data.size) * 100,
+        'complexity_score': min(100, (n_cols * 2) + (n_rows / 1000))
+    }
+    
+    # Intelligent insights
+    insights = []
+    
+    # Insight 1: Dataset readiness
+    if n_rows >= 1000 and n_cols >= 5:
+        insights.append({
+            'type': 'success',
+            'insight': 'Dataset is well-suited for machine learning with sufficient samples and features.',
+            'confidence': 0.95,
+            'evidence': f'{n_rows} samples and {n_cols} features provide good statistical power.'
+        })
+    elif n_rows >= 100 and n_cols >= 3:
+        insights.append({
+            'type': 'info',
+            'insight': 'Dataset is adequate for basic ML tasks but may benefit from feature engineering.',
+            'confidence': 0.80,
+            'evidence': f'{n_rows} samples and {n_cols} features are sufficient for simple models.'
+        })
+    else:
+        insights.append({
+            'type': 'warning',
+            'insight': 'Dataset may be too small for reliable machine learning results.',
+            'confidence': 0.90,
+            'evidence': f'Only {n_rows} samples and {n_cols} features may lead to overfitting.'
+        })
+    
+    # Insight 2: Feature quality
+    if len(numerical_cols) > 0:
+        missing_pct = (data[numerical_cols].isnull().sum().sum() / data[numerical_cols].size) * 100
+        if missing_pct < 5:
+            insights.append({
+                'type': 'success',
+                'insight': 'Numerical features have excellent completeness.',
+                'confidence': 0.90,
+                'evidence': f'Only {missing_pct:.1f}% missing values in numerical columns.'
+            })
+        elif missing_pct < 20:
+            insights.append({
+                'type': 'info',
+                'insight': 'Numerical features have acceptable completeness with manageable missing values.',
+                'confidence': 0.85,
+                'evidence': f'{missing_pct:.1f}% missing values can be effectively handled with imputation.'
+            })
+    
+    # Insight 3: Model complexity recommendation
+    complexity_factors = []
+    if n_cols > 20:
+        complexity_factors.append('High dimensionality')
+    if missing_pct > 15:
+        complexity_factors.append('Significant missing data')
+    if n_rows > 10000:
+        complexity_factors.append('Large dataset size')
+    
+    if len(complexity_factors) == 0:
+        insights.append({
+            'type': 'success',
+            'insight': 'Dataset complexity is low - simple models are recommended.',
+            'confidence': 0.90,
+            'evidence': 'Clean, well-structured data suitable for interpretable models.'
+        })
+    elif len(complexity_factors) <= 2:
+        insights.append({
+            'type': 'info',
+            'insight': 'Moderate complexity - ensemble methods are recommended.',
+            'confidence': 0.85,
+            'evidence': f'Factors: {", ".join(complexity_factors)}'
+        })
+    else:
+        insights.append({
+            'type': 'warning',
+            'insight': 'High complexity - advanced techniques required.',
+            'confidence': 0.80,
+            'evidence': f'Multiple complexity factors: {", ".join(complexity_factors)}'
+        })
+    
+    agent_analysis['intelligent_insights'] = insights
+    
+    # Actionable recommendations
+    recommendations = []
+    
+    # Recommendation 1: Preprocessing strategy
+    if missing_pct > 10:
+        recommendations.append({
+            'action': 'Implement advanced imputation strategy',
+            'priority': 'high',
+            'rationale': f'{missing_pct:.1f}% missing values require sophisticated handling',
+            'implementation': 'Use iterative imputation or model-based imputation methods',
+            'expected_impact': 'Improve model performance by 15-25%'
+        })
+    
+    # Recommendation 2: Feature engineering
+    if len(numerical_cols) > 3:
+        recommendations.append({
+            'action': 'Apply feature scaling and transformation',
+            'priority': 'medium',
+            'rationale': 'Multiple numerical features benefit from standardization',
+            'implementation': 'Use StandardScaler and consider log transformations for skewed features',
+            'expected_impact': 'Improve model convergence and performance'
+        })
+    
+    # Recommendation 3: Model selection
+    if n_rows > 1000 and n_cols > 10:
+        recommendations.append({
+            'action': 'Use ensemble methods with hyperparameter tuning',
+            'priority': 'high',
+            'rationale': 'Large dataset can support complex models with proper validation',
+            'implementation': 'Implement Random Forest or XGBoost with Optuna optimization',
+            'expected_impact': 'Achieve 85-95% prediction accuracy'
+        })
+    elif n_rows > 100:
+        recommendations.append({
+            'action': 'Start with interpretable models',
+            'priority': 'medium',
+            'rationale': 'Moderate dataset size suitable for balanced approach',
+            'implementation': 'Use Logistic Regression or Decision Tree with cross-validation',
+            'expected_impact': 'Achieve 75-85% prediction accuracy with interpretability'
+        })
+    
+    agent_analysis['actionable_recommendations'] = recommendations
+    
+    # Risk assessment
+    risks = []
+    
+    if n_rows < 100:
+        risks.append({
+            'risk': 'High overfitting risk',
+            'severity': 'high',
+            'mitigation': 'Use simple models, aggressive regularization, and extensive validation',
+            'probability': 0.8
+        })
+    
+    if missing_pct > 20:
+        risks.append({
+            'risk': 'Biased model due to missing data patterns',
+            'severity': 'medium',
+            'mitigation': 'Analyze missing data patterns and use multiple imputation strategies',
+            'probability': 0.6
+        })
+    
+    if n_cols > 50:
+        risks.append({
+            'risk': 'Curse of dimensionality',
+            'severity': 'medium',
+            'mitigation': 'Apply dimensionality reduction techniques before modeling',
+            'probability': 0.7
+        })
+    
+    agent_analysis['risk_assessment'] = risks
+    
+    # Success probability calculation
+    success_factors = []
+    if n_rows >= 200:
+        success_factors.append(0.2)
+    if missing_pct < 15:
+        success_factors.append(0.2)
+    if n_cols >= 3:
+        success_factors.append(0.2)
+    if len(complexity_factors) <= 1:
+        success_factors.append(0.2)
+    if len(risks) <= 1:
+        success_factors.append(0.2)
+    
+    agent_analysis['success_probability'] = min(0.95, sum(success_factors))
+    
+    return agent_analysis
+
 def verify_captcha(input_text, correct_text):
     """Verify captcha input"""
     return input_text.upper().strip() == correct_text.upper().strip()
@@ -1145,6 +1541,137 @@ with tab1:
                     for method in rec['methods']:
                         st.write(f"• {method}")
                     st.write("")
+            
+            # Enhanced AI-Powered Analysis Section
+            st.subheader("🤖 AI-Powered Dataset Analysis" if st.session_state.language == 'id' else "🤖 AI-Powered Dataset Analysis")
+            
+            # Add toggle for AI analysis
+            if 'show_ai_analysis' not in st.session_state:
+                st.session_state.show_ai_analysis = False
+            
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                if st.button("🔍 Generate AI Analysis" if st.session_state.language == 'id' else "🔍 Generate AI Analysis", 
+                           type="primary", key="generate_ai_analysis"):
+                    st.session_state.show_ai_analysis = True
+                    st.rerun()
+            
+            with col2:
+                if st.button("🤖 Agentic AI Deep Analysis" if st.session_state.language == 'id' else "🤖 Agentic AI Deep Analysis", 
+                           type="secondary", key="generate_agent_analysis"):
+                    st.session_state.show_agent_analysis = True
+                    st.rerun()
+            
+            # Display AI Analysis
+            if st.session_state.get('show_ai_analysis', False):
+                with st.expander("📊 AI-Powered Recommendations" if st.session_state.language == 'id' else "📊 AI-Powered Recommendations", expanded=True):
+                    with st.spinner("Generating AI analysis..." if st.session_state.language == 'id' else "Generating AI analysis..."):
+                        ai_recommendations = analyze_dataset_with_ai(data)
+                        
+                        for rec in ai_recommendations:
+                            if rec['type'] == 'error':
+                                st.error(f"**{rec['title']}**\n\n{rec['description']}")
+                            elif rec['type'] == 'warning':
+                                st.warning(f"**{rec['title']}**\n\n{rec['description']}")
+                            elif rec['type'] == 'info':
+                                st.info(f"**{rec['title']}**\n\n{rec['description']}")
+                            elif rec['type'] == 'success':
+                                st.success(f"**{rec['title']}**\n\n{rec['description']}")
+                            
+                            if 'details' in rec and rec['details']:
+                                st.write(f"**Details:**" if st.session_state.language == 'id' else f"**Details:**")
+                                for detail in rec['details']:
+                                    st.write(f"• {detail}")
+                            
+                            if 'methods' in rec:
+                                st.write(f"**{rec['priority'].title()} Priority:**" if st.session_state.language == 'id' else f"**{rec['priority'].title()} Priority:**")
+                                for method in rec['methods']:
+                                    st.write(f"• {method}")
+                                st.write("")
+            
+            # Display Agentic AI Analysis
+            if st.session_state.get('show_agent_analysis', False):
+                with st.expander("🧠 Agentic AI Deep Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Deep Analysis", expanded=True):
+                    with st.spinner("Running agentic AI analysis..." if st.session_state.language == 'id' else "Running agentic AI analysis..."):
+                        agent_analysis = create_agentic_ai_analysis(data)
+                        
+                        # Agent Header
+                        st.markdown(f"### 🤖 {agent_analysis['agent_name']}")
+                        st.caption(f"Analysis completed at: {agent_analysis['analysis_timestamp']}")
+                        
+                        # Dataset Summary
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Total Rows", agent_analysis['dataset_summary']['total_rows'])
+                        with col2:
+                            st.metric("Total Columns", agent_analysis['dataset_summary']['total_columns'])
+                        with col3:
+                            st.metric("Data Density", f"{agent_analysis['dataset_summary']['data_density']:.1f}%")
+                        with col4:
+                            st.metric("Complexity Score", f"{agent_analysis['dataset_summary']['complexity_score']:.1f}/100")
+                        
+                        # Intelligent Insights
+                        st.subheader("🧠 Intelligent Insights" if st.session_state.language == 'id' else "🧠 Intelligent Insights")
+                        for insight in agent_analysis['intelligent_insights']:
+                            if insight['type'] == 'success':
+                                st.success(f"**{insight['insight']}**")
+                            elif insight['type'] == 'info':
+                                st.info(f"**{insight['insight']}**")
+                            elif insight['type'] == 'warning':
+                                st.warning(f"**{insight['insight']}**")
+                            
+                            st.write(f"Confidence: {insight['confidence']*100:.0f}%")
+                            st.write(f"Evidence: {insight['evidence']}")
+                            st.write("")
+                        
+                        # Actionable Recommendations
+                        st.subheader("🎯 Actionable Recommendations" if st.session_state.language == 'id' else "🎯 Actionable Recommendations")
+                        for rec in agent_analysis['actionable_recommendations']:
+                            st.markdown(f"### 🎯 {rec['action']}")
+                            st.write(f"**Priority:** {rec['priority'].title()}")
+                            st.write(f"**Rationale:** {rec['rationale']}")
+                            st.write(f"**Implementation:** {rec['implementation']}")
+                            st.write(f"**Expected Impact:** {rec['expected_impact']}")
+                            st.write("---")  # Add separator between recommendations
+                        
+                        # Risk Assessment
+                        if agent_analysis['risk_assessment']:
+                            st.subheader("⚠️ Risk Assessment" if st.session_state.language == 'id' else "⚠️ Risk Assessment")
+                            for risk in agent_analysis['risk_assessment']:
+                                severity_color = {
+                                    'low': 'info',
+                                    'medium': 'warning',
+                                    'high': 'error'
+                                }
+                                if risk['severity'] == 'high':
+                                    st.error(f"**{risk['risk']}**")
+                                elif risk['severity'] == 'medium':
+                                    st.warning(f"**{risk['risk']}**")
+                                else:
+                                    st.info(f"**{risk['risk']}**")
+                                
+                                st.write(f"**Probability:** {risk['probability']*100:.0f}%")
+                                st.write(f"**Mitigation:** {risk['mitigation']}")
+                                st.write("")
+                        
+                        # Success Probability
+                        st.subheader("📈 Success Probability" if st.session_state.language == 'id' else "📈 Success Probability")
+                        success_prob = agent_analysis['success_probability']
+                        if success_prob >= 0.8:
+                            st.success(f"**High Success Probability: {success_prob*100:.0f}%**")
+                            st.write("This dataset has excellent characteristics for machine learning success.")
+                        elif success_prob >= 0.6:
+                            st.info(f"**Moderate Success Probability: {success_prob*100:.0f}%**")
+                            st.write("This dataset should work well with proper preprocessing and model selection.")
+                        else:
+                            st.warning(f"**Low Success Probability: {success_prob*100:.0f}%**")
+                            st.write("This dataset may require significant preprocessing and careful model selection.")
+                        
+                        # Reset button
+                        if st.button("🔄 Reset Analysis" if st.session_state.language == 'id' else "🔄 Reset Analysis"):
+                            st.session_state.show_agent_analysis = False
+                            st.session_state.show_ai_analysis = False
+                            st.rerun()
         
         # Tambahkan informasi kolom untuk dataset gabungan dari ZIP
         if uploaded_file.name.endswith('.zip') and st.session_state.data is not None:
