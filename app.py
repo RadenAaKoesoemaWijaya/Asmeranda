@@ -496,6 +496,63 @@ def generate_cluster_report(X, labels, algorithm_name, evaluation_metrics, stabi
     
     return "\n".join(report)
 
+def load_and_predict_model(model_file, data):
+    """Memuat model dari file .pkl dan melakukan prediksi pada data baru"""
+    try:
+        # Load the model
+        model = pickle.load(model_file)
+        
+        # Get model type
+        model_type = type(model).__name__
+        
+        # Prepare data for prediction
+        if hasattr(model, 'feature_names_in_'):
+            # If model has feature names, use them
+            required_features = model.feature_names_in_
+            if set(required_features).issubset(set(data.columns)):
+                X = data[required_features]
+            else:
+                missing_features = set(required_features) - set(data.columns)
+                raise ValueError(f"Missing required features: {missing_features}")
+        else:
+            # Use all numeric columns
+            numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+            if not numeric_cols:
+                raise ValueError("No numeric columns found in data")
+            X = data[numeric_cols]
+        
+        # Handle missing values
+        X = X.fillna(X.mean())
+        
+        # Make predictions
+        if hasattr(model, 'predict'):
+            predictions = model.predict(X)
+            
+            # Get prediction probabilities if available (for classification)
+            probabilities = None
+            if hasattr(model, 'predict_proba'):
+                try:
+                    probabilities = model.predict_proba(X)
+                except:
+                    pass
+            
+            return {
+                'success': True,
+                'predictions': predictions,
+                'probabilities': probabilities,
+                'model_type': model_type,
+                'n_samples': len(predictions),
+                'features_used': X.columns.tolist() if hasattr(X, 'columns') else list(range(X.shape[1]))
+            }
+        else:
+            raise ValueError("Model does not have predict method")
+            
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 def adjusted_r2_score(r2, n, k):
     """Hitung Adjusted R².""" if st.session_state.language == 'id' else """Calculate Adjusted R²."""
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
@@ -927,7 +984,7 @@ def analyze_dataset_with_ai(data, analysis_type='comprehensive'):
     
     return recommendations
 
-def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
+def create_agentic_ai_analysis(data, analysis_type='comprehensive', language='id'):
     """
     Create an agentic AI analysis that simulates intelligent reasoning about the dataset
     """
@@ -958,27 +1015,43 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
     # Intelligent insights
     insights = []
     
+    # Language-specific messages
+    if language == 'id':
+        success_msg = 'Dataset sangat cocok untuk machine learning dengan jumlah sampel dan fitur yang memadai.'
+        adequate_msg = 'Dataset cukup untuk tugas ML dasar tetapi dapat diperbaiki dengan rekayasa fitur.'
+        small_msg = 'Dataset mungkin terlalu kecil untuk hasil machine learning yang dapat diandalkan.'
+        low_complexity_msg = 'Kompleksitas dataset rendah - model sederhana direkomendasikan.'
+        moderate_complexity_msg = 'Kompleksitas sedang - metode ensemble direkomendasikan.'
+        high_complexity_msg = 'Kompleksitas tinggi - teknik lanjutan diperlukan.'
+    else:
+        success_msg = 'Dataset is well-suited for machine learning with sufficient samples and features.'
+        adequate_msg = 'Dataset is adequate for basic ML tasks but may benefit from feature engineering.'
+        small_msg = 'Dataset may be too small for reliable machine learning results.'
+        low_complexity_msg = 'Dataset complexity is low - simple models are recommended.'
+        moderate_complexity_msg = 'Moderate complexity - ensemble methods are recommended.'
+        high_complexity_msg = 'High complexity - advanced techniques required.'
+    
     # Insight 1: Dataset readiness
     if n_rows >= 1000 and n_cols >= 5:
         insights.append({
             'type': 'success',
-            'insight': 'Dataset is well-suited for machine learning with sufficient samples and features.',
+            'insight': success_msg,
             'confidence': 0.95,
-            'evidence': f'{n_rows} samples and {n_cols} features provide good statistical power.'
+            'evidence': f'{n_rows} sampel dan {n_cols} fitur memberikan kekuatan statistik yang baik.' if language == 'id' else f'{n_rows} samples and {n_cols} features provide good statistical power.'
         })
     elif n_rows >= 100 and n_cols >= 3:
         insights.append({
             'type': 'info',
-            'insight': 'Dataset is adequate for basic ML tasks but may benefit from feature engineering.',
+            'insight': adequate_msg,
             'confidence': 0.80,
-            'evidence': f'{n_rows} samples and {n_cols} features are sufficient for simple models.'
+            'evidence': f'{n_rows} sampel dan {n_cols} fitur cukup untuk model sederhana.' if language == 'id' else f'{n_rows} samples and {n_cols} features are sufficient for simple models.'
         })
     else:
         insights.append({
             'type': 'warning',
-            'insight': 'Dataset may be too small for reliable machine learning results.',
+            'insight': small_msg,
             'confidence': 0.90,
-            'evidence': f'Only {n_rows} samples and {n_cols} features may lead to overfitting.'
+            'evidence': f'Hanya {n_rows} sampel dan {n_cols} fitur dapat menyebabkan overfitting.' if language == 'id' else f'Only {n_rows} samples and {n_cols} features may lead to overfitting.'
         })
     
     # Insight 2: Feature quality
@@ -987,47 +1060,47 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
         if missing_pct < 5:
             insights.append({
                 'type': 'success',
-                'insight': 'Numerical features have excellent completeness.',
+                'insight': 'Fitur numerik memiliki kelengkapan yang sangat baik.' if language == 'id' else 'Numerical features have excellent completeness.',
                 'confidence': 0.90,
-                'evidence': f'Only {missing_pct:.1f}% missing values in numerical columns.'
+                'evidence': f'Hanya {missing_pct:.1f}% nilai yang hilang di kolom numerik.' if language == 'id' else f'Only {missing_pct:.1f}% missing values in numerical columns.'
             })
         elif missing_pct < 20:
             insights.append({
                 'type': 'info',
-                'insight': 'Numerical features have acceptable completeness with manageable missing values.',
+                'insight': 'Fitur numerik memiliki kelengkapan yang dapat diterima dengan nilai hilang yang dapat dikelola.' if language == 'id' else 'Numerical features have acceptable completeness with manageable missing values.',
                 'confidence': 0.85,
-                'evidence': f'{missing_pct:.1f}% missing values can be effectively handled with imputation.'
+                'evidence': f'{missing_pct:.1f}% nilai hilang dapat ditangani secara efektif dengan imputasi.' if language == 'id' else f'{missing_pct:.1f}% missing values can be effectively handled with imputation.'
             })
     
     # Insight 3: Model complexity recommendation
     complexity_factors = []
     if n_cols > 20:
-        complexity_factors.append('High dimensionality')
+        complexity_factors.append('Dimensi tinggi' if language == 'id' else 'High dimensionality')
     if missing_pct > 15:
-        complexity_factors.append('Significant missing data')
+        complexity_factors.append('Data hilang signifikan' if language == 'id' else 'Significant missing data')
     if n_rows > 10000:
-        complexity_factors.append('Large dataset size')
+        complexity_factors.append('Ukuran dataset besar' if language == 'id' else 'Large dataset size')
     
     if len(complexity_factors) == 0:
         insights.append({
             'type': 'success',
-            'insight': 'Dataset complexity is low - simple models are recommended.',
+            'insight': low_complexity_msg,
             'confidence': 0.90,
-            'evidence': 'Clean, well-structured data suitable for interpretable models.'
+            'evidence': 'Data bersih dan terstruktur dengan baik, cocok untuk model yang dapat ditafsirkan.' if language == 'id' else 'Clean, well-structured data suitable for interpretable models.'
         })
     elif len(complexity_factors) <= 2:
         insights.append({
             'type': 'info',
-            'insight': 'Moderate complexity - ensemble methods are recommended.',
+            'insight': moderate_complexity_msg,
             'confidence': 0.85,
-            'evidence': f'Factors: {", ".join(complexity_factors)}'
+            'evidence': f'Faktor: {", ".join(complexity_factors)}' if language == 'id' else f'Factors: {", ".join(complexity_factors)}'
         })
     else:
         insights.append({
             'type': 'warning',
-            'insight': 'High complexity - advanced techniques required.',
+            'insight': high_complexity_msg,
             'confidence': 0.80,
-            'evidence': f'Multiple complexity factors: {", ".join(complexity_factors)}'
+            'evidence': f'Beberapa faktor kompleksitas: {", ".join(complexity_factors)}' if language == 'id' else f'Multiple complexity factors: {", ".join(complexity_factors)}'
         })
     
     agent_analysis['intelligent_insights'] = insights
@@ -1035,42 +1108,84 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
     # Actionable recommendations
     recommendations = []
     
+    # Language-specific recommendation messages
+    if language == 'id':
+        imp_action = 'Terapkan strategi imputasi lanjutan'
+        scaling_action = 'Terapkan penskalaan dan transformasi fitur'
+        ensemble_action = 'Gunakan metode ensemble dengan penyetelan hyperparameter'
+        interpretable_action = 'Mulai dengan model yang dapat ditafsirkan'
+        
+        imp_rationale = f'{missing_pct:.1f}% nilai hilang memerlukan penanganan yang canggih'
+        scaling_rationale = 'Beberapa fitur numerik mendapat manfaat dari standarisasi'
+        ensemble_rationale = 'Dataset besar dapat mendukung model kompleks dengan validasi yang tepat'
+        interpretable_rationale = 'Ukuran dataset sedang cocok untuk pendekatan yang seimbang'
+        
+        imp_implementation = 'Gunakan imputasi iteratif atau metode imputasi berbasis model'
+        scaling_implementation = 'Gunakan StandardScaler dan pertimbangkan transformasi log untuk fitur yang miring'
+        ensemble_implementation = 'Terapkan Random Forest atau XGBoost dengan optimasi Optuna'
+        interpretable_implementation = 'Gunakan Regresi Logistik atau Pohon Keputusan dengan validasi silang'
+        
+        imp_impact = 'Tingkatkan performa model sebesar 15-25%'
+        scaling_impact = 'Tingkatkan konvergensi dan performa model'
+        ensemble_impact = 'Capai akurasi prediksi 85-95%'
+        interpretable_impact = 'Capai akurasi prediksi 75-85% dengan dapat ditafsirkan'
+    else:
+        imp_action = 'Implement advanced imputation strategy'
+        scaling_action = 'Apply feature scaling and transformation'
+        ensemble_action = 'Use ensemble methods with hyperparameter tuning'
+        interpretable_action = 'Start with interpretable models'
+        
+        imp_rationale = f'{missing_pct:.1f}% missing values require sophisticated handling'
+        scaling_rationale = 'Multiple numerical features benefit from standardization'
+        ensemble_rationale = 'Large dataset can support complex models with proper validation'
+        interpretable_rationale = 'Moderate dataset size suitable for balanced approach'
+        
+        imp_implementation = 'Use iterative imputation or model-based imputation methods'
+        scaling_implementation = 'Use StandardScaler and consider log transformations for skewed features'
+        ensemble_implementation = 'Implement Random Forest or XGBoost with Optuna optimization'
+        interpretable_implementation = 'Use Logistic Regression or Decision Tree with cross-validation'
+        
+        imp_impact = 'Improve model performance by 15-25%'
+        scaling_impact = 'Improve model convergence and performance'
+        ensemble_impact = 'Achieve 85-95% prediction accuracy'
+        interpretable_impact = 'Achieve 75-85% prediction accuracy with interpretability'
+    
     # Recommendation 1: Preprocessing strategy
     if missing_pct > 10:
         recommendations.append({
-            'action': 'Implement advanced imputation strategy',
+            'action': imp_action,
             'priority': 'high',
-            'rationale': f'{missing_pct:.1f}% missing values require sophisticated handling',
-            'implementation': 'Use iterative imputation or model-based imputation methods',
-            'expected_impact': 'Improve model performance by 15-25%'
+            'rationale': imp_rationale,
+            'implementation': imp_implementation,
+            'expected_impact': imp_impact
         })
     
     # Recommendation 2: Feature engineering
     if len(numerical_cols) > 3:
         recommendations.append({
-            'action': 'Apply feature scaling and transformation',
+            'action': scaling_action,
             'priority': 'medium',
-            'rationale': 'Multiple numerical features benefit from standardization',
-            'implementation': 'Use StandardScaler and consider log transformations for skewed features',
-            'expected_impact': 'Improve model convergence and performance'
+            'rationale': scaling_rationale,
+            'implementation': scaling_implementation,
+            'expected_impact': scaling_impact
         })
     
     # Recommendation 3: Model selection
     if n_rows > 1000 and n_cols > 10:
         recommendations.append({
-            'action': 'Use ensemble methods with hyperparameter tuning',
+            'action': ensemble_action,
             'priority': 'high',
-            'rationale': 'Large dataset can support complex models with proper validation',
-            'implementation': 'Implement Random Forest or XGBoost with Optuna optimization',
-            'expected_impact': 'Achieve 85-95% prediction accuracy'
+            'rationale': ensemble_rationale,
+            'implementation': ensemble_implementation,
+            'expected_impact': ensemble_impact
         })
     elif n_rows > 100:
         recommendations.append({
-            'action': 'Start with interpretable models',
+            'action': interpretable_action,
             'priority': 'medium',
-            'rationale': 'Moderate dataset size suitable for balanced approach',
-            'implementation': 'Use Logistic Regression or Decision Tree with cross-validation',
-            'expected_impact': 'Achieve 75-85% prediction accuracy with interpretability'
+            'rationale': interpretable_rationale,
+            'implementation': interpretable_implementation,
+            'expected_impact': interpretable_impact
         })
     
     agent_analysis['actionable_recommendations'] = recommendations
@@ -1078,27 +1193,45 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
     # Risk assessment
     risks = []
     
+    # Language-specific risk messages
+    if language == 'id':
+        overfitting_risk = 'Risiko overfitting tinggi'
+        missing_bias_risk = 'Model bias karena pola data hilang'
+        dimensionality_risk = 'Kutukan dimensionalitas'
+        
+        overfitting_mitigation = 'Gunakan model sederhana, regularisasi agresif, dan validasi ekstensif'
+        missing_bias_mitigation = 'Analisis pola data hilang dan gunakan beberapa strategi imputasi'
+        dimensionality_mitigation = 'Terapkan teknik reduksi dimensionalitas sebelum pemodelan'
+    else:
+        overfitting_risk = 'High overfitting risk'
+        missing_bias_risk = 'Biased model due to missing data patterns'
+        dimensionality_risk = 'Curse of dimensionality'
+        
+        overfitting_mitigation = 'Use simple models, aggressive regularization, and extensive validation'
+        missing_bias_mitigation = 'Analyze missing data patterns and use multiple imputation strategies'
+        dimensionality_mitigation = 'Apply dimensionality reduction techniques before modeling'
+    
     if n_rows < 100:
         risks.append({
-            'risk': 'High overfitting risk',
+            'risk': overfitting_risk,
             'severity': 'high',
-            'mitigation': 'Use simple models, aggressive regularization, and extensive validation',
+            'mitigation': overfitting_mitigation,
             'probability': 0.8
         })
     
     if missing_pct > 20:
         risks.append({
-            'risk': 'Biased model due to missing data patterns',
+            'risk': missing_bias_risk,
             'severity': 'medium',
-            'mitigation': 'Analyze missing data patterns and use multiple imputation strategies',
+            'mitigation': missing_bias_mitigation,
             'probability': 0.6
         })
     
     if n_cols > 50:
         risks.append({
-            'risk': 'Curse of dimensionality',
+            'risk': dimensionality_risk,
             'severity': 'medium',
-            'mitigation': 'Apply dimensionality reduction techniques before modeling',
+            'mitigation': dimensionality_mitigation,
             'probability': 0.7
         })
     
@@ -1118,6 +1251,7 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive'):
         success_factors.append(0.2)
     
     agent_analysis['success_probability'] = min(0.95, sum(success_factors))
+    agent_analysis['language'] = language
     
     return agent_analysis
 
@@ -1308,6 +1442,210 @@ if st.sidebar.button("Logout", key="logout_btn"):
 # Tab 1: Data Upload
 with tab1:
     st.header("Unggah Dataset Anda" if st.session_state.language == 'id' else "Upload Your Dataset")
+    
+    # Model Prediction Section
+    st.subheader("🔮 Prediksi Data Baru" if st.session_state.language == 'id' else "🔮 Predict New Data")
+    
+    col_model, col_data = st.columns(2)
+    
+    with col_model:
+        model_file = st.file_uploader(
+            "Unggah model .pkl" if st.session_state.language == 'id' else "Upload .pkl model file",
+            type=['pkl'],
+            key="model_uploader"
+        )
+    
+    with col_data:
+        prediction_data_file = st.file_uploader(
+            "Unggah data untuk prediksi (CSV)" if st.session_state.language == 'id' else "Upload data for prediction (CSV)",
+            type=['csv'],
+            key="prediction_data_uploader"
+        )
+    
+    if model_file and prediction_data_file:
+        try:
+            # Load prediction data
+            prediction_df = pd.read_csv(prediction_data_file)
+            
+            # Load model and make predictions
+            prediction_result = load_and_predict_model(model_file, prediction_df)
+            
+            if prediction_result['success']:
+                st.success("Prediksi berhasil!" if st.session_state.language == 'id' else "Prediction successful!")
+                
+                # Display results
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.info(f"Model: {prediction_result['model_type']}")
+                    st.info(f"Jumlah sampel: {prediction_result['n_samples']}" if st.session_state.language == 'id' else f"Number of samples: {prediction_result['n_samples']}")
+                    st.info(f"Fitur digunakan: {len(prediction_result['features_used'])}")
+                
+                with col2:
+                    # Display prediction statistics
+                    predictions = prediction_result['predictions']
+                    if len(np.unique(predictions)) <= 10:  # Classification
+                        unique, counts = np.unique(predictions, return_counts=True)
+                        pred_counts = dict(zip(unique, counts))
+                        st.write("**Distribusi Prediksi:**" if st.session_state.language == 'id' else "**Prediction Distribution:**")
+                        for pred, count in pred_counts.items():
+                            st.write(f"- {pred}: {count} ({count/len(predictions)*100:.1f}%)")
+                    else:  # Regression
+                        st.write("**Statistik Prediksi:**" if st.session_state.language == 'id' else "**Prediction Statistics:**")
+                        st.write(f"Mean: {np.mean(predictions):.2f}")
+                        st.write(f"Std: {np.std(predictions):.2f}")
+                        st.write(f"Min: {np.min(predictions):.2f}")
+                        st.write(f"Max: {np.max(predictions):.2f}")
+                
+                # Display predictions table
+                st.write("**Hasil Prediksi:**" if st.session_state.language == 'id' else "**Prediction Results:**")
+                result_df = prediction_df.copy()
+                result_df['Prediksi'] = predictions
+                
+                # Add probabilities if available
+                if prediction_result['probabilities'] is not None:
+                    prob_df = pd.DataFrame(prediction_result['probabilities'])
+                    prob_cols = [f'Prob_Kelas_{i}' for i in range(prob_df.shape[1])]
+                    prob_df.columns = prob_cols
+                    result_df = pd.concat([result_df, prob_df], axis=1)
+                
+                st.dataframe(result_df.head(100))  # Show first 100 rows
+                
+                # Download results
+                csv = result_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Unduh Hasil Prediksi (CSV)" if st.session_state.language == 'id' else "📥 Download Prediction Results (CSV)",
+                    data=csv,
+                    file_name=f"prediksi_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+                
+            else:
+                st.error(f"Gagal melakukan prediksi: {prediction_result['error']}" if st.session_state.language == 'id' else f"Prediction failed: {prediction_result['error']}")
+                
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+    
+    # Single Prediction Section
+    if model_file:
+        st.markdown("---")
+        st.subheader("🔮 Prediksi Manual Satu Data" if st.session_state.language == 'id' else "🔮 Manual Single Prediction")
+        
+        # Load model to get feature information
+        try:
+            model = pickle.load(model_file)
+            model_file.seek(0)  # Reset file pointer for future use
+            
+            # Get feature names if available
+            if hasattr(model, 'feature_names_in_'):
+                feature_names = list(model.feature_names_in_)
+                st.info(f"Model membutuhkan {len(feature_names)} fitur: {', '.join(feature_names)}" if st.session_state.language == 'id' else f"Model requires {len(feature_names)} features: {', '.join(feature_names)}")
+                
+                # Create input form for each feature
+                with st.form("single_prediction_form"):
+                    st.write("**Masukkan nilai fitur:**" if st.session_state.language == 'id' else "**Enter feature values:**")
+                    
+                    input_data = {}
+                    cols = st.columns(2)
+                    for i, feature in enumerate(feature_names):
+                        with cols[i % 2]:
+                            input_data[feature] = st.number_input(
+                                f"{feature}",
+                                value=0.0,
+                                step=0.01,
+                                key=f"feature_{feature}"
+                            )
+                    
+                    col_predict, col_clear = st.columns(2)
+                    with col_predict:
+                        predict_button = st.form_submit_button(
+                            "🔮 Lakukan Prediksi" if st.session_state.language == 'id' else "🔮 Make Prediction",
+                            type="primary"
+                        )
+                    with col_clear:
+                        clear_button = st.form_submit_button(
+                            "🗑️ Bersihkan" if st.session_state.language == 'id' else "🗑️ Clear"
+                        )
+                
+                if predict_button:
+                    try:
+                        # Create DataFrame from input data
+                        input_df = pd.DataFrame([input_data])
+                        
+                        # Make prediction
+                        prediction = model.predict(input_df)[0]
+                        
+                        # Display result
+                        st.success("Prediksi Berhasil!" if st.session_state.language == 'id' else "Prediction Successful!")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric(
+                                "Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Result",
+                                f"{prediction:.4f}" if isinstance(prediction, (int, float)) else str(prediction)
+                            )
+                        
+                        with col2:
+                            # Show probabilities if classification
+                            if hasattr(model, 'predict_proba'):
+                                try:
+                                    probabilities = model.predict_proba(input_df)[0]
+                                    st.write("**Probabilitas Kelas:**" if st.session_state.language == 'id' else "**Class Probabilities:**")
+                                    for i, prob in enumerate(probabilities):
+                                        st.write(f"Kelas {i}: {prob:.4f} ({prob*100:.2f}%)" if st.session_state.language == 'id' else f"Class {i}: {prob:.4f} ({prob*100:.2f}%)")
+                                except:
+                                    pass
+                        
+                        # Show input summary
+                        with st.expander("📋 Ringkasan Input" if st.session_state.language == 'id' else "📋 Input Summary"):
+                            st.write("**Nilai Fitur yang Dimasukkan:**" if st.session_state.language == 'id' else "**Entered Feature Values:**")
+                            for feature, value in input_data.items():
+                                st.write(f"- {feature}: {value}")
+                        
+                    except Exception as e:
+                        st.error(f"Error dalam prediksi: {str(e)}" if st.session_state.language == 'id' else f"Error in prediction: {str(e)}")
+                
+            else:
+                st.warning("Model tidak memiliki informasi fitur. Pastikan data yang dimasukkan sesuai dengan training data." if st.session_state.language == 'id' else "Model doesn't have feature information. Make sure input data matches training data.")
+                
+                # Simple text area for manual input
+                manual_input = st.text_area(
+                    "Masukkan data (format: fitur1,nilai1;fitur2,nilai2)" if st.session_state.language == 'id' else "Enter data (format: feature1,value1;feature2,value2)",
+                    placeholder="contoh: age,25;income,50000;score,85" if st.session_state.language == 'id' else "example: age,25;income,50000;score,85"
+                )
+                
+                if st.button("🔮 Lakukan Prediksi" if st.session_state.language == 'id' else "🔮 Make Prediction"):
+                    try:
+                        # Parse manual input
+                        data_pairs = manual_input.split(';')
+                        input_dict = {}
+                        for pair in data_pairs:
+                            if ',' in pair:
+                                feature, value = pair.split(',')
+                                input_dict[feature.strip()] = float(value.strip())
+                        
+                        # Create DataFrame
+                        input_df = pd.DataFrame([input_dict])
+                        
+                        # Make prediction
+                        prediction = model.predict(input_df)[0]
+                        
+                        st.success("Prediksi Berhasil!" if st.session_state.language == 'id' else "Prediction Successful!")
+                        st.metric(
+                            "Hasil Prediksi" if st.session_state.language == 'id' else "Prediction Result",
+                            f"{prediction:.4f}" if isinstance(prediction, (int, float)) else str(prediction)
+                        )
+                        
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}. Pastikan format input benar." if st.session_state.language == 'id' else f"Error: {str(e)}. Make sure input format is correct.")
+                        
+        except Exception as e:
+            st.error(f"Error memuat model: {str(e)}" if st.session_state.language == 'id' else f"Error loading model: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Section title for new dataset training
+    st.subheader("📚 Latih Dataset Baru" if st.session_state.language == 'id' else "📚 Train New Dataset")
     
     uploaded_file = st.file_uploader(
         "Pilih file CSV atau ZIP berisi folder train/test" if st.session_state.language == 'id' else "Choose a CSV file or ZIP with train/test folders",
@@ -1593,25 +1931,25 @@ with tab1:
             if st.session_state.get('show_agent_analysis', False):
                 with st.expander("🧠 Agentic AI Deep Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Deep Analysis", expanded=True):
                     with st.spinner("Running agentic AI analysis..." if st.session_state.language == 'id' else "Running agentic AI analysis..."):
-                        agent_analysis = create_agentic_ai_analysis(data)
+                        agent_analysis = create_agentic_ai_analysis(data, language=st.session_state.language)
                         
                         # Agent Header
                         st.markdown(f"### 🤖 {agent_analysis['agent_name']}")
-                        st.caption(f"Analysis completed at: {agent_analysis['analysis_timestamp']}")
+                        st.caption(f"{'Analisis selesai pada:' if st.session_state.language == 'id' else 'Analysis completed at:'} {agent_analysis['analysis_timestamp']}")
                         
                         # Dataset Summary
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("Total Rows", agent_analysis['dataset_summary']['total_rows'])
+                            st.metric("Total Baris" if st.session_state.language == 'id' else "Total Rows", agent_analysis['dataset_summary']['total_rows'])
                         with col2:
-                            st.metric("Total Columns", agent_analysis['dataset_summary']['total_columns'])
+                            st.metric("Total Kolom" if st.session_state.language == 'id' else "Total Columns", agent_analysis['dataset_summary']['total_columns'])
                         with col3:
-                            st.metric("Data Density", f"{agent_analysis['dataset_summary']['data_density']:.1f}%")
+                            st.metric("Densitas Data" if st.session_state.language == 'id' else "Data Density", f"{agent_analysis['dataset_summary']['data_density']:.1f}%")
                         with col4:
-                            st.metric("Complexity Score", f"{agent_analysis['dataset_summary']['complexity_score']:.1f}/100")
+                            st.metric("Skor Kompleksitas" if st.session_state.language == 'id' else "Complexity Score", f"{agent_analysis['dataset_summary']['complexity_score']:.1f}/100")
                         
                         # Intelligent Insights
-                        st.subheader("🧠 Intelligent Insights" if st.session_state.language == 'id' else "🧠 Intelligent Insights")
+                        st.subheader("🧠 Wawasan Cerdas" if st.session_state.language == 'id' else "🧠 Intelligent Insights")
                         for insight in agent_analysis['intelligent_insights']:
                             if insight['type'] == 'success':
                                 st.success(f"**{insight['insight']}**")
@@ -1620,23 +1958,23 @@ with tab1:
                             elif insight['type'] == 'warning':
                                 st.warning(f"**{insight['insight']}**")
                             
-                            st.write(f"Confidence: {insight['confidence']*100:.0f}%")
-                            st.write(f"Evidence: {insight['evidence']}")
+                            st.write(f"{'Kepercayaan:' if st.session_state.language == 'id' else 'Confidence:'} {insight['confidence']*100:.0f}%")
+                            st.write(f"{'Bukti:' if st.session_state.language == 'id' else 'Evidence:'} {insight['evidence']}")
                             st.write("")
                         
                         # Actionable Recommendations
-                        st.subheader("🎯 Actionable Recommendations" if st.session_state.language == 'id' else "🎯 Actionable Recommendations")
+                        st.subheader("🎯 Rekomendasi yang Dapat Dilakukan" if st.session_state.language == 'id' else "🎯 Actionable Recommendations")
                         for rec in agent_analysis['actionable_recommendations']:
                             st.markdown(f"### 🎯 {rec['action']}")
-                            st.write(f"**Priority:** {rec['priority'].title()}")
-                            st.write(f"**Rationale:** {rec['rationale']}")
-                            st.write(f"**Implementation:** {rec['implementation']}")
-                            st.write(f"**Expected Impact:** {rec['expected_impact']}")
+                            st.write(f"**{'Prioritas:' if st.session_state.language == 'id' else 'Priority:'}** {rec['priority'].title()}")
+                            st.write(f"**{'Rasional:' if st.session_state.language == 'id' else 'Rationale:'}** {rec['rationale']}")
+                            st.write(f"**{'Implementasi:' if st.session_state.language == 'id' else 'Implementation:'}** {rec['implementation']}")
+                            st.write(f"**{'Dampak yang Diharapkan:' if st.session_state.language == 'id' else 'Expected Impact:'}** {rec['expected_impact']}")
                             st.write("---")  # Add separator between recommendations
                         
                         # Risk Assessment
                         if agent_analysis['risk_assessment']:
-                            st.subheader("⚠️ Risk Assessment" if st.session_state.language == 'id' else "⚠️ Risk Assessment")
+                            st.subheader("⚠️ Penilaian Risiko" if st.session_state.language == 'id' else "⚠️ Risk Assessment")
                             for risk in agent_analysis['risk_assessment']:
                                 severity_color = {
                                     'low': 'info',
@@ -1650,22 +1988,22 @@ with tab1:
                                 else:
                                     st.info(f"**{risk['risk']}**")
                                 
-                                st.write(f"**Probability:** {risk['probability']*100:.0f}%")
-                                st.write(f"**Mitigation:** {risk['mitigation']}")
+                                st.write(f"**{'Probabilitas:' if st.session_state.language == 'id' else 'Probability:'}** {risk['probability']*100:.0f}%")
+                                st.write(f"**{'Mitigasi:' if st.session_state.language == 'id' else 'Mitigation:'}** {risk['mitigation']}")
                                 st.write("")
                         
                         # Success Probability
-                        st.subheader("📈 Success Probability" if st.session_state.language == 'id' else "📈 Success Probability")
+                        st.subheader("📈 Probabilitas Keberhasilan" if st.session_state.language == 'id' else "📈 Success Probability")
                         success_prob = agent_analysis['success_probability']
                         if success_prob >= 0.8:
-                            st.success(f"**High Success Probability: {success_prob*100:.0f}%**")
-                            st.write("This dataset has excellent characteristics for machine learning success.")
+                            st.success(f"**{'Probabilitas Keberhasilan Tinggi' if st.session_state.language == 'id' else 'High Success Probability'}: {success_prob*100:.0f}%**")
+                            st.write("Dataset ini memiliki karakteristik luar biasa untuk keberhasilan pembelajaran mesin." if st.session_state.language == 'id' else "This dataset has excellent characteristics for machine learning success.")
                         elif success_prob >= 0.6:
-                            st.info(f"**Moderate Success Probability: {success_prob*100:.0f}%**")
-                            st.write("This dataset should work well with proper preprocessing and model selection.")
+                            st.info(f"**{'Probabilitas Keberhasilan Sedang' if st.session_state.language == 'id' else 'Moderate Success Probability'}: {success_prob*100:.0f}%**")
+                            st.write("Dataset ini seharusnya bekerja dengan baik dengan prapemrosesan yang tepat dan pemilihan model." if st.session_state.language == 'id' else "This dataset should work well with proper preprocessing and model selection.")
                         else:
-                            st.warning(f"**Low Success Probability: {success_prob*100:.0f}%**")
-                            st.write("This dataset may require significant preprocessing and careful model selection.")
+                            st.warning(f"**{'Probabilitas Keberhasilan Rendah' if st.session_state.language == 'id' else 'Low Success Probability'}: {success_prob*100:.0f}%**")
+                            st.write("Dataset ini mungkin memerlukan prapemrosesan yang signifikan dan pemilihan model yang cermat." if st.session_state.language == 'id' else "This dataset may require significant preprocessing and careful model selection.")
                         
                         # Reset button
                         if st.button("🔄 Reset Analysis" if st.session_state.language == 'id' else "🔄 Reset Analysis"):
