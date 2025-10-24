@@ -2884,7 +2884,7 @@ with tab1:
             
             col1, col2 = st.columns([1, 3])
             with col1:
-                if st.button("🔍 Generate AI Analysis" if st.session_state.language == 'id' else "🔍 Generate AI Analysis", 
+                if st.button("🧠 Generate Analisis Dataset" if st.session_state.language == 'id' else "🧠 Generate Dataset Analysis", 
                            type="primary", key="generate_ai_analysis"):
                     st.session_state.show_ai_analysis = True
                     st.rerun()
@@ -2895,32 +2895,45 @@ with tab1:
                     st.session_state.show_agent_analysis = True
                     st.rerun()
             
-            # Display AI Analysis
+            # Display AI Analysis - Fokus pada Potensi Keberhasilan
             if st.session_state.get('show_ai_analysis', False):
-                with st.expander("📊 AI-Powered Recommendations" if st.session_state.language == 'id' else "📊 AI-Powered Recommendations", expanded=True):
-                    with st.spinner("Generating AI analysis..." if st.session_state.language == 'id' else "Generating AI analysis..."):
+                with st.expander("📊 Potensi Keberhasilan Dataset untuk Penelitian" if st.session_state.language == 'id' else "📊 Dataset Success Potential for Research", expanded=True):
+                    with st.spinner("Menganalisis potensi keberhasilan dataset..." if st.session_state.language == 'id' else "Analyzing dataset success potential..."):
                         ai_recommendations = analyze_dataset_with_ai(data)
                         
+                        # Filter hanya rekomendasi yang relevan untuk keberhasilan penelitian
+                        success_recommendations = []
                         for rec in ai_recommendations:
-                            if rec['type'] == 'error':
-                                st.error(f"**{rec['title']}**\n\n{rec['description']}")
-                            elif rec['type'] == 'warning':
-                                st.warning(f"**{rec['title']}**\n\n{rec['description']}")
-                            elif rec['type'] == 'info':
-                                st.info(f"**{rec['title']}**\n\n{rec['description']}")
-                            elif rec['type'] == 'success':
-                                st.success(f"**{rec['title']}**\n\n{rec['description']}")
+                            if rec['type'] in ['success', 'info'] and any(keyword in rec['title'].lower() or rec['description'].lower() 
+                                                                          for keyword in ['siap', 'optimal', 'baik', 'success', 'good', 'optimal', 'ready']):
+                                success_recommendations.append(rec)
+                        
+                        # Tampilkan ringkasan keberhasilan
+                        if success_recommendations:
+                            st.success("✅ **Dataset ini memiliki potensi keberhasilan yang baik untuk penelitian!**" if st.session_state.language == 'id' else "✅ **This dataset has good success potential for research!**")
                             
-                            if 'details' in rec and rec['details']:
-                                st.write(f"**Details:**" if st.session_state.language == 'id' else f"**Details:**")
-                                for detail in rec['details']:
-                                    st.write(f"• {detail}")
-                            
-                            if 'methods' in rec:
-                                st.write(f"**{rec['priority'].title()} Priority:**" if st.session_state.language == 'id' else f"**{rec['priority'].title()} Priority:**")
-                                for method in rec['methods']:
-                                    st.write(f"• {method}")
+                            for rec in success_recommendations[:3]:  # Batasi hingga 3 rekomendasi utama
+                                st.write(f"**{rec['title']}**")
+                                st.write(f"{rec['description']}")
+                                
+                                if 'details' in rec and rec['details']:
+                                    st.write("**Poin-poin utama:**" if st.session_state.language == 'id' else "**Key points:**")
+                                    for detail in rec['details'][:2]:  # Batasi detail
+                                        st.write(f"• {detail}")
                                 st.write("")
+                        else:
+                            # Jika tidak ada rekomendasi sukses, tampilkan yang paling relevan
+                            relevant_rec = [rec for rec in ai_recommendations if rec['type'] != 'error'][:2]
+                            if relevant_rec:
+                                for rec in relevant_rec:
+                                    if rec['type'] == 'warning':
+                                        st.warning(f"**⚠️ {rec['title']}**")
+                                    else:
+                                        st.info(f"**ℹ️ {rec['title']}**")
+                                    st.write(f"{rec['description']}")
+                                    st.write("")
+                            
+                            st.info("💡 **Saran:** Dataset ini memerlukan preprocessing tambahan untuk optimal dalam penelitian." if st.session_state.language == 'id' else "💡 **Suggestion:** This dataset requires additional preprocessing to be optimal for research.")
             
             # Display Agentic AI Analysis
             if st.session_state.get('show_agent_analysis', False):
