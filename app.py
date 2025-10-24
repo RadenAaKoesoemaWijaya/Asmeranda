@@ -2612,12 +2612,6 @@ with tab1:
                     st.session_state.show_research_types = True
                     st.rerun()
             
-            with col2:
-                if st.button("🧠 Agentic AI Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Analysis", 
-                           type="secondary", key="agent_research_analysis"):
-                    st.session_state.show_agent_research_analysis = True
-                    st.rerun()
-            
             # Tampilkan rekomendasi jenis penelitian
             if st.session_state.get('show_research_types', False):
                 with st.expander("📊 Rekomendasi Jenis Penelitian" if st.session_state.language == 'id' else "📊 Research Type Recommendations", expanded=True):
@@ -2652,55 +2646,6 @@ with tab1:
                                 st.markdown("---")
                         else:
                             st.info("Tidak ada rekomendasi jenis penelitian yang tersedia untuk dataset ini." if st.session_state.language == 'id' else "No research type recommendations available for this dataset.")
-            
-            # Tampilkan Agentic AI Research Analysis
-            if st.session_state.get('show_agent_research_analysis', False):
-                with st.expander("🧠 Agentic AI Research Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Research Analysis", expanded=True):
-                    with st.spinner("Running agentic AI research analysis..." if st.session_state.language == 'id' else "Running agentic AI research analysis..."):
-                        # Buat analisis agentic AI untuk penelitian
-                        agent_research_analysis = create_agentic_research_analysis(data, language=st.session_state.language)
-                        
-                        # Header
-                        st.markdown(f"### 🧠 {agent_research_analysis['agent_name']}")
-                        st.caption(f"{'Analisis riset selesai pada:' if st.session_state.language == 'id' else 'Research analysis completed at:'} {agent_research_analysis['analysis_timestamp']}")
-                        
-                        # Dataset Characteristics
-                        st.markdown("**📊 Karakteristik Dataset untuk Riset:**" if st.session_state.language == 'id' else "**📊 Dataset Characteristics for Research:**")
-                        for char in agent_research_analysis['dataset_characteristics']:
-                            st.write(f"• {char}")
-                        
-                        # Research Opportunities
-                        st.markdown("**🎯 Peluang Penelitian:**" if st.session_state.language == 'id' else "**🎯 Research Opportunities:**")
-                        for opp in agent_research_analysis['research_opportunities']:
-                            st.markdown(f"**• {opp['title']}**")
-                            st.write(f"**Description:** {opp['description']}")
-                            st.write(f"**Feasibility:** {opp['feasibility']}")
-                            st.write(f"**Expected Impact:** {opp['expected_impact']}")
-                            st.write("")
-                        
-                        # Journal Recommendations
-                        st.markdown("**📚 Rekomendasi Jurnal:**" if st.session_state.language == 'id' else "**📚 Journal Recommendations:**")
-                        for journal in agent_research_analysis['journal_recommendations']:
-                            st.markdown(f"**• {journal['name']}**")
-                            st.write(f"**Scope:** {journal['scope']}")
-                            st.write(f"**Impact Factor:** {journal['impact_factor']}")
-                            st.write(f"**Why Suitable:** {journal['why_suitable']}")
-                            st.write(f"**Submission Tips:** {journal['submission_tips']}")
-                            st.write("")
-                        
-                        # Research Roadmap
-                        st.markdown("**🛣️ Peta Jalan Penelitian:**" if st.session_state.language == 'id' else "**🛣️ Research Roadmap:**")
-                        for step in agent_research_analysis['research_roadmap']:
-                            st.write(f"**{step['step']}:** {step['description']}")
-                            st.write(f"**Timeline:** {step['timeline']}")
-                            st.write(f"**Key Milestones:** {step['key_milestones']}")
-                            st.write("")
-                        
-                        # Reset button
-                        if st.button("🔄 Reset Research Analysis" if st.session_state.language == 'id' else "🔄 Reset Research Analysis"):
-                            st.session_state.show_research_types = False
-                            st.session_state.show_agent_research_analysis = False
-                            st.rerun()
             
             # Enhanced AI-Powered Analysis Section
             st.subheader("🤖 AI-Powered Dataset Analysis" if st.session_state.language == 'id' else "🤖 AI-Powered Dataset Analysis")

@@ -6,129 +6,87 @@ Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang di
 ## Fitur Utama
 Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 
-### 1. 📤 Unggah Data
-- Unggah file CSV
-- Melihat pratinjau data
-- Melihat informasi dan statistik data
-- Identifikasi otomatis kolom numerik dan kategorikal
+### 1. 🔐 Sistem Autentikasi & Keamanan
+- **Registrasi & Login Pengguna**: Sistem autentikasi lengkap dengan database SQLite
+- **Captcha Security**: Perlindungan dari bot dengan captcha visual
+- **Session Management**: Pengelolaan sesi pengguna yang aman
+- **Multi-bahasa**: Dukungan Bahasa Indonesia dan English
 
-### 2. 📊 Analisis Data Eksploratori
-- Analisis nilai yang hilang (missing values)
-- Analisis korelasi dengan heatmap
-- Visualisasi distribusi fitur numerik (histogram dan boxplot)
-- Visualisasi distribusi fitur kategorikal
-- Analisis bivariat untuk melihat hubungan antar variabel
+### 2. 📤 Unggah Data
+- **Multi-format Support**: Unggah file CSV, Excel (XLSX), dan ZIP (dataset gabungan)
+- **Dataset Integration**: Support untuk dataset train/test split dalam format ZIP
+- **Automatic Data Detection**: Identifikasi otomatis kolom numerik, kategorikal, dan datetime
+- **Data Preview & Statistics**: Pratinjau data dan statistik deskriptif
+- **Missing Values Analysis**: Deteksi dan analisis nilai hilang otomatis
 
-### 3. 🔄 Preprocessing Data
-- Pemilihan variabel target
-- Penentuan tipe masalah (klasifikasi atau regresi)
-- Penanganan nilai yang hilang
-- Encoding fitur kategorikal
-- Penskalaan fitur numerik (pilihan Standard Scaler atau MinMax Scaler)
-- **Seleksi fitur dengan berbagai metode:**  
-  - Manual  
-  - Mutual Information  
-  - Pearson Correlation  
-  - Recursive Feature Elimination (RFE)  
-  - LASSO  
-  - Gradient Boosting Importance  
-  - Random Forest Importance  
-  - Ensemble Feature Selection (gabungan dua metode dengan union/intersection)
+### 3. 📊 Analisis Data Eksploratori
+- **Comprehensive EDA**: Analisis eksploratori data lengkap
+- **Correlation Analysis**: Heatmap korelasi dengan berbagai metrik
+- **Distribution Visualization**: Histogram, boxplot, dan visualisasi distribusi
+- **Bivariate Analysis**: Analisis hubungan antar variabel
+- **Time Series Detection**: Deteksi otomatis data time series
 
-### 4. 🛠️ Feature Engineering & Pelatihan Model
-- Pemilihan fitur dengan berbagai metode
-- Pemilihan algoritma machine learning
-- Pembagian data training dan testing
-- Pelatihan model dengan parameter yang dapat disesuaikan
-- **Optimasi Parameter Hyperparameter Otomatis**:
-  - **GridSearchCV**: Pencarian eksaustif parameter optimal
-  - **RandomizedSearchCV**: Pencarian parameter acak efisien
-  - **Bayesian Optimization**: Optimasi berbasis probabilistik (Optuna)
-  - **Preset Parameter**: Konfigurasi parameter siap pakai untuk berbagai skenario
-  - **Validasi Parameter Cerdas**: Validasi otomatis parameter berbasis karakteristik data
-  - **Rentang Parameter Kustom**: Fleksibilitas mendefinisikan rentang parameter spesifik
-  - **Impor/Ekspor Konfigurasi**: Simpan dan bagikan konfigurasi parameter favorit
+### 4. 🎯 Rekomendasi Metode Penelitian & AI Analysis
+- **Research Type Recommendations**: Rekomendasi jenis penelitian berbasis karakteristik dataset
+- **Methodology Suggestions**: Saran metodologi penelitian yang tepat
+- **Journal References**: Referensi jurnal ilmiah dengan impact factor dan DOI
+- **AI-Powered Dataset Analysis**: Analisis potensi keberhasilan dataset untuk penelitian
+- **ML Approach Recommendations**: Saran pendekatan machine learning yang sesuai
 
-### 5. 🔍 Interpretasi Model dengan SHAP
-- Visualisasi nilai SHAP untuk memahami kontribusi fitur
-- Analisis pengaruh fitur terhadap prediksi model
+### 5. 🔄 Preprocessing Data Canggih
+- **Automated Preprocessing**: Pipeline preprocessing otomatis
+- **Feature Selection**: 8 metode seleksi fitur (Manual, MI, Pearson, RFE, LASSO, GB, RF, Ensemble)
+- **Encoding Methods**: One-hot encoding, label encoding, target encoding
+- **Scaling Options**: StandardScaler, MinMaxScaler, RobustScaler, Normalizer
+- **Missing Value Handling**: Mean, median, mode, forward/backward fill, interpolation
+- **Outlier Detection**: IQR, Z-score, Isolation Forest untuk deteksi outlier
 
-### 6. 📈 Analisis Data Baru & Prediksi
-- Input data baru secara manual atau upload file CSV untuk prediksi batch
-- Preprocessing otomatis pada data baru (encoding & scaling sesuai model)
-- Hasil prediksi dapat diunduh dalam format CSV atau PDF laporan prediksi
-- Fitur untuk memuat model yang sudah disimpan dan melakukan prediksi ulang
+### 6. 🛠️ Feature Engineering & Pelatihan Model
+- **Advanced Feature Engineering**: Polynomial features, interaction terms, binning
+- **Comprehensive ML Models**: 10+ algoritma klasifikasi dan regresi
+- **Hyperparameter Optimization**: GridSearchCV, RandomizedSearchCV, Bayesian Optimization (Optuna)
+- **Smart Parameter Validation**: Validasi parameter otomatis berbasis karakteristik data
+- **Preset Configurations**: Konfigurasi siap pakai untuk berbagai skenario
+- **Custom Parameter Ranges**: Fleksibilitas definisi rentang parameter
 
-### 7. 📈 Time Series Forecasting & Analisis Prediktif
-- **Algoritma Forecasting Lengkap**:
+### 7. 🔍 Interpretasi Model dengan SHAP
+- **SHAP Values Analysis**: Visualisasi kontribusi fitur terhadap prediksi
+- **Feature Importance**: Analisis kepentingan fitur global dan lokal
+- **Model Interpretation**: Penjelasan interpretabel untuk hasil model
+- **Prediction Explanation**: Detail kontribusi setiap fitur untuk prediksi individual
+
+### 8. 📈 Time Series Forecasting & Analisis Prediktif
+- **Comprehensive Forecasting Models**:
   - **ARIMA/SARIMA**: Model statistik klasik untuk time series
   - **Exponential Smoothing**: Holt-Winters untuk data dengan tren dan musiman
-  - **LSTM (Long Short-Term Memory)**: Deep learning untuk prediksi jangka panjang
-  - **Random Forest Regressor**: Ensemble learning untuk data time series
-  - **Gradient Boosting**: XGBoost-style untuk forecasting kompleks
+  - **LSTM**: Deep learning untuk prediksi kompleks jangka panjang
+  - **Random Forest & Gradient Boosting**: Ensemble learning untuk forecasting
   - **Linear Regression**: Baseline untuk perbandingan performa
 
-- **Fitur Analisis Time Series**:
-  - Deteksi otomatis kolom tanggal/waktu dan frekuensi data
-  - Analisis stasioneritas data dengan Augmented Dickey-Fuller test
-  - Identifikasi komponen tren, musiman, dan siklus
-  - Visualisasi dekomposisi time series
-  - Plot ACF dan PACF untuk analisis autokorelasi
+- **Advanced Time Series Analysis**:
+  - **Stationarity Testing**: Augmented Dickey-Fuller test otomatis
+  - **Decomposition Analysis**: Analisis tren, musiman, dan komponen siklis
+  - **ACF/PACF Analysis**: Plot autokorelasi untuk identifikasi order
+  - **Seasonal Detection**: Deteksi otomatis pola musiman
 
-- **Parameter Konfigurasi Interaktif**:
-  - Order ARIMA (p,d,q) dan seasonal order (P,D,Q,s) yang dapat disesuaikan
-  - Hyperparameter LSTM (units, dropout, epochs, batch size)
-  - Window size dan lag features untuk model ML
-  - Proporsi train-test split yang fleksibel
+- **Forecasting Evaluation**: MAE, MSE, RMSE, MAPE, R² dengan confidence intervals
+- **Multi-horizon Forecasting**: Prediksi multi-step ke depan
+- **External Features**: Support fitur eksternal untuk forecasting
 
-- **Evaluasi Model Forecasting**:
-  - Metrik evaluasi komprehensif: MAE, MSE, RMSE, MAPE, R²
-  - Visualisasi prediksi vs aktual dengan confidence intervals
-  - Forecast horizon yang dapat dikonfigurasi
-  - Perbandingan performa antar model dalam tabel interaktif
+### 9. ⚠️ Deteksi Anomali Time Series
+- **Multiple Algorithms**: Isolation Forest, One-Class SVM, Statistical (Z-Score), Ensemble
+- **Real-time Detection**: Deteksi anomali real-time pada data streaming
+- **Configurable Parameters**: Threshold adjustment dan parameter kontrol
+- **Comparative Analysis**: Perbandingan performa antar metode deteksi
+- **Anomaly Visualization**: Visualisasi komprehensif hasil deteksi
+- **Export Results**: Export hasil deteksi dengan flag anomali
 
-- **Visualisasi dan Interpretasi**:
-  - Plot time series dengan area prediksi
-  - Residual analysis dan diagnostic plots
-  - Feature importance untuk model tree-based
-  - Export hasil forecasting ke CSV dengan interval kepercayaan
-
-### 8. ⚠️ Deteksi Anomali Time Series
-- **Algoritma State-of-the-Art**: Isolation Forest, One-Class SVM, Statistical (Z-Score), dan Ensemble Method
-- Deteksi otomatis kolom tanggal/waktu dalam dataset
-- Konfigurasi parameter interaktif (tingkat kontaminasi, threshold Z-score)
-- Visualisasi komprehensif hasil deteksi anomali
-- Analisis perbandingan antar metode deteksi
-- Ekspor hasil dalam format CSV dengan flag anomali untuk setiap metode
-- Dukungan bilingual (Bahasa Indonesia & English)
-- Penanganan missing values otomatis
-
-### 9. 🎯 Optimasi Parameter & Preset Konfigurasi
-Aplikasi ini menyediakan sistem optimasi parameter yang canggih untuk meningkatkan performa model:
-
-#### Fitur Optimasi Parameter:
-- **GridSearchCV**: Pencarian parameter optimal secara menyeluruh dalam rentang yang ditentukan
-- **RandomizedSearchCV**: Pencarian parameter acak yang efisien untuk ruang parameter besar
-- **Bayesian Optimization**: Optimasi berbasis probabilistik menggunakan Optuna untuk hasil optimal dengan iterasi minimal
-- **Validasi Parameter Cerdas**: Validasi otomatis parameter berbasis karakteristik data
-  - `max_depth` divalidasi berdasarkan jumlah fitur
-  - `n_neighbors` divalidasi berdasarkan jumlah sampel training
-  - `max_features` divalidasi berdasarkan dimensi data
-
-#### Sistem Preset Parameter:
-- **Preset Siap Pakai**: Konfigurasi parameter optimal untuk berbagai skenario:
-  - **Default**: Konfigurasi standar untuk pemula
-  - **Fast Training**: Parameter untuk pelatihan cepat pada dataset kecil
-  - **High Accuracy**: Parameter untuk akurasi maksimal (komputasi lebih intensif)
-  - **Small Dataset**: Parameter yang dioptimalkan untuk dataset dengan sampel terbatas
-- **Preset Kustom**: Buat dan simpan konfigurasi parameter favorit
-- **Impor/Ekspor Preset**: Bagikan konfigurasi parameter dengan tim atau simpan untuk digunakan kembali
-
-#### Rentang Parameter Kustom:
-- Definisikan rentang parameter spesifik untuk setiap model
-- Fleksibilitas penuh dalam menentukan nilai minimum dan maksimum
-- Integrasi dengan semua metode optimasi (GridSearchCV, RandomizedSearchCV, Bayesian Optimization)
-- Antarmuka yang intuitif untuk mengatur parameter berdasarkan kebutuhan spesifik
+### 10. 📊 Advanced Visualization & Reporting
+- **Interactive Charts**: Plot interaktif dengan zoom, pan, dan hover
+- **Multi-format Export**: Export hasil dalam CSV, PDF, PNG, dan HTML
+- **Comprehensive Reports**: Laporan lengkap dengan metrik dan visualisasi
+- **Dashboard Customization**: Panel kontrol yang dapat disesuaikan
+- **Real-time Updates**: Update visualisasi secara real-time selama analisis
 
 ## Model yang Didukung
 ### Klasifikasi
@@ -140,12 +98,25 @@ Aplikasi ini menyediakan sistem optimasi parameter yang canggih untuk meningkatk
 - Neural Network (MLP)
 - Decision Tree
 - Naive Bayes
+- XGBoost
+- CatBoost
+- LightGBM
+- Extra Trees
+- AdaBoost
 
 ### Regresi
 - Random Forest
 - Gradient Boosting
 - Linear Regression
 - Support Vector Regression (SVR)
+- XGBoost Regressor
+- CatBoost Regressor
+- LightGBM Regressor
+- Extra Trees Regressor
+- Ridge Regression
+- Lasso Regression
+- Elastic Net
+- Neural Network Regressor
 
 ### Time Series Forecasting
 - **ARIMA/SARIMA**: Untuk data dengan pola musiman
@@ -156,17 +127,79 @@ Aplikasi ini menyediakan sistem optimasi parameter yang canggih untuk meningkatk
 - **Linear Regression**: Baseline untuk perbandingan performa
 
 ## Keunggulan Aplikasi
-- **Antarmuka yang Ramah Pengguna**: Tampilan yang intuitif dan mudah digunakan, cocok untuk pemula maupun pengguna berpengalaman
-- **Analisis Komprehensif**: Menyediakan berbagai metode analisis dari eksplorasi data hingga interpretasi model
-- **Machine Learning Lengkap**: Mendukung klasifikasi, regresi, dan time series forecasting
-- **Interpretasi Model yang Canggih**: Menggunakan SHAP untuk interpretasi model yang dapat dipercaya
-- **Dukungan Multi-bahasa**: Mendukung Bahasa Indonesia dan Bahasa Inggris
-- **Export Hasil yang Fleksibel**: Dapat mengekspor hasil dalam berbagai format (CSV, PDF, gambar)
-- **Sistem Optimasi Parameter Canggih**: 
-  - Validasi parameter otomatis berbasis karakteristik data
-  - Preset parameter siap pakai untuk berbagai skenario
-  - Fitur impor/ekspor konfigurasi untuk kolaborasi tim
-  - Integrasi dengan berbagai metode optimasi (GridSearchCV, RandomizedSearchCV, Bayesian Optimization)
+Aplikasi ini memiliki beberapa keunggulan dibandingkan tools sejenis:
+
+### 1. **All-in-One Research Platform**
+- Platform lengkap untuk penelitian berbasis data dari awal hingga akhir
+- Integrasi autentikasi pengguna, unggah data, analisis, modeling, dan reporting
+- Tidak perlu berpindah-pindah tools atau environment
+- Workflow penelitian yang seamless dan terintegrasi
+
+### 2. **AI-Powered Research Recommendations**
+- Rekomendasi jenis penelitian otomatis berbasis karakteristik dataset
+- Saran metodologi dan pendekatan ML yang tepat
+- Referensi jurnal ilmiah dengan impact factor dan DOI
+- Analisis potensi keberhasilan dataset untuk penelitian
+
+### 3. **Advanced Security & User Management**
+- Sistem autentikasi lengkap dengan registrasi dan login
+- Perlindungan captcha untuk keamanan dari bot
+- Manajemen sesi pengguna yang aman dan terenkripsi
+- Support multi-pengguna dengan isolasi data
+
+### 4. **Comprehensive Data Support**
+- Multi-format data: CSV, Excel (XLSX), ZIP (dataset gabungan)
+- Support dataset train/test split dalam format ZIP
+- Deteksi otomatis tipe data, kolom datetime, dan time series
+- Penanganan missing values yang canggih dan otomatis
+
+### 5. **Advanced Feature Engineering & Selection**
+- 8+ metode seleksi fitur dengan ensemble capabilities
+- Feature engineering otomatis (polynomial, interaction, binning)
+- Encoding methods lengkap: one-hot, label, target encoding
+- Multiple scaling options dan outlier detection
+
+### 6. **State-of-the-Art ML Algorithms**
+- 15+ algoritma klasifikasi dan regresi termasuk XGBoost, LightGBM, CatBoost
+- Neural networks dan deep learning untuk pola kompleks
+- Time series forecasting dengan ARIMA, LSTM, Prophet, VAR
+- Ensemble methods untuk performa optimal
+
+### 7. **Advanced Hyperparameter Optimization**
+- 3 metode optimasi parameter: GridSearchCV, RandomizedSearchCV, Bayesian Optimization
+- Smart parameter validation berbasis karakteristik data
+- Preset configurations untuk berbagai skenario (Fast, High Accuracy, Small Dataset)
+- Custom parameter ranges dengan fleksibilitas penuh
+
+### 8. **SHAP Integration & Model Interpretability**
+- Interpretasi model yang mendalam dengan SHAP values
+- Visualisasi kontribusi fitur global dan lokal
+- Prediction explanation untuk setiap instance
+- Model interpretability untuk compliance dan audit
+
+### 9. **Advanced Time Series & Anomaly Detection**
+- Multiple forecasting algorithms dengan auto-parameter selection
+- Anomaly detection real-time dengan berbagai metode
+- Time series decomposition dan stationarity testing
+- Multi-horizon forecasting dengan confidence intervals
+
+### 10. **Interactive Visualization & Reporting**
+- Visualisasi interaktif dengan zoom, pan, dan hover capabilities
+- Multi-format export: CSV, PDF, PNG, HTML reports
+- Real-time dashboard updates selama analisis
+- Customizable dashboard layouts dan themes
+
+### 11. **Bilingual & Accessibility Support**
+- Dukungan Bahasa Indonesia dan English
+- Interface yang dapat disesuaikan preferensi bahasa
+- Accessibility features untuk pengguna dengan kebutuhan khusus
+- Dokumentasi dan help system bilingual
+
+### 12. **Scalability & Performance**
+- Optimasi performa untuk dataset besar
+- Parallel processing untuk training dan hyperparameter tuning
+- Memory efficient untuk resource yang terbatas
+- Caching system untuk hasil analisis yang cepat
 
 ## Cara Menjalankan Aplikasi
 1. Pastikan semua persyaratan telah terpenuhi dengan menjalankan:
@@ -181,92 +214,181 @@ streamlit run app.py
 3. Aplikasi akan terbuka di browser web Anda secara otomatis (biasanya di http://localhost:8501 )
 
 ## Struktur File
-- `app.py` - File utama aplikasi Streamlit
+```
+├── app.py                 # File utama aplikasi Streamlit (5000+ baris)
+├── requirements.txt       # Daftar dependensi Python
+├── README.md              # File dokumentasi ini
+├── 📁 assets/               # Folder untuk assets
+│   ├── 📁 images/           # Folder untuk gambar dan ikon
+│   ├── 📁 styles/           # Folder untuk styling CSS
+│   ├── 📁 fonts/            # Folder untuk font kustom
+├── 📁 models/               # Folder untuk menyimpan model ML
+├── 📁 data/                 # Folder untuk data sample dan dataset
+├── 📁 exports/              # Folder untuk hasil export (CSV, PDF, PNG)
+├── 📁 temp/                 # Folder temporary untuk file sementara
+├── 📁 logs/                  # Folder untuk log aplikasi dan error tracking
+├── 📁 config/               # Folder untuk konfigurasi aplikasi
+├── 📁 database/             # Folder untuk database SQLite
+└── 📁 cache/                # Folder untuk caching hasil analisis
+
+# File utama app.py berisi:
+# - Sistem autentikasi dan manajemen pengguna
+# - Fungsi-fungsi analisis data dan visualisasi
+# - Implementasi 15+ algoritma ML untuk klasifikasi/regresi
+# - Time series forecasting dengan 6+ metode
+# - Anomaly detection dengan 4+ algoritma
+# - SHAP integration untuk interpretasi model
+# - Research recommendation system dengan AI analysis
+# - Multi-language support (ID/EN)
+# - Export system untuk multiple formats
+```
+
 - `param_presets.py` - Modul manajemen preset parameter untuk optimasi model
 - `auth_db.py` - Modul autentikasi pengguna
 - `utils.py` - Fungsi utilitas untuk time series dan preprocessing
 - `anomaly_detection_utils.py` - Fungsi untuk deteksi anomali
 - `forecasting_utils.py` - Fungsi untuk forecasting time series
-- `requirements.txt` - Daftar dependensi Python
 - `users.db` - Database SQLite untuk autentikasi
-- `models/` - Folder untuk menyimpan model yang dilatih
 - `DFI/`, `KIMIA DARAH/`, `PROLANIS/` - Folder dataset contoh
 
+## Fitur Baru & Update Terbaru
+
+### 🔍 AI-Powered Research Recommendations
+- **Analisis Otomatis Dataset**: Sistem AI yang menganalisis karakteristik dataset dan memberikan rekomendasi jenis penelitian yang sesuai
+- **Rekomendasi Metodologi**: Saran metodologi penelitian berbasis tipe data dan domain penelitian
+- **Referensi Jurnal Ilmiah**: Database jurnal internasional dengan impact factor, indexing, dan DOI lengkap
+- **Potensi Keberhasilan Analisis**: Evaluasi keberhasilan dataset untuk penelitian dengan indikator khusus
+
+### 🤖 Advanced Machine Learning Integration
+- **15+ Algoritma ML Terbaru**: Termasuk CatBoost, LightGBM, dan Extra Trees untuk performa optimal
+- **Neural Network Support**: Deep learning untuk pola kompleks dan dataset besar
+- **AutoML Features**: Otomatisasi pemilihan model dan hyperparameter tuning
+- **Ensemble Methods**: Kombinasi multiple algorithms untuk hasil terbaik
+
+### 📊 Enhanced Time Series Analysis
+- **Prophet Integration**: Facebook Prophet untuk forecasting dengan komponen tren dan musiman
+- **VAR Models**: Vector Autoregression untuk multivariate time series
+- **Multi-horizon Forecasting**: Prediksi multi-step dengan confidence intervals
+- **Real-time Anomaly Detection**: Deteksi anomali pada data streaming
+
+### 🛡️ Enterprise-Grade Security
+- **User Authentication System**: Registrasi, login, dan session management yang aman
+- **Captcha Protection**: Perlindungan dari automated attacks dan bot
+- **Multi-user Support**: Isolasi data antar pengguna untuk keamanan privasi
+- **Encrypted Data Storage**: Keamanan data dengan enkripsi terbaru
+
+### 🌐 Multi-language & Accessibility
+- **Bahasa Indonesia & English**: Dukungan penuh untuk kedua bahasa
+- **Dynamic Language Switching**: Perubahan bahasa secara real-time
+- **Accessibility Features**: Support untuk pengguna dengan kebutuhan khusus
+- **Localized Interface**: Antarmuka yang disesuaikan dengan preferensi bahasa
+
+### 📈 Advanced Visualization & Export
+- **Interactive Dashboards**: Visualisasi interaktif dengan Plotly dan Altair
+- **Multi-format Export**: CSV, PDF, PNG, HTML, dan format laporan khusus
+- **Real-time Updates**: Dashboard yang update secara real-time selama analisis
+- **Customizable Reports**: Template laporan yang dapat disesuaikan
+
 ## Persyaratan Sistem
-- Python 3.7 atau lebih baru
-- Streamlit untuk antarmuka web
-- Scikit-learn untuk machine learning
-- Pandas dan NumPy untuk manipulasi data
-- Matplotlib dan Seaborn untuk visualisasi
-- Plotly untuk visualisasi interaktif
-- SHAP untuk interpretasi model
-- Optuna untuk optimasi Bayesian (opsional)
-- TensorFlow untuk LSTM forecasting (opsional)
-- LIME untuk interpretasi model alternatif (opsional)
+- **Python**: 3.8 atau lebih baru (3.9+ direkomendasikan)
+- **RAM**: Minimum 8GB (16GB direkomendasikan untuk dataset besar)
+- **Storage**: Minimum 5GB ruang kosong (termasuk cache dan model storage)
+- **OS**: Windows 10/11, macOS 10.15+, atau Linux (Ubuntu 18.04+)
+- **Browser**: Chrome 90+, Firefox 88+, Safari 14+, atau Edge 90+
+- **Internet**: Diperlukan untuk download dependencies dan update model
+
+## Dependencies Utama
+- **Streamlit**: 1.28+ untuk web interface
+- **Pandas**: 1.5+ untuk data manipulation
+- **Scikit-learn**: 1.3+ untuk machine learning
+- **XGBoost**: 1.7+ untuk gradient boosting
+- **LightGBM**: 3.3+ untuk high-performance boosting
+- **CatBoost**: 1.2+ untuk categorical feature handling
+- **SHAP**: 0.42+ untuk model interpretability
+- **Plotly**: 5.17+ untuk interactive visualization
+- **Prophet**: 1.1+ untuk time series forecasting
+- **SQLite**: Untuk user database dan session management
 
 ## Alur Kerja Penggunaan
-1. **Unggah dataset Anda di tab "Data Upload"**
-   - Dukungan untuk data CSV, Excel, dan format lainnya
-   - Identifikasi otomatis kolom tanggal/waktu untuk time series
 
-### Contoh Penggunaan Fitur Optimasi Parameter:
+### 1. **Autentikasi & Setup Awal**
+   - Jalankan aplikasi dengan `streamlit run app.py`
+   - Akses melalui browser di `http://localhost:8501`
+   - Registrasi akun baru atau login dengan akun existing
+   - Selesaikan captcha untuk keamanan
+   - Pilih preferensi bahasa (Bahasa Indonesia/English)
 
-#### Menggunakan Preset Parameter:
-1. Setelah memilih model di tab "Feature Engineering & Model Training"
-2. Aktifkan "Gunakan Rentang Parameter Kustom"
-3. Pilih preset dari dropdown (Default, Fast Training, High Accuracy, atau Small Dataset)
-4. Klik "Terapkan Preset" untuk mengisi parameter otomatis
-5. Lihat detail preset dengan klik "Lihat Detail"
+### 2. **Unggah Data**
+   - Pilih tab "Unggah Data"
+   - Upload file CSV, Excel (XLSX), atau ZIP (dataset gabungan)
+   - Sistem otomatis mendeteksi tipe data dan struktur
+   - Lihat pratinjau data dan statistik deskriptif
+   - Identifikasi missing values dan outliers otomatis
 
-#### Membuat Konfigurasi Kustom:
-1. Aktifkan "Gunakan Rentang Parameter Kustom"
-2. Atur rentang parameter sesuai kebutuhan di form yang tersedia
-3. Simpan konfigurasi dengan fitur impor/ekspor
-4. Bagikan konfigurasi dengan tim menggunakan file JSON
+### 3. **AI-Powered Research Recommendations**
+   - Gunakan tombol "Generate Rekomendasi Jenis Penelitian"
+   - Sistem AI akan menganalisis karakteristik dataset
+   - Dapatkan rekomendasi: jenis penelitian, metodologi, jurnal referensi
+   - Lihat impact factor dan DOI jurnal yang direkomendasikan
+   - Gunakan tombol "Generate Analisis Dataset" untuk evaluasi potensi keberhasilan
 
-#### Optimasi Parameter Otomatis:
-1. Pilih metode optimasi (GridSearchCV untuk hasil optimal, RandomizedSearchCV untuk efisiensi, atau Bayesian Optimization untuk keseimbangan)
-2. Sistem akan secara otomatis memvalidasi parameter berdasarkan data Anda
-3. Parameter yang tidak valid akan disesuaikan secara otomatis
-4. Hasil optimasi ditampilkan dengan metrik performa terbaik
+### 4. **Analisis Eksploratori Data (EDA)**
+   - Pindah ke tab "Analisis Data"
+   - Eksplorasi komprehensif dengan visualisasi interaktif
+   - Analisis korelasi, distribusi, dan hubungan antar variabel
+   - Deteksi otomatis time series dan pola musiman
+   - Export visualisasi dalam berbagai format
 
-2. **Lakukan eksplorasi data di tab "Exploratory Data Analytic"**
-   - Analisis tren, musiman, dan pola time series
-   - Visualisasi dekomposisi data untuk forecasting
+### 5. **Preprocessing Data Canggih**
+   - Buka tab "Preprocessing Data"
+   - Pilih variabel target (otomatis untuk time series)
+   - Konfigurasi penanganan missing values (mean, median, mode, advanced methods)
+   - Pilih encoding untuk fitur kategorikal (one-hot, label, target)
+   - Atur scaling untuk fitur numerik (Standard, MinMax, Robust, Normalizer)
+   - Gunakan 8+ metode seleksi fitur dengan ensemble capabilities
 
-3. **Lakukan preprocessing data di tab "Preprocessing"**
-   - Penanganan missing values otomatis
-   - Seleksi fitur untuk model forecasting
-   - Scaling dan transformasi data sesuai kebutuhan
+### 6. **Training Model dengan Optimasi Hyperparameter**
+   - Masuk ke tab "Training Model"
+   - Pilih dari 15+ algoritma klasifikasi/regresi (XGBoost, LightGBM, CatBoost, Neural Networks)
+   - Gunakan preset konfigurasi (Fast, High Accuracy, Small Dataset) atau custom
+   - Pilih metode optimasi hyperparameter:
+     - GridSearchCV untuk pencarian menyeluruh
+     - RandomizedSearchCV untuk efisiensi
+     - Bayesian Optimization (Optuna) untuk hasil optimal
+   - Validasi parameter otomatis berbasis karakteristik data
+   - Training dengan parallel processing untuk performa optimal
 
-4. **Time Series Forecasting di tab "Time Series Forecasting"**
-   - Pilih algoritma forecasting (ARIMA, LSTM, Exponential Smoothing, dll)
-   - Konfigurasi parameter interaktif
-   - Visualisasi prediksi dengan confidence intervals
-   - Evaluasi performa model dengan berbagai metrik
+### 7. **Interpretasi Model dengan SHAP**
+   - Gunakan tab "Interpretasi Model" untuk analisis mendalam
+   - Visualisasi SHAP values untuk kontribusi fitur global dan lokal
+   - Prediksi explanation untuk setiap instance individual
+   - Feature importance ranking dengan confidence intervals
+   - Export interpretasi untuk reporting dan compliance
 
-5. **Latih dan evaluasi model klasifikasi/regresi di tab "Feature Engineering & Model Training"**
-   - Untuk data non-time series atau sebagai pendamping forecasting
+### 8. **Time Series Forecasting & Anomaly Detection**
+   - Untuk data temporal, gunakan tab "Analisis Time Series":
+     - Pilih dari 6+ algoritma forecasting (ARIMA, LSTM, Prophet, VAR)
+     - Otomatis parameter selection untuk ARIMA
+     - Multi-horizon forecasting dengan confidence intervals
+     - Dekomposisi time series dan stationarity testing
+   - Gunakan tab "Deteksi Anomali" untuk:
+     - Real-time anomaly detection dengan 4+ metode
+     - Comparative analysis antar metode deteksi
+     - Visualisasi interaktif hasil deteksi
+     - Export hasil dengan flag anomali
 
-6. **Interpretasikan hasil model dengan SHAP di tab "SHAP Model Interpretation"**
-   - Analisis feature importance untuk model forecasting
-   - Pemahaman kontribusi fitur terhadap prediksi
+### 9. **Prediksi Data Baru & Batch Processing**
+   - Pilih tab "Prediksi Data Baru"
+   - Upload file CSV untuk batch prediction atau input manual
+   - Preprocessing otomatis sesuai pipeline training
+   - Real-time prediction dengan model yang telah dilatih
+   - Export hasil prediksi dalam multiple formats (CSV, PDF, HTML report)
 
-7. **Analisis anomali pada data time series di tab "Time Series Anomaly Detection"**
-   - Deteksi outlier dalam data time series
-   - Identifikasi event abnormal yang dapat mempengaruhi forecasting
-
-8. **Optimasi Parameter Hyperparameter di tab "Feature Engineering & Model Training"**
-   - Pilih metode optimasi (GridSearchCV, RandomizedSearchCV, atau Bayesian Optimization)
-   - Gunakan preset parameter siap pakai atau buat konfigurasi kustom
-   - Validasi parameter otomatis akan memastikan parameter yang dipilih sesuai dengan data Anda
-   - Simpan konfigurasi parameter favorit untuk digunakan kembali di masa depan
-   - Bandingkan performa model dengan berbagai konfigurasi parameter
-
-9. **Prediksi data baru dan ekspor hasil**
-   - Gunakan model terlatih untuk prediksi masa depan
-   - Export hasil forecasting ke CSV dengan interval kepercayaan
-   - Generate laporan PDF komprehensif untuk hasil analisis
+### 10. **Export & Reporting Lanjutan**
+   - Export model yang telah dilatih untuk digunakan kembali
+   - Generate comprehensive reports dengan metrik dan visualisasi
+   - Customizable report templates untuk kebutuhan spesifik
+   - Multi-format export untuk berbagai keperluan (akademik, bisnis, presentasi)
 
 ## Tips dan Trik
 
@@ -277,7 +399,60 @@ streamlit run app.py
 - **Akurasi Maksimal**: Gunakan preset "High Accuracy" atau Bayesian Optimization dengan iterasi banyak
 - **Kolaborasi Tim**: Export konfigurasi parameter yang berhasil ke JSON dan bagikan dengan tim
 
-### Troubleshooting:
+### Troubleshooting & FAQ
+
+#### Masalah Umum:
+
+**Q: Aplikasi tidak bisa dijalankan?**
+A: Pastikan Python 3.8+ terinstall dan semua dependencies terinstall dengan `pip install -r requirements.txt`
+
+**Q: Dataset besar membuat aplikasi lambat?**
+A: Gunakan fitur sampling untuk EDA, dan processing penuh hanya untuk modeling. Pertimbangkan untuk upgrade RAM ke 16GB+
+
+**Q: Model training gagal atau error?**
+A: Periksa kualitas data (missing values, outliers), pastikan target variable sesuai, dan coba gunakan preset parameter default
+
+**Q: Captcha tidak muncul atau error?**
+A: Refresh browser atau clear cache. Pastikan JavaScript enabled di browser
+
+**Q: Time series forecasting hasilnya tidak akurat?**
+A: Periksa stasioneritas data, coba dekomposisi, dan pastikan frekuensi data sudah benar
+
+**Q: SHAP visualization error?**
+A: Untuk model kompleks, gunakan subset data untuk SHAP analysis. Pastikan memory cukup untuk computation
+
+**Q: Export PDF gagal?**
+A: Install wkhtmltopdf untuk PDF export, atau gunakan format HTML sebagai alternatif
+
+#### Error Messages dan Solusi:
+
+**"Out of Memory" Error**: 
+- Gunakan sampling untuk dataset > 1GB
+- Kurangi jumlah features dengan feature selection
+- Restart aplikasi dan clear cache
+
+**"Model Not Converging" Error**:
+- Kurangi complexity (max_depth, n_estimators)
+- Gunakan preset "Fast Training" sebagai starting point
+- Periksa data untuk multicollinearity
+
+**"CUDA/GPU Memory" Error** (untuk Neural Networks):
+- Gunakan CPU mode untuk testing
+- Kurangi batch size dan network complexity
+- Pertimbangkan model yang lebih sederhana
+
+#### Performance Optimization:
+- **Parallel Processing**: Aktifkan untuk training dan hyperparameter tuning
+- **Caching**: Gunakan fitur caching untuk analisis yang berulang
+- **Model Persistence**: Simpan dan load model untuk avoid retraining
+- **Incremental Learning**: Gunakan untuk dataset yang sangat besar
+
+#### Best Practices:
+- **Data Validation**: Selalu lakukan data validation sebelum analysis
+- **Version Control**: Simpan konfigurasi dan hasil untuk reproducibility
+- **Documentation**: Dokumentasikan setiap step untuk future reference
+- **Backup**: Backup model dan konfigurasi secara berka
+
 - Jika optimasi parameter memakan waktu lama, coba gunakan RandomizedSearchCV dengan jumlah iterasi yang lebih sedikit
 - Untuk parameter yang tidak valid, sistem akan secara otomatis menyesuaikan dengan batasan data Anda
 - Gunakan fitur "Lihat Detail" pada preset untuk memahami konfigurasi parameter sebelum menerapkannya
@@ -297,14 +472,98 @@ streamlit run app.py
 - Fitur impor/ekspor memungkinkan kolaborasi tim yang lebih baik
 - Antarmuka yang lebih intuitif untuk pengaturan parameter
 
-## Kontribusi
-Kontribusi sangat dipersilakan! Silakan buat pull request atau laporkan issue di repository ini.
+## Kontribusi & Development
 
-## Lisensi
-Proyek ini dilisensikan di bawah lisensi MIT. Lihat file [LICENSE](LICENSE) untuk detail lebih lanjut.
+Kontribusi sangat diterima! Kami menyambut kontribusi dari komunitas untuk meningkatkan aplikasi ini.
 
-## Dukungan
-Jika Anda menemui masalah atau memiliki pertanyaan, silakan buat issue di repository ini atau hubungi melalui email yang tersedia di profil.
+### Area Pengembangan:
+- **Machine Learning**: Penambahan algoritma ML baru dan improvement existing models
+- **Deep Learning**: Integrasi PyTorch, TensorFlow untuk model kompleks
+- **Natural Language Processing**: Analisis text data dan sentiment analysis
+- **Computer Vision**: Image processing dan feature extraction
+- **Big Data**: Support untuk dataset > 10GB dengan distributed processing
+- **Cloud Integration**: AWS, GCP, Azure integration untuk scalable deployment
+- **API Development**: RESTful API untuk integration dengan aplikasi lain
+- **Mobile Support**: Progressive Web App (PWA) untuk mobile devices
+- **Real-time Analytics**: Streaming data processing dan real-time dashboards
+- **AutoML Enhancement**: Automated feature engineering dan model selection
+
+### Cara Berkontribusi:
+1. Fork repository ini
+2. Buat branch untuk fitur baru (`git checkout -b feature/AmazingFeature`)
+3. Commit perubahan Anda (`git commit -m 'Add some AmazingFeature'`)
+4. Push ke branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request dengan deskripsi yang jelas
+
+### Code Standards:
+- Ikuti PEP 8 untuk Python code style
+- Tambahkan docstrings untuk semua fungsi dan classes
+- Buat unit tests untuk fitur baru
+- Update dokumentasi untuk perubahan signifikan
+- Gunakan type hints untuk code clarity
+
+## Lisensi & Disclaimer
+
+### Lisensi
+Proyek ini bersifat open source dan dapat digunakan secara bebas untuk keperluan:
+- **Pendidikan**: Penggunaan dalam kurikulum akademik
+- **Penelitian**: Penelitian ilmiah dan publikasi
+- **Pengembangan**: Base untuk proyek komersial dan non-komersial
+- **Komersial**: Penggunaan dalam produk dan layanan komersial
+
+### Disclaimer
+- Aplikasi ini disediakan "as-is" tanpa garansi apapun
+- Hasil analisis dan prediksi bergantung pada kualitas data input
+- Selalu validasi hasil dengan domain expert untuk aplikasi kritis
+- Penulis tidak bertanggung jawab atas penggunaan yang tidak tepat
+
+### Citation
+Jika Anda menggunakan aplikasi ini untuk penelitian atau publikasi, mohon cite:
+```
+Asmeranda ML Research Platform - Advanced Machine Learning Analysis Tool
+Available at: [repository-url]
+```
+
+## Roadmap & Future Development
+
+### Q1 2024:
+- [ ] Deep Learning Module dengan PyTorch integration
+- [ ] Natural Language Processing untuk text analysis
+- [ ] Real-time streaming data processing
+- [ ] Mobile-responsive PWA version
+
+### Q2 2024:
+- [ ] Cloud deployment templates (AWS, GCP, Azure)
+- [ ] Advanced AutoML dengan neural architecture search
+- [ ] Multi-user collaboration features
+- [ ] API documentation dan SDK development
+
+### Q3 2024:
+- [ ] Computer vision module untuk image analysis
+- [ ] Reinforcement learning untuk optimization problems
+- [ ] Federated learning untuk privacy-preserving analysis
+- [ ] Integration dengan popular data sources (BigQuery, Snowflake)
+
+### Q4 2024:
+- [ ] Advanced explainable AI (XAI) features
+- [ ] Quantum machine learning integration
+- [ ] Edge computing support untuk IoT devices
+- [ ] Enterprise-grade security dan compliance features
+
+## Support & Community
+
+### Getting Help:
+- 📧 Email: [support-email]
+- 💬 Discord: [discord-invite-link]
+- 📚 Documentation: [docs-url]
+- 🐛 Bug Reports: [issues-url]
+- 💡 Feature Requests: [discussions-url]
+
+### Community:
+- 🌟 Star repository ini jika Anda merasa terbantu
+- 🔄 Share dengan komunitas ML dan data science
+- 🤝 Kontribusi dalam bentuk code, dokumentasi, atau testing
+- 📢 Beritahu kami jika Anda menggunakan aplikasi ini untuk proyek menarik!
 
 ---
 **Catatan**: Aplikasi ini terus dikembangkan. Pastikan untuk selalu memperbarui ke versi terbaru untuk mendapatkan fitur dan perbaikan terbaru.
