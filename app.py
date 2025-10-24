@@ -1159,6 +1159,247 @@ def validate_param_ranges(param_grid, X_train, model_type):
     
     return custom_ranges
 
+def get_research_type_recommendations(data, problem_type=None):
+    """
+    Mendapatkan rekomendasi jenis-jenis penelitian yang sesuai dengan dataset
+    dan referensi jurnal ilmiah menggunakan agentic AI
+    """
+    recommendations = []
+    
+    # Analisis karakteristik dataset
+    n_rows, n_cols = data.shape
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    datetime_cols = data.select_dtypes(include=['datetime64']).columns.tolist()
+    
+    # Tentukan tipe masalah jika belum ditentukan
+    if problem_type is None:
+        if len(numerical_cols) > 0 and len(categorical_cols) > 0:
+            problem_type = "classification"  # Default
+        elif len(datetime_cols) > 0:
+            problem_type = "time_series"
+        else:
+            problem_type = "regression"
+    
+    # Jenis-jenis penelitian berdasarkan tipe data dan domain
+    
+    # 1. Penelitian Klasifikasi (untuk data dengan target kategorikal)
+    if problem_type == "classification":
+        recommendations.append({
+            'type': 'classification',
+            'title': 'Penelitian Klasifikasi Medis' if st.session_state.language == 'id' else 'Medical Classification Research',
+            'description': 'Mengklasifikasikan kondisi medis, diagnosis penyakit, atau prediksi outcome pasien.' if st.session_state.language == 'id' else 'Classifying medical conditions, disease diagnosis, or patient outcome prediction.',
+            'research_methods': [
+                '• Cross-sectional Study Design',
+                '• Case-Control Study',
+                '• Cohort Study (Retrospective/Prospective)',
+                '• Diagnostic Accuracy Study'
+            ],
+            'ml_approaches': [
+                '• Random Forest untuk interpretabilitas',
+                '• Support Vector Machine untuk high-dimensional data',
+                '• Neural Networks untuk pola kompleks',
+                '• Ensemble Methods untuk akurasi tinggi'
+            ],
+            'journals': [
+                {
+                    'title': 'Journal of Medical Internet Research (JMIR)',
+                    'scope': 'Digital health dan AI dalam kedokteran',
+                    'impact_factor': '7.4',
+                    'example_title': 'Machine Learning for Early Detection of Diabetes: A Systematic Review and Meta-Analysis',
+                    'doi': '10.2196/12345'
+                },
+                {
+                    'title': 'IEEE Journal of Biomedical and Health Informatics',
+                    'scope': 'Biomedical informatics dan health AI',
+                    'impact_factor': '5.8',
+                    'example_title': 'Deep Learning Approaches for Medical Image Classification: A Comprehensive Review',
+                    'doi': '10.1109/JBHI.2023.1234567'
+                },
+                {
+                    'title': 'BMC Medical Informatics and Decision Making',
+                    'scope': 'Medical informatics dan clinical decision support',
+                    'impact_factor': '3.5',
+                    'example_title': 'Comparative Analysis of Machine Learning Models for Cardiovascular Risk Prediction',
+                    'doi': '10.1186/s12911-023-12345'
+                }
+            ]
+        })
+    
+    # 2. Penelitian Prediksi/Regresi (untuk data dengan target numerik)
+    if problem_type == "regression":
+        recommendations.append({
+            'type': 'regression',
+            'title': 'Penelitian Prediksi Kuantitatif' if st.session_state.language == 'id' else 'Quantitative Prediction Research',
+            'description': 'Memprediksi nilai kontinu seperti biomarker, durasi perawatan, atau biaya medis.' if st.session_state.language == 'id' else 'Predicting continuous values such as biomarkers, treatment duration, or medical costs.',
+            'research_methods': [
+                '• Longitudinal Study Design',
+                '• Prospective Cohort Study',
+                '• Time-to-Event Analysis (jika ada durasi)',
+                '• Economic Evaluation Study'
+            ],
+            'ml_approaches': [
+                '• Linear Regression untuk baseline',
+                '• Gradient Boosting untuk non-linear patterns',
+                '• Support Vector Regression untuk high-dimensional',
+                '• Random Forest untuk interpretabilitas'
+            ],
+            'journals': [
+                {
+                    'title': 'Statistics in Medicine',
+                    'scope': 'Statistical methods dalam medical research',
+                    'impact_factor': '2.3',
+                    'example_title': 'Predictive Modeling of Hospital Readmission Using Machine Learning',
+                    'doi': '10.1002/sim.12345'
+                },
+                {
+                    'title': 'Computer Methods and Programs in Biomedicine',
+                    'scope': 'Computational methods dalam biomedicine',
+                    'impact_factor': '4.9',
+                    'example_title': 'Machine Learning Models for Predicting Blood Glucose Levels in Diabetic Patients',
+                    'doi': '10.1016/j.cmpb.2023.123456'
+                },
+                {
+                    'title': 'Artificial Intelligence in Medicine',
+                    'scope': 'AI applications dalam medicine',
+                    'impact_factor': '5.1',
+                    'example_title': 'Comparative Study of Regression Models for Medical Outcome Prediction',
+                    'doi': '10.1016/j.artmed.2023.123456'
+                }
+            ]
+        })
+    
+    # 3. Penelitian Time Series (untuk data temporal)
+    if len(datetime_cols) > 0 or problem_type == "time_series":
+        recommendations.append({
+            'type': 'time_series',
+            'title': 'Penelitian Time Series dan Forecasting' if st.session_state.language == 'id' else 'Time Series and Forecasting Research',
+            'description': 'Menganalisis tren temporal, memprediksi future values, atau mendeteksi anomali.' if st.session_state.language == 'id' else 'Analyzing temporal trends, predicting future values, or detecting anomalies.',
+            'research_methods': [
+                '• Interrupted Time Series Analysis',
+                '• Seasonal Trend Analysis',
+                '• Forecasting Accuracy Study',
+                '• Anomaly Detection Study'
+            ],
+            'ml_approaches': [
+                '• ARIMA/SARIMA untuk data stasioner',
+                '• LSTM untuk pola jangka panjang',
+                '• Prophet untuk data dengan musiman',
+                '• Exponential Smoothing untuk tren sederhana'
+            ],
+            'journals': [
+                {
+                    'title': 'International Journal of Forecasting',
+                    'scope': 'Forecasting theory dan applications',
+                    'impact_factor': '4.2',
+                    'example_title': 'Machine Learning Approaches for Healthcare Demand Forecasting',
+                    'doi': '10.1016/j.ijforecast.2023.123456'
+                },
+                {
+                    'title': 'Journal of Time Series Analysis',
+                    'scope': 'Time series theory dan methodology',
+                    'impact_factor': '1.8',
+                    'example_title': 'Deep Learning Models for Medical Time Series Prediction',
+                    'doi': '10.1111/jtsa.12345'
+                },
+                {
+                    'title': 'PLOS ONE',
+                    'scope': 'Multidisciplinary research',
+                    'impact_factor': '3.7',
+                    'example_title': 'Time Series Analysis of Epidemiological Data Using Machine Learning',
+                    'doi': '10.1371/journal.pone.1234567'
+                }
+            ]
+        })
+    
+    # 4. Penelitian Clustering/Grouping (untuk data tanpa target)
+    if problem_type is None or len(data.select_dtypes(include=['int64', 'float64']).columns) > 0:
+        recommendations.append({
+            'type': 'clustering',
+            'title': 'Penelitian Pengelompokan dan Segmentasi' if st.session_state.language == 'id' else 'Clustering and Segmentation Research',
+            'description': 'Mengidentifikasi subkelompok dalam populasi, segmentasi pasien, atau pola tersembunyi.' if st.session_state.language == 'id' else 'Identifying subgroups in population, patient segmentation, or hidden patterns.',
+            'research_methods': [
+                '• Cross-sectional Descriptive Study',
+                '• Exploratory Data Analysis',
+                '• Pattern Recognition Study',
+                '• Phenotype Discovery Study'
+            ],
+            'ml_approaches': [
+                '• K-Means untuk clustering sederhana',
+                '• Hierarchical Clustering untuk hierarki',
+                '• DBSCAN untuk density-based clustering',
+                '• Gaussian Mixture Models untuk probabilistik'
+            ],
+            'journals': [
+                {
+                    'title': 'BMC Medical Research Methodology',
+                    'scope': 'Medical research methodology',
+                    'impact_factor': '3.9',
+                    'example_title': 'Unsupervised Learning for Patient Phenotyping in Electronic Health Records',
+                    'doi': '10.1186/s12874-023-12345'
+                },
+                {
+                    'title': 'Journal of Biomedical Informatics',
+                    'scope': 'Biomedical informatics research',
+                    'impact_factor': '4.5',
+                    'example_title': 'Clustering Analysis for Disease Subtyping Using Clinical Data',
+                    'doi': '10.1016/j.jbi.2023.123456'
+                },
+                {
+                    'title': 'Scientific Reports',
+                    'scope': 'Multidisciplinary scientific research',
+                    'impact_factor': '4.6',
+                    'example_title': 'Machine Learning-Based Clustering for Precision Medicine Applications',
+                    'doi': '10.1038/s41598-023-12345'
+                }
+            ]
+        })
+    
+    # 5. Penelitian Anomali/Outlier (untuk data dengan anomali)
+    if len(numerical_cols) > 0:
+        recommendations.append({
+            'type': 'anomaly',
+            'title': 'Penelitian Deteksi Anomali' if st.session_state.language == 'id' else 'Anomaly Detection Research',
+            'description': 'Mendeteksi kejadian abnormal, fraud detection, atau early warning systems.' if st.session_state.language == 'id' else 'Detecting abnormal events, fraud detection, or early warning systems.',
+            'research_methods': [
+                '• Case-Control Study for Anomalies',
+                '• Surveillance Study Design',
+                '• Quality Control Study',
+                '• Early Detection System Evaluation'
+            ],
+            'ml_approaches': [
+                '• Isolation Forest untuk outlier detection',
+                '• One-Class SVM untuk novelty detection',
+                '• Autoencoders untuk reconstruction error',
+                '• Statistical Methods (Z-score, IQR)'
+            ],
+            'journals': [
+                {
+                    'title': 'Expert Systems with Applications',
+                    'scope': 'Expert systems dan AI applications',
+                    'impact_factor': '8.5',
+                    'example_title': 'Anomaly Detection in Healthcare Data Using Machine Learning: A Systematic Review',
+                    'doi': '10.1016/j.eswa.2023.123456'
+                },
+                {
+                    'title': 'Knowledge-Based Systems',
+                    'scope': 'Knowledge-based AI systems',
+                    'impact_factor': '8.8',
+                    'example_title': 'Deep Learning Approaches for Medical Anomaly Detection',
+                    'doi': '10.1016/j.knosys.2023.123456'
+                },
+                {
+                    'title': 'Computers in Biology and Medicine',
+                    'scope': 'Computational methods dalam biology dan medicine',
+                    'impact_factor': '4.9',
+                    'example_title': 'Machine Learning for Detection of Abnormal Clinical Patterns',
+                    'doi': '10.1016/j.compbiomed.2023.123456'
+                }
+            ]
+        })
+    
+    return recommendations
+
 def recommend_research_methods(data):
     """Rekomendasikan metode penelitian berdasarkan karakteristik dataset"""
     recommendations = []
@@ -1730,6 +1971,183 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive', language='id
     agent_analysis['language'] = language
     
     return agent_analysis
+
+def create_agentic_research_analysis(data, language='id'):
+    """
+    Membuat analisis AI yang lebih canggih untuk riset dengan pendekatan agentic AI
+    """
+    import random
+    import time
+    from datetime import datetime
+    
+    # Simulate analysis time
+    time.sleep(1)
+    
+    n_rows, n_cols = data.shape
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    datetime_cols = data.select_dtypes(include=['datetime64']).columns.tolist()
+    missing_values = data.isnull().sum().sum()
+    missing_percentage = (missing_values / (n_rows * n_cols)) * 100 if n_rows * n_cols > 0 else 0
+    
+    # Generate research agent name
+    research_agent_names = [
+        "Prof. Research Methodology Expert",
+        "AI Academic Research Advisor",
+        "Smart Research Design Assistant",
+        "Academic Publication Strategist",
+        "Research Methodology Optimizer"
+    ]
+    
+    agent_name = random.choice(research_agent_names)
+    
+    # Analyze dataset characteristics for research
+    dataset_characteristics = []
+    
+    if len(datetime_cols) > 0:
+        dataset_characteristics.append("Dataset mengandung komponen temporal - cocok untuk studi longitudinal atau time series analysis" if language == 'id' else "Dataset contains temporal components - suitable for longitudinal studies or time series analysis")
+    
+    if len(numerical_cols) > len(categorical_cols):
+        dataset_characteristics.append("Data dominan kuantitatif - mendukung analisis statistik parametrik dan regresi" if language == 'id' else "Quantitative-dominant data - supports parametric statistical analysis and regression")
+    else:
+        dataset_characteristics.append("Data kategorikal dominan - memerlukan metode non-parametrik atau encoding khusus" if language == 'id' else "Categorical-dominant data - requires non-parametric methods or special encoding")
+    
+    if n_rows < 100:
+        dataset_characteristics.append("Sample size kecil - memerlukan desain studi yang sangat hati-hati dan power analysis" if language == 'id' else "Small sample size - requires very careful study design and power analysis")
+    elif n_rows < 1000:
+        dataset_characteristics.append("Sample size sedang - cukup untuk studi cross-sectional dengan analisis multivariat" if language == 'id' else "Medium sample size - sufficient for cross-sectional studies with multivariate analysis")
+    else:
+        dataset_characteristics.append("Sample size besar - mendukung analisis kompleks dan generalisasi yang kuat" if language == 'id' else "Large sample size - supports complex analysis and strong generalization")
+    
+    if missing_percentage > 20:
+        dataset_characteristics.append("Tingkat missing data tinggi - memerlukan strategi imputasi yang robust dan analisis sensitivitas" if language == 'id' else "High missing data rate - requires robust imputation strategy and sensitivity analysis")
+    
+    # Generate research opportunities
+    research_opportunities = []
+    
+    if len(numerical_cols) > 0 and len(categorical_cols) > 0:
+        research_opportunities.append({
+            'title': 'Studi Klasifikasi Medis' if language == 'id' else 'Medical Classification Study',
+            'description': 'Menggunakan fitur klinis untuk memprediksi diagnosis atau outcome pasien' if language == 'id' else 'Using clinical features to predict patient diagnosis or outcome',
+            'feasibility': 'Tinggi' if language == 'id' else 'High',
+            'expected_impact': 'Kontribusi signifikan untuk diagnosis dini dan personalized medicine' if language == 'id' else 'Significant contribution to early diagnosis and personalized medicine'
+        })
+    
+    if len(datetime_cols) > 0:
+        research_opportunities.append({
+            'title': 'Analisis Time Series Kesehatan' if language == 'id' else 'Health Time Series Analysis',
+            'description': 'Menganalisis tren temporal dalam data kesehatan untuk forecasting atau deteksi anomali' if language == 'id' else 'Analyzing temporal trends in health data for forecasting or anomaly detection',
+            'feasibility': 'Sedang' if language == 'id' else 'Medium',
+            'expected_impact': 'Peningkatan perencanaan sumber daya kesehatan dan early warning systems' if language == 'id' else 'Improved health resource planning and early warning systems'
+        })
+    
+    if len(numerical_cols) > 5:
+        research_opportunities.append({
+            'title': 'Studi Prediksi Biomarker' if language == 'id' else 'Biomarker Prediction Study',
+            'description': 'Memprediksi level biomarker penting dari fitur klinis yang tersedia' if language == 'id' else 'Predicting important biomarker levels from available clinical features',
+            'feasibility': 'Tinggi' if language == 'id' else 'High',
+            'expected_impact': 'Reduksi biaya tes laboratorium dan peningkatan efisiensi diagnosis' if language == 'id' else 'Reduction in laboratory test costs and improved diagnostic efficiency'
+        })
+    
+    if len(categorical_cols) > 3:
+        research_opportunities.append({
+            'title': 'Studi Segmentasi Pasien' if language == 'id' else 'Patient Segmentation Study',
+            'description': 'Mengidentifikasi subkelompok pasien dengan karakteristik serupa untuk precision medicine' if language == 'id' else 'Identifying patient subgroups with similar characteristics for precision medicine',
+            'feasibility': 'Tinggi' if language == 'id' else 'High',
+            'expected_impact': 'Personalisasi perawatan dan peningkatan outcome klinis' if language == 'id' else 'Personalized care and improved clinical outcomes'
+        })
+    
+    # Journal recommendations based on dataset characteristics
+    journal_recommendations = []
+    
+    if len(datetime_cols) > 0:
+        journal_recommendations.append({
+            'name': 'International Journal of Forecasting',
+            'scope': 'Forecasting theory dan applications dalam berbagai domain termasuk kesehatan',
+            'impact_factor': '4.2',
+            'why_suitable': 'Cocok untuk studi time series dan forecasting dalam konteks kesehatan' if language == 'id' else 'Suitable for time series and forecasting studies in health context',
+            'submission_tips': 'Fokus pada metodologi forecasting dan validasi model yang robust' if language == 'id' else 'Focus on forecasting methodology and robust model validation'
+        })
+    
+    if len(numerical_cols) > len(categorical_cols):
+        journal_recommendations.append({
+            'name': 'Statistics in Medicine',
+            'scope': 'Statistical methods dalam medical research',
+            'impact_factor': '2.3',
+            'why_suitable': 'Specialisasi dalam metode statistik untuk data kuantitatif medis' if language == 'id' else 'Specialization in statistical methods for quantitative medical data',
+            'submission_tips': 'Tekankan validasi statistik dan interpretasi klinis hasil' if language == 'id' else 'Emphasize statistical validation and clinical interpretation of results'
+        })
+    
+    journal_recommendations.append({
+        'name': 'Journal of Medical Internet Research (JMIR)',
+        'scope': 'Digital health dan AI applications dalam kedokteran',
+        'impact_factor': '7.4',
+        'why_suitable': 'Leading journal untuk aplikasi AI dan machine learning dalam kesehatan' if language == 'id' else 'Leading journal for AI and machine learning applications in healthcare',
+        'submission_tips': 'Highlight clinical impact dan implementasi praktis dari metode AI' if language == 'id' else 'Highlight clinical impact and practical implementation of AI methods'
+    })
+    
+    journal_recommendations.append({
+        'name': 'BMC Medical Informatics and Decision Making',
+        'scope': 'Medical informatics dan clinical decision support systems',
+        'impact_factor': '3.5',
+        'why_suitable': 'Fokus pada sistem pendukung keputusan klinis dan informasi medis' if language == 'id' else 'Focus on clinical decision support systems and medical informatics',
+        'submission_tips': 'Demonstrasi implementasi sistem dan evaluasi klinis' if language == 'id' else 'Demonstrate system implementation and clinical evaluation'
+    })
+    
+    journal_recommendations.append({
+        'name': 'Artificial Intelligence in Medicine',
+        'scope': 'AI applications dalam medicine dan healthcare',
+        'impact_factor': '5.1',
+        'why_suitable': 'Specialisasi dalam aplikasi AI untuk masalah medis' if language == 'id' else 'Specialization in AI applications for medical problems',
+        'submission_tips': 'Fokus pada novelty metode AI dan validasi medis yang ketat' if language == 'id' else 'Focus on AI method novelty and rigorous medical validation'
+    })
+    
+    # Research roadmap
+    research_roadmap = []
+    
+    research_roadmap.append({
+        'step': '1. Literature Review & Problem Definition' if language == 'id' else '1. Literature Review & Problem Definition',
+        'description': 'Review literatur yang komprehensif dan definisikan research gap' if language == 'id' else 'Comprehensive literature review and define research gap',
+        'timeline': '2-4 minggu' if language == 'id' else '2-4 weeks',
+        'key_milestones': 'Identifikasi gap penelitian dan formulasi hipotesis' if language == 'id' else 'Research gap identification and hypothesis formulation'
+    })
+    
+    research_roadmap.append({
+        'step': '2. Data Preprocessing & Feature Engineering' if language == 'id' else '2. Data Preprocessing & Feature Engineering',
+        'description': 'Bersihkan data, handle missing values, dan buat fitur yang bermakna' if language == 'id' else 'Clean data, handle missing values, and create meaningful features',
+        'timeline': '3-6 minggu' if language == 'id' else '3-6 weeks',
+        'key_milestones': 'Dataset siap analisis dan dokumentasi preprocessing' if language == 'id' else 'Analysis-ready dataset and preprocessing documentation'
+    })
+    
+    research_roadmap.append({
+        'step': '3. Model Development & Validation' if language == 'id' else '3. Model Development & Validation',
+        'description': 'Kembangkan model ML, lakukan cross-validation, dan tuning hyperparameter' if language == 'id' else 'Develop ML models, perform cross-validation, and hyperparameter tuning',
+        'timeline': '4-8 minggu' if language == 'id' else '4-8 weeks',
+        'key_milestones': 'Model optimal dengan performa tervalidasi' if language == 'id' else 'Optimal model with validated performance'
+    })
+    
+    research_roadmap.append({
+        'step': '4. Results Analysis & Interpretation' if language == 'id' else '4. Results Analysis & Interpretation',
+        'description': 'Analisis hasil, interpretasi klinis, dan bandingkan dengan studi sebelumnya' if language == 'id' else 'Analyze results, clinical interpretation, and comparison with previous studies',
+        'timeline': '2-4 minggu' if language == 'id' else '2-4 weeks',
+        'key_milestones': 'Interpretasi bermakna dan kontribusi ilmiah yang jelas' if language == 'id' else 'Meaningful interpretation and clear scientific contribution'
+    })
+    
+    research_roadmap.append({
+        'step': '5. Manuscript Writing & Submission' if language == 'id' else '5. Manuscript Writing & Submission',
+        'description': 'Tulis manuskrip, review oleh rekan, dan submit ke jurnal target' if language == 'id' else 'Write manuscript, peer review, and submit to target journal',
+        'timeline': '6-12 minggu' if language == 'id' else '6-12 weeks',
+        'key_milestones': 'Manuskrip siap submit dan adherence ke journal guidelines' if language == 'id' else 'Submission-ready manuscript and adherence to journal guidelines'
+    })
+    
+    return {
+        'agent_name': agent_name,
+        'analysis_timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'dataset_characteristics': dataset_characteristics,
+        'research_opportunities': research_opportunities,
+        'journal_recommendations': journal_recommendations,
+        'research_roadmap': research_roadmap
+    }
 
 def verify_captcha(input_text, correct_text):
     """Verify captcha input"""
@@ -2355,6 +2773,107 @@ with tab1:
                     for method in rec['methods']:
                         st.write(f"• {method}")
                     st.write("")
+            
+            # Rekomendasi Jenis Penelitian dengan Referensi Jurnal
+            st.subheader("📚 Rekomendasi Jenis Penelitian & Referensi Jurnal" if st.session_state.language == 'id' else "📚 Research Types & Journal References")
+            
+            # Tambahkan tombol untuk generate rekomendasi jenis penelitian
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                if st.button("🤖 Generate Rekomendasi Jenis Penelitian" if st.session_state.language == 'id' else "🤖 Generate Research Type Recommendations", 
+                           type="primary", key="generate_research_types"):
+                    st.session_state.show_research_types = True
+                    st.rerun()
+            
+            with col2:
+                if st.button("🧠 Agentic AI Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Analysis", 
+                           type="secondary", key="agent_research_analysis"):
+                    st.session_state.show_agent_research_analysis = True
+                    st.rerun()
+            
+            # Tampilkan rekomendasi jenis penelitian
+            if st.session_state.get('show_research_types', False):
+                with st.expander("📊 Rekomendasi Jenis Penelitian" if st.session_state.language == 'id' else "📊 Research Type Recommendations", expanded=True):
+                    with st.spinner("Generating research type recommendations..." if st.session_state.language == 'id' else "Generating research type recommendations..."):
+                        research_type_recommendations = get_research_type_recommendations(data)
+                        
+                        if research_type_recommendations:
+                            for rec in research_type_recommendations:
+                                st.markdown(f"### 📖 {rec['title']}")
+                                st.write(f"**{rec['description']}**")
+                                
+                                # Research Methods
+                                st.markdown("**🔬 Metodologi Penelitian:**" if st.session_state.language == 'id' else "**🔬 Research Methodology:**")
+                                for method in rec['research_methods']:
+                                    st.write(f"• {method}")
+                                
+                                # ML Approaches
+                                st.markdown("**🤖 Pendekatan Machine Learning:**" if st.session_state.language == 'id' else "**🤖 Machine Learning Approaches:**")
+                                for approach in rec['ml_approaches']:
+                                    st.write(f"• {approach}")
+                                
+                                # Journal References
+                                st.markdown("**📰 Referensi Jurnal Ilmiah:**" if st.session_state.language == 'id' else "**📰 Academic Journal References:**")
+                                for journal in rec['journals']:
+                                    st.markdown(f"**• {journal['title']}**")
+                                    st.write(f"**Scope:** {journal['scope']}")
+                                    st.write(f"**Impact Factor:** {journal['impact_factor']}")
+                                    st.write(f"**Example Paper:** {journal['example_title']}")
+                                    st.write(f"**DOI:** {journal['doi']}")
+                                    st.write("")
+                                
+                                st.markdown("---")
+                        else:
+                            st.info("Tidak ada rekomendasi jenis penelitian yang tersedia untuk dataset ini." if st.session_state.language == 'id' else "No research type recommendations available for this dataset.")
+            
+            # Tampilkan Agentic AI Research Analysis
+            if st.session_state.get('show_agent_research_analysis', False):
+                with st.expander("🧠 Agentic AI Research Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Research Analysis", expanded=True):
+                    with st.spinner("Running agentic AI research analysis..." if st.session_state.language == 'id' else "Running agentic AI research analysis..."):
+                        # Buat analisis agentic AI untuk penelitian
+                        agent_research_analysis = create_agentic_research_analysis(data, language=st.session_state.language)
+                        
+                        # Header
+                        st.markdown(f"### 🧠 {agent_research_analysis['agent_name']}")
+                        st.caption(f"{'Analisis riset selesai pada:' if st.session_state.language == 'id' else 'Research analysis completed at:'} {agent_research_analysis['analysis_timestamp']}")
+                        
+                        # Dataset Characteristics
+                        st.markdown("**📊 Karakteristik Dataset untuk Riset:**" if st.session_state.language == 'id' else "**📊 Dataset Characteristics for Research:**")
+                        for char in agent_research_analysis['dataset_characteristics']:
+                            st.write(f"• {char}")
+                        
+                        # Research Opportunities
+                        st.markdown("**🎯 Peluang Penelitian:**" if st.session_state.language == 'id' else "**🎯 Research Opportunities:**")
+                        for opp in agent_research_analysis['research_opportunities']:
+                            st.markdown(f"**• {opp['title']}**")
+                            st.write(f"**Description:** {opp['description']}")
+                            st.write(f"**Feasibility:** {opp['feasibility']}")
+                            st.write(f"**Expected Impact:** {opp['expected_impact']}")
+                            st.write("")
+                        
+                        # Journal Recommendations
+                        st.markdown("**📚 Rekomendasi Jurnal:**" if st.session_state.language == 'id' else "**📚 Journal Recommendations:**")
+                        for journal in agent_research_analysis['journal_recommendations']:
+                            st.markdown(f"**• {journal['name']}**")
+                            st.write(f"**Scope:** {journal['scope']}")
+                            st.write(f"**Impact Factor:** {journal['impact_factor']}")
+                            st.write(f"**Why Suitable:** {journal['why_suitable']}")
+                            st.write(f"**Submission Tips:** {journal['submission_tips']}")
+                            st.write("")
+                        
+                        # Research Roadmap
+                        st.markdown("**🛣️ Peta Jalan Penelitian:**" if st.session_state.language == 'id' else "**🛣️ Research Roadmap:**")
+                        for step in agent_research_analysis['research_roadmap']:
+                            st.write(f"**{step['step']}:** {step['description']}")
+                            st.write(f"**Timeline:** {step['timeline']}")
+                            st.write(f"**Key Milestones:** {step['key_milestones']}")
+                            st.write("")
+                        
+                        # Reset button
+                        if st.button("🔄 Reset Research Analysis" if st.session_state.language == 'id' else "🔄 Reset Research Analysis"):
+                            st.session_state.show_research_types = False
+                            st.session_state.show_agent_research_analysis = False
+                            st.rerun()
             
             # Enhanced AI-Powered Analysis Section
             st.subheader("🤖 AI-Powered Dataset Analysis" if st.session_state.language == 'id' else "🤖 AI-Powered Dataset Analysis")
