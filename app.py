@@ -32,12 +32,14 @@ import os
 from PIL import Image
 import io
 import time
+import json
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
 from auth_db import auth_db
 from captcha_utils import captcha_gen, verify_captcha
 from utils import prepare_timeseries_data, check_stationarity, plot_timeseries_analysis, analyze_trend_seasonality_cycle, plot_pattern_analysis
+from param_presets import get_available_presets, get_preset_params, get_all_presets, save_custom_preset, load_custom_presets, export_preset_to_json, import_preset_from_json, create_preset_summary
 
 try:
     import lime
@@ -557,16 +559,73 @@ def adjusted_r2_score(r2, n, k):
     """Hitung Adjusted R².""" if st.session_state.language == 'id' else """Calculate Adjusted R²."""
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
 
-def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
+def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params, custom_param_ranges=None):
     
     def objective(trial):
         if problem_type == "Classification":
             if model_type == "Random Forest":
+                # Gunakan rentang parameter kustom jika tersedia, jika tidak gunakan rentang default
+                if custom_param_ranges and 'n_estimators' in custom_param_ranges:
+                    n_estimators_range = custom_param_ranges['n_estimators']
+                    if isinstance(n_estimators_range, list) and len(n_estimators_range) == 3:
+                        n_estimators = trial.suggest_int('n_estimators', n_estimators_range[0], n_estimators_range[1], step=n_estimators_range[2])
+                    else:
+                        n_estimators = trial.suggest_int('n_estimators', 50, 300)
+                else:
+                    n_estimators = trial.suggest_int('n_estimators', 50, 300)
+                
+                if custom_param_ranges and 'max_depth' in custom_param_ranges:
+                    max_depth_range = custom_param_ranges['max_depth']
+                    if isinstance(max_depth_range, list) and len(max_depth_range) == 3:
+                        max_depth = trial.suggest_int('max_depth', max_depth_range[0], max_depth_range[1], step=max_depth_range[2])
+                    else:
+                        max_depth = trial.suggest_int('max_depth', 3, 20)
+                else:
+                    max_depth = trial.suggest_int('max_depth', 3, 20)
+                
+                if custom_param_ranges and 'min_samples_split' in custom_param_ranges:
+                    min_samples_split_range = custom_param_ranges['min_samples_split']
+                    if isinstance(min_samples_split_range, list) and len(min_samples_split_range) == 3:
+                        min_samples_split = trial.suggest_int('min_samples_split', min_samples_split_range[0], min_samples_split_range[1], step=min_samples_split_range[2])
+                    else:
+                        min_samples_split = trial.suggest_int('min_samples_split', 2, 10)
+                else:
+                    min_samples_split = trial.suggest_int('min_samples_split', 2, 10)
+                
+                if custom_param_ranges and 'min_samples_leaf' in custom_param_ranges:
+                    min_samples_leaf_range = custom_param_ranges['min_samples_leaf']
+                    if isinstance(min_samples_leaf_range, list) and len(min_samples_leaf_range) == 3:
+                        min_samples_leaf = trial.suggest_int('min_samples_leaf', min_samples_leaf_range[0], min_samples_leaf_range[1], step=min_samples_leaf_range[2])
+                    else:
+                        min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 5)
+                else:
+                    min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 5)
+                
+                if custom_param_ranges and 'max_features' in custom_param_ranges:
+                    max_features_values = custom_param_ranges['max_features']
+                    if isinstance(max_features_values, list):
+                        max_features = trial.suggest_categorical('max_features', max_features_values)
+                    else:
+                        max_features = trial.suggest_categorical('max_features', ['sqrt', 'log2', None])
+                else:
+                    max_features = trial.suggest_categorical('max_features', ['sqrt', 'log2', None])
+                
+                if custom_param_ranges and 'bootstrap' in custom_param_ranges:
+                    bootstrap_values = custom_param_ranges['bootstrap']
+                    if isinstance(bootstrap_values, list):
+                        bootstrap = trial.suggest_categorical('bootstrap', bootstrap_values)
+                    else:
+                        bootstrap = trial.suggest_categorical('bootstrap', [True, False])
+                else:
+                    bootstrap = trial.suggest_categorical('bootstrap', [True, False])
+                
                 params = {
-                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
-                    'max_depth': trial.suggest_int('max_depth', 3, 20),
-                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
+                    'n_estimators': n_estimators,
+                    'max_depth': max_depth,
+                    'min_samples_split': min_samples_split,
+                    'min_samples_leaf': min_samples_leaf,
+                    'max_features': max_features,
+                    'bootstrap': bootstrap,
                     'random_state': 42
                 }
                 model = RandomForestClassifier(**params)
@@ -574,23 +633,37 @@ def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
                 params = {
                     'C': trial.suggest_float('C', 0.01, 10.0, log=True),
                     'max_iter': trial.suggest_int('max_iter', 100, 1000),
+                    'class_weight': trial.suggest_categorical('class_weight', [None, 'balanced']),
+                    'solver': trial.suggest_categorical('solver', ['lbfgs', 'liblinear', 'saga', 'newton-cg']),
+                    'penalty': trial.suggest_categorical('penalty', ['l2', 'l1', 'elasticnet']),
                     'random_state': 42
                 }
+                # Handle elasticnet penalty yang memerlukan l1_ratio
+                if params['penalty'] == 'elasticnet':
+                    params['l1_ratio'] = trial.suggest_float('l1_ratio', 0.0, 1.0)
                 model = LogisticRegression(**params)
             elif model_type == "SVM":
                 params = {
                     'C': trial.suggest_float('C', 0.1, 10.0, log=True),
-                    'kernel': trial.suggest_categorical('kernel', ['linear', 'rbf', 'poly']),
+                    'kernel': trial.suggest_categorical('kernel', ['linear', 'rbf', 'poly', 'sigmoid']),
                     'gamma': trial.suggest_categorical('gamma', ['scale', 'auto']),
+                    'coef0': trial.suggest_float('coef0', 0.0, 1.0),
+                    'shrinking': trial.suggest_categorical('shrinking', [True, False]),
+                    'probability': True,
                     'random_state': 42
                 }
+                # Handle degree untuk kernel poly
+                if params['kernel'] == 'poly':
+                    params['degree'] = trial.suggest_int('degree', 2, 10)
                 model = SVC(**params)
             elif model_type == "KNN":
                 params = {
                     'n_neighbors': trial.suggest_int('n_neighbors', 1, 20),
                     'weights': trial.suggest_categorical('weights', ['uniform', 'distance']),
-                    'algorithm': trial.suggest_categorical('algorithm', ['auto', 'ball_tree', 'kd_tree']),
-                    'p': trial.suggest_int('p', 1, 2)
+                    'algorithm': trial.suggest_categorical('algorithm', ['auto', 'ball_tree', 'kd_tree', 'brute']),
+                    'p': trial.suggest_int('p', 1, 5),
+                    'leaf_size': trial.suggest_int('leaf_size', 10, 50),
+                    'metric': trial.suggest_categorical('metric', ['minkowski', 'euclidean', 'manhattan'])
                 }
                 model = KNeighborsClassifier(**params)
             elif model_type == "Decision Tree":
@@ -599,6 +672,9 @@ def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
                     'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
                     'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
                     'criterion': trial.suggest_categorical('criterion', ['gini', 'entropy']),
+                    'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None, 'auto']),
+                    'class_weight': trial.suggest_categorical('class_weight', [None, 'balanced']),
+                    'ccp_alpha': trial.suggest_float('ccp_alpha', 0.0, 0.1, step=0.001),
                     'random_state': 42
                 }
                 model = DecisionTreeClassifier(**params)
@@ -607,10 +683,18 @@ def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
                     'n_estimators': trial.suggest_int('n_estimators', 50, 300),
                     'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
                     'max_depth': trial.suggest_int('max_depth', 3, 10),
-                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                    'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20),
+                    'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None, 'auto']),
                     'random_state': 42
                 }
                 model = GradientBoostingClassifier(**params)
+            elif model_type == "Naive Bayes":
+                params = {
+                    'var_smoothing': trial.suggest_float('var_smoothing', 1e-12, 1e-6, log=True)
+                }
+                model = GaussianNB(**params)
             else:
                 return 0
                 
@@ -619,16 +703,78 @@ def create_optuna_study(problem_type, model_type, X_train, y_train, cv_params):
             
         else:  # Regression
             if model_type == "Random Forest":
+                # Gunakan rentang parameter kustom jika tersedia, jika tidak gunakan rentang default
+                if custom_param_ranges and 'n_estimators' in custom_param_ranges:
+                    n_estimators_range = custom_param_ranges['n_estimators']
+                    if isinstance(n_estimators_range, list) and len(n_estimators_range) == 3:
+                        n_estimators = trial.suggest_int('n_estimators', n_estimators_range[0], n_estimators_range[1], step=n_estimators_range[2])
+                    else:
+                        n_estimators = trial.suggest_int('n_estimators', 50, 300)
+                else:
+                    n_estimators = trial.suggest_int('n_estimators', 50, 300)
+                
+                if custom_param_ranges and 'max_depth' in custom_param_ranges:
+                    max_depth_range = custom_param_ranges['max_depth']
+                    if isinstance(max_depth_range, list) and len(max_depth_range) == 3:
+                        max_depth = trial.suggest_int('max_depth', max_depth_range[0], max_depth_range[1], step=max_depth_range[2])
+                    else:
+                        max_depth = trial.suggest_int('max_depth', 3, 20)
+                else:
+                    max_depth = trial.suggest_int('max_depth', 3, 20)
+                
+                if custom_param_ranges and 'min_samples_split' in custom_param_ranges:
+                    min_samples_split_range = custom_param_ranges['min_samples_split']
+                    if isinstance(min_samples_split_range, list) and len(min_samples_split_range) == 3:
+                        min_samples_split = trial.suggest_int('min_samples_split', min_samples_split_range[0], min_samples_split_range[1], step=min_samples_split_range[2])
+                    else:
+                        min_samples_split = trial.suggest_int('min_samples_split', 2, 10)
+                else:
+                    min_samples_split = trial.suggest_int('min_samples_split', 2, 10)
+                
+                if custom_param_ranges and 'min_samples_leaf' in custom_param_ranges:
+                    min_samples_leaf_range = custom_param_ranges['min_samples_leaf']
+                    if isinstance(min_samples_leaf_range, list) and len(min_samples_leaf_range) == 3:
+                        min_samples_leaf = trial.suggest_int('min_samples_leaf', min_samples_leaf_range[0], min_samples_leaf_range[1], step=min_samples_leaf_range[2])
+                    else:
+                        min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 5)
+                else:
+                    min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 5)
+                
+                if custom_param_ranges and 'max_features' in custom_param_ranges:
+                    max_features_values = custom_param_ranges['max_features']
+                    if isinstance(max_features_values, list):
+                        max_features = trial.suggest_categorical('max_features', max_features_values)
+                    else:
+                        max_features = trial.suggest_categorical('max_features', ['sqrt', 'log2', None])
+                else:
+                    max_features = trial.suggest_categorical('max_features', ['sqrt', 'log2', None])
+                
+                if custom_param_ranges and 'bootstrap' in custom_param_ranges:
+                    bootstrap_values = custom_param_ranges['bootstrap']
+                    if isinstance(bootstrap_values, list):
+                        bootstrap = trial.suggest_categorical('bootstrap', bootstrap_values)
+                    else:
+                        bootstrap = trial.suggest_categorical('bootstrap', [True, False])
+                else:
+                    bootstrap = trial.suggest_categorical('bootstrap', [True, False])
+                
                 params = {
-                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
-                    'max_depth': trial.suggest_int('max_depth', 3, 20),
-                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 5),
+                    'n_estimators': n_estimators,
+                    'max_depth': max_depth,
+                    'min_samples_split': min_samples_split,
+                    'min_samples_leaf': min_samples_leaf,
+                    'max_features': max_features,
+                    'bootstrap': bootstrap,
                     'random_state': 42
                 }
                 model = RandomForestRegressor(**params)
             elif model_type == "Linear Regression":
-                return 0  # Linear regression has no hyperparameters
+                params = {
+                    'fit_intercept': trial.suggest_categorical('fit_intercept', [True, False]),
+                    'positive': trial.suggest_categorical('positive', [True, False]),
+                    'copy_X': trial.suggest_categorical('copy_X', [True, False])
+                }
+                model = LinearRegression(**params)
             elif model_type == "Gradient Boosting":
                 params = {
                     'n_estimators': trial.suggest_int('n_estimators', 50, 300),
@@ -682,6 +828,336 @@ def get_model_type(model):
             return st.session_state.problem_type
     except:
         return st.session_state.problem_type
+
+def parse_custom_range(range_str, param_type='int'):
+    """
+    Parse custom parameter range string into appropriate format
+    
+    Args:
+        range_str: String format like "10:100:10" for numeric or "sqrt,log2,None" for categorical
+        param_type: 'int', 'float', or 'categorical'
+    
+    Returns:
+        List of values or range specification
+    """
+    if not range_str or range_str.strip() == "":
+        return None
+    
+    range_str = range_str.strip()
+    
+    # Handle categorical parameters (comma-separated values)
+    if ',' in range_str:
+        values = [val.strip() for val in range_str.split(',')]
+        # Convert numeric strings to numbers, handle None/True/False
+        converted_values = []
+        for val in values:
+            if val.lower() == 'none':
+                converted_values.append(None)
+            elif val.lower() == 'true':
+                converted_values.append(True)
+            elif val.lower() == 'false':
+                converted_values.append(False)
+            else:
+                try:
+                    if param_type == 'int':
+                        converted_values.append(int(val))
+                    elif param_type == 'float':
+                        converted_values.append(float(val))
+                    else:
+                        converted_values.append(val)
+                except ValueError:
+                    converted_values.append(val)
+        return converted_values
+    
+    # Handle numeric ranges (min:max:step format)
+    elif ':' in range_str:
+        parts = range_str.split(':')
+        if len(parts) == 3:
+            try:
+                start = int(parts[0]) if param_type == 'int' else float(parts[0])
+                stop = int(parts[1]) if param_type == 'int' else float(parts[1])
+                step = int(parts[2]) if param_type == 'int' else float(parts[2])
+                
+                if param_type == 'int':
+                    return list(range(start, stop + 1, step))
+                else:
+                    values = []
+                    current = start
+                    while current <= stop:
+                        values.append(current)
+                        current += step
+                    return values
+            except ValueError:
+                return None
+    
+    # Single value
+    try:
+        if param_type == 'int':
+            return [int(range_str)]
+        elif param_type == 'float':
+            return [float(range_str)]
+        else:
+            return [range_str]
+    except ValueError:
+        return None
+
+def get_custom_param_inputs(model_name, use_custom_ranges, st_session):
+    """
+    Get custom parameter range inputs from user
+    
+    Args:
+        model_name: Name of the model
+        use_custom_ranges: Whether custom ranges are enabled
+        st_session: Streamlit session object
+    
+    Returns:
+        Dictionary of custom parameter ranges
+    """
+    custom_ranges = {}
+    
+    if not use_custom_ranges:
+        return custom_ranges
+    
+    # Tambahkan fitur preset parameter
+    available_presets = get_available_presets(model_name)
+    
+    if available_presets:
+        st_session.subheader("🎯 Preset Parameter" if st_session.language == 'id' else "🎯 Parameter Presets")
+        
+        col1, col2, col3 = st_session.columns([3, 2, 2])
+        with col1:
+            selected_preset = st_session.selectbox(
+                "Pilih preset:" if st_session.language == 'id' else "Select preset:",
+                ["None"] + available_presets,
+                help="Pilih preset parameter yang telah dikonfigurasi sebelumnya" if st_session.language == 'id' else "Select pre-configured parameter preset"
+            )
+        
+        with col2:
+            if st_session.button("Terapkan Preset" if st_session.language == 'id' else "Apply Preset"):
+                if selected_preset != "None":
+                    preset_params = get_preset_params(model_name, selected_preset)
+                    custom_ranges.update(preset_params)
+                    st_session.success(f"Preset '{selected_preset}' diterapkan!" if st_session.language == 'id' else f"Preset '{selected_preset}' applied!")
+        
+        with col3:
+            if st_session.button("Lihat Detail" if st_session.language == 'id' else "View Details"):
+                if selected_preset != "None":
+                    preset_params = get_preset_params(model_name, selected_preset)
+                    summary = create_preset_summary(model_name, selected_preset, preset_params)
+                    st_session.markdown(summary)
+        
+        st_session.markdown("---")
+    
+    # Tambahkan fitur impor/ekspor preset
+    with st_session.expander("💾 Impor/Ekspor Preset" if st_session.language == 'id' else "💾 Import/Export Presets"):
+        col1, col2 = st_session.columns(2)
+        
+        with col1:
+            st_session.subheader("Impor Preset" if st_session.language == 'id' else "Import Preset")
+            uploaded_file = st_session.file_uploader(
+                "Pilih file JSON preset:" if st_session.language == 'id' else "Choose preset JSON file:",
+                type=['json'],
+                key=f"preset_import_{model_name}"
+            )
+            if uploaded_file is not None:
+                try:
+                    imported_data = json.load(uploaded_file)
+                    if st_session.button("Impor" if st_session.language == 'id' else "Import"):
+                        if all(key in imported_data for key in ["model_type", "preset_name", "parameters"]):
+                            custom_ranges.update(imported_data["parameters"])
+                            st_session.success(f"Preset '{imported_data['preset_name']}' berhasil diimpor!" if st_session.language == 'id' else f"Preset '{imported_data['preset_name']}' successfully imported!")
+                except Exception as e:
+                    st_session.error(f"Error mengimpor preset: {str(e)}" if st_session.language == 'id' else f"Error importing preset: {str(e)}")
+        
+        with col2:
+            st_session.subheader("Ekspor Preset" if st_session.language == 'id' else "Export Preset")
+            if custom_ranges:
+                preset_name_export = st_session.text_input(
+                    "Nama preset untuk diekspor:" if st_session.language == 'id' else "Preset name to export:",
+                    value=f"custom_{model_name.lower()}",
+                    key=f"preset_export_name_{model_name}"
+                )
+                if st_session.button("Ekspor ke JSON" if st_session.language == 'id' else "Export to JSON"):
+                    filename = export_preset_to_json(model_name, preset_name_export, custom_ranges)
+                    if filename:
+                        with open(filename, 'rb') as f:
+                            st_session.download_button(
+                                label="Unduh File JSON" if st_session.language == 'id' else "Download JSON File",
+                                data=f.read(),
+                                file_name=filename,
+                                mime="application/json"
+                            )
+                        st_session.success(f"Preset berhasil diekspor ke {filename}!" if st_session.language == 'id' else f"Preset successfully exported to {filename}!")
+            else:
+                st_session.info("Tidak ada parameter kustom untuk diekspor" if st_session.language == 'id' else "No custom parameters to export")
+
+def merge_custom_param_ranges(default_param_grid, custom_param_ranges):
+    """
+    Menggabungkan parameter grid default dengan custom parameter ranges
+    
+    Parameters:
+    -----------
+    default_param_grid : dict
+        Parameter grid default dari aplikasi
+    custom_param_ranges : dict
+        Custom parameter ranges dari user input
+        
+    Returns:
+    --------
+    dict: Parameter grid yang sudah digabung
+    """
+    if custom_param_ranges is None or not custom_param_ranges:
+        return default_param_grid
+    
+    # Salin parameter grid default
+    merged_grid = default_param_grid.copy()
+    
+    # Override dengan custom parameter ranges
+    for param, custom_range in custom_param_ranges.items():
+        if custom_range is not None and len(custom_range) > 0:
+            merged_grid[param] = custom_range
+    
+    return merged_grid
+
+def validate_param_ranges(param_grid, X_train, model_type):
+    """
+    Validasi parameter ranges berdasarkan karakteristik data
+    
+    Parameters:
+    -----------
+    param_grid : dict
+        Parameter grid yang akan divalidasi
+    X_train : pandas.DataFrame
+        Data training untuk validasi
+    model_type : str
+        Tipe model untuk validasi khusus
+        
+    Returns:
+    --------
+    dict: Parameter grid yang sudah divalidasi
+    """
+    if X_train is None or X_train.empty:
+        return param_grid
+    
+    validated_grid = param_grid.copy()
+    n_features = X_train.shape[1]
+    n_samples = len(X_train)
+    
+    # Validasi untuk max_depth (Random Forest, Decision Tree, Gradient Boosting)
+    if 'max_depth' in validated_grid and model_type in ['Random Forest', 'Decision Tree', 'Gradient Boosting']:
+        max_possible_depth = int(np.log2(n_samples)) if n_samples > 1 else 1
+        validated_max_depth = []
+        for depth in validated_grid['max_depth']:
+            if isinstance(depth, (int, float)) and depth > 0:
+                if depth <= max_possible_depth:
+                    validated_max_depth.append(int(depth))
+                else:
+                    validated_max_depth.append(max_possible_depth)
+            elif depth is None:
+                validated_max_depth.append(depth)
+        validated_grid['max_depth'] = validated_max_depth
+    
+    # Validasi untuk max_features (Random Forest, Gradient Boosting)
+    if 'max_features' in validated_grid and model_type in ['Random Forest', 'Gradient Boosting']:
+        validated_max_features = []
+        for feature in validated_grid['max_features']:
+            if isinstance(feature, (int, float)) and feature > 0:
+                if feature <= n_features:
+                    validated_max_features.append(int(feature))
+                else:
+                    validated_max_features.append(n_features)
+            else:
+                validated_max_features.append(feature)
+        validated_grid['max_features'] = validated_max_features
+    
+    # Validasi untuk n_neighbors (KNN)
+    if 'n_neighbors' in validated_grid and model_type == 'KNN':
+        max_neighbors = min(n_samples - 1, 50)  # Batasi maksimal 50 atau n_samples-1
+        validated_n_neighbors = []
+        for k in validated_grid['n_neighbors']:
+            if isinstance(k, (int, float)) and k > 0:
+                if k <= max_neighbors:
+                    validated_n_neighbors.append(int(k))
+                else:
+                    validated_n_neighbors.append(max_neighbors)
+        validated_grid['n_neighbors'] = validated_n_neighbors
+    
+    # Validasi untuk min_samples_split dan min_samples_leaf
+    if 'min_samples_split' in validated_grid:
+        min_samples = 2
+        max_samples = max(2, n_samples // 10)  # Maksimal 10% dari data
+        validated_min_samples = []
+        for samples in validated_grid['min_samples_split']:
+            if isinstance(samples, (int, float)) and samples >= 1:
+                if samples <= max_samples:
+                    validated_min_samples.append(int(samples))
+                else:
+                    validated_min_samples.append(max_samples)
+        validated_grid['min_samples_split'] = validated_min_samples
+    
+    if 'min_samples_leaf' in validated_grid:
+        max_samples = max(1, n_samples // 20)  # Maksimal 5% dari data
+        validated_min_samples = []
+        for samples in validated_grid['min_samples_leaf']:
+            if isinstance(samples, (int, float)) and samples >= 1:
+                if samples <= max_samples:
+                    validated_min_samples.append(int(samples))
+                else:
+                    validated_min_samples.append(max_samples)
+        validated_grid['min_samples_leaf'] = validated_min_samples
+    
+    return validated_grid
+    
+    # Model-specific parameter ranges
+    if model_name == "Random Forest":
+        st_session.subheader("Rentang Parameter Kustom - Random Forest" if st_session.language == 'id' else "Custom Parameter Ranges - Random Forest")
+        
+        col1, col2 = st_session.columns(2)
+        with col1:
+            n_estimators_range = st_session.text_input(
+                "Jumlah pohon (n_estimators):" if st_session.language == 'id' else "Number of trees (n_estimators):",
+                placeholder="50:300:50",
+                help="Format: min:max:step" if st_session.language == 'id' else "Format: min:max:step"
+            )
+            max_depth_range = st_session.text_input(
+                "Kedalaman maksimum (max_depth):" if st_session.language == 'id' else "Maximum depth (max_depth):",
+                placeholder="3:20:1",
+                help="Format: min:max:step" if st_session.language == 'id' else "Format: min:max:step"
+            )
+            min_samples_split_range = st_session.text_input(
+                "Min samples split:" if st_session.language == 'id' else "Min samples split:",
+                placeholder="2:10:1"
+            )
+        with col2:
+            min_samples_leaf_range = st_session.text_input(
+                "Min samples leaf:" if st_session.language == 'id' else "Min samples leaf:",
+                placeholder="1:5:1"
+            )
+            max_features_range = st_session.text_input(
+                "Max features:" if st_session.language == 'id' else "Max features:",
+                placeholder="sqrt,log2,None",
+                help="Pisahkan dengan koma" if st_session.language == 'id' else "Separate with commas"
+            )
+            bootstrap_range = st_session.text_input(
+                "Bootstrap:" if st_session.language == 'id' else "Bootstrap:",
+                placeholder="True,False"
+            )
+        
+        # Parse ranges
+        if n_estimators_range:
+            custom_ranges['n_estimators'] = parse_custom_range(n_estimators_range, 'int')
+        if max_depth_range:
+            custom_ranges['max_depth'] = parse_custom_range(max_depth_range, 'int')
+        if min_samples_split_range:
+            custom_ranges['min_samples_split'] = parse_custom_range(min_samples_split_range, 'int')
+        if min_samples_leaf_range:
+            custom_ranges['min_samples_leaf'] = parse_custom_range(min_samples_leaf_range, 'int')
+        if max_features_range:
+            custom_ranges['max_features'] = parse_custom_range(max_features_range, 'categorical')
+        if bootstrap_range:
+            custom_ranges['bootstrap'] = parse_custom_range(bootstrap_range, 'categorical')
+    
+    return custom_ranges
 
 def recommend_research_methods(data):
     """Rekomendasikan metode penelitian berdasarkan karakteristik dataset"""
@@ -5386,6 +5862,16 @@ with tab4:
                             epochs = st.slider("Jumlah epochs:", 10, 200, 100)
                             batch_size = st.slider("Batch size:", 16, 128, 32)
                             
+                            # Parameter arsitektur lanjutan dengan expander
+                            with st.expander("Parameter Arsitektur Lanjutan" if st.session_state.language == 'id' else "Advanced Architecture Parameters"):
+                                lstm_units = st.slider("Unit LSTM per layer:" if st.session_state.language == 'id' else "LSTM units per layer:", 10, 200, 50)
+                                num_layers = st.slider("Jumlah layer LSTM:" if st.session_state.language == 'id' else "Number of LSTM layers:", 1, 5, 2)
+                                dropout = st.slider("Dropout rate:" if st.session_state.language == 'id' else "Dropout rate:", 0.0, 0.5, 0.2, 0.05)
+                                recurrent_dropout = st.slider("Recurrent dropout rate:" if st.session_state.language == 'id' else "Recurrent dropout rate:", 0.0, 0.5, 0.2, 0.05)
+                                bidirectional = st.checkbox("Gunakan LSTM bidirectional:" if st.session_state.language == 'id' else "Use bidirectional LSTM:", value=False)
+                                learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.0001, 0.01, 0.001, 0.0001)
+                                optimizer = st.selectbox("Optimizer:" if st.session_state.language == 'id' else "Optimizer:", ["adam", "sgd", "rmsprop"], index=0)
+                            
                             with st.spinner("Melatih model LSTM..." if st.session_state.language == 'id' else "Training LSTM model..."):
                                 try:
                                     model = train_lstm_model(
@@ -5393,7 +5879,14 @@ with tab4:
                                         target_column, 
                                         look_back=look_back, 
                                         epochs=epochs, 
-                                        batch_size=batch_size
+                                        batch_size=batch_size,
+                                        lstm_units=lstm_units,
+                                        num_layers=num_layers,
+                                        dropout=dropout,
+                                        recurrent_dropout=recurrent_dropout,
+                                        bidirectional=bidirectional,
+                                        learning_rate=learning_rate,
+                                        optimizer=optimizer
                                     )
                                     st.session_state.model = model
                                     st.success("Model LSTM berhasil dilatih!" if st.session_state.language == 'id' else "LSTM model trained successfully!")
@@ -5406,9 +5899,24 @@ with tab4:
                             if model_type == "Random Forest":
                                 n_estimators = st.slider("Jumlah trees:" if st.session_state.language == 'id' else "Number of trees:", 10, 500, 100)
                                 max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
+                                
+                                # Parameter lanjutan dengan expander
+                                with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                                    min_samples_split = st.slider("Jumlah sampel minimum untuk membagi:" if st.session_state.language == 'id' else "Minimum samples to split:", 2, 20, 2)
+                                    min_samples_leaf = st.slider("Jumlah sampel minimum di leaf:" if st.session_state.language == 'id' else "Minimum samples in leaf:", 1, 10, 1)
+                                    max_features = st.selectbox("Fitur maksimum:" if st.session_state.language == 'id' else "Max features:", ["sqrt", "log2", "None"], index=0)
+                                    bootstrap = st.checkbox("Bootstrap sampel:" if st.session_state.language == 'id' else "Bootstrap samples:", value=True)
+                                    
+                                    # Konversi max_features dari string ke None jika diperlukan
+                                    max_features_value = None if max_features == "None" else max_features
+                                
                                 model_params = {
                                     'n_estimators': n_estimators,
                                     'max_depth': max_depth,
+                                    'min_samples_split': min_samples_split,
+                                    'min_samples_leaf': min_samples_leaf,
+                                    'max_features': max_features_value,
+                                    'bootstrap': bootstrap,
                                     'random_state': 42
                                 }
                             elif model_type == "Gradient Boosting":
@@ -5832,6 +6340,21 @@ with tab4:
                 ["None", "GridSearchCV", "RandomizedSearchCV", "Bayesian Optimization (Optuna)"]
             )
             
+            # Opsi rentang parameter kustom
+            use_custom_ranges = False
+            custom_param_ranges = {}
+            
+            if optimization_method in ["GridSearchCV", "RandomizedSearchCV"]:
+                use_custom_ranges = st.checkbox(
+                    "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
+                    value=False,
+                    help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges"
+                )
+                
+                if use_custom_ranges:
+                    st.info("💡 Gunakan format: min:max:step untuk numerik, atau val1,val2,val3 untuk kategorikal" if st.session_state.language == 'id' else "💡 Use format: min:max:step for numeric, or val1,val2,val3 for categorical")
+                    st.info("⚠️ Kosongkan field untuk menggunakan rentang default" if st.session_state.language == 'id' else "⚠️ Leave field empty to use default ranges")
+            
             # Model selection
             if problem_type == "Classification":
                 # Define available classification models
@@ -5841,8 +6364,21 @@ with tab4:
                 st.session_state.model_type = model_type
                 
                 if model_type == "Random Forest":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     n_estimators = st.slider("Number of trees:" if st.session_state.language == 'id' else "Jumlah pohon:", 10, 500, 100)
                     max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 50, 10)
+                    
+                    # Parameter lanjutan dengan expander
+                    with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                        min_samples_split = st.slider("Minimum samples to split:" if st.session_state.language == 'id' else "Jumlah sampel minimum untuk membagi:", 2, 20, 2)
+                        min_samples_leaf = st.slider("Minimum samples in leaf:" if st.session_state.language == 'id' else "Jumlah sampel minimum di leaf:", 1, 10, 1)
+                        max_features = st.selectbox("Max features:" if st.session_state.language == 'id' else "Fitur maksimum:", ["sqrt", "log2", "None"], index=0)
+                        bootstrap = st.checkbox("Bootstrap samples:" if st.session_state.language == 'id' else "Bootstrap sampel:", value=True)
+                        
+                        # Konversi max_features dari string ke None jika diperlukan
+                        max_features_value = None if max_features == "None" else max_features
                     
                     base_model = RandomForestClassifier(random_state=42)
                     
@@ -5853,6 +6389,10 @@ with tab4:
                             'min_samples_split': [2, 5, 10],
                             'min_samples_leaf': [1, 2, 4]
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
@@ -5863,10 +6403,14 @@ with tab4:
                             'min_samples_leaf': [1, 2, 4, 8, 16],
                             'max_features': ['sqrt', 'log2', None]
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=50, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=50, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -5875,12 +6419,33 @@ with tab4:
                         model = RandomForestClassifier(
                             n_estimators=n_estimators,
                             max_depth=max_depth,
+                            min_samples_split=min_samples_split,
+                            min_samples_leaf=min_samples_leaf,
+                            max_features=max_features_value,
+                            bootstrap=bootstrap,
                             random_state=42
                         )
                         
                 elif model_type == "Logistic Regression" :
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.01, 10.0, 1.0)
                     max_iter = st.slider("Maximum iterations:" if st.session_state.language == 'id' else "Iterasi maksimum:", 100, 1000, 100)
+                    
+                    # Parameter lanjutan dalam expander
+                    with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                        class_weight = st.selectbox("Class weight:" if st.session_state.language == 'id' else "Bobot kelas:", ["None", "balanced", "balanced_subsample"], index=0)
+                        solver = st.selectbox("Solver algorithm:" if st.session_state.language == 'id' else "Algoritma solver:", ["lbfgs", "liblinear", "saga", "newton-cg", "sag"], index=0)
+                        penalty = st.selectbox("Penalty type:" if st.session_state.language == 'id' else "Jenis penalti:", ["l2", "l1", "elasticnet"], index=0)
+                        
+                        # Konversi class_weight dari string ke None jika diperlukan
+                        class_weight_value = None if class_weight == "None" else class_weight
+                        
+                        # Elastic net memerlukan parameter l1_ratio
+                        l1_ratio = None
+                        if penalty == "elasticnet":
+                            l1_ratio = st.slider("L1 ratio (for elasticnet):" if st.session_state.language == 'id' else "Rasio L1 (untuk elasticnet):", 0.0, 1.0, 0.5)
                     
                     base_model = LogisticRegression(random_state=42)
                     
@@ -5890,6 +6455,10 @@ with tab4:
                             'solver': ['liblinear', 'lbfgs', 'saga'],
                             'max_iter': [100, 500, 1000]
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
@@ -5899,10 +6468,14 @@ with tab4:
                             'max_iter': [100, 500, 1000],
                             'penalty': ['l1', 'l2', 'elasticnet']
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "Logistic Regression", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "Logistic Regression", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -5911,15 +6484,33 @@ with tab4:
                         model = LogisticRegression(
                             C=C,
                             max_iter=max_iter,
+                            class_weight=class_weight_value,
+                            solver=solver,
+                            penalty=penalty,
+                            l1_ratio=l1_ratio,
                             random_state=42
                         )
                         
                 elif model_type == "SVM":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.1, 10.0, 1.0)
                     kernel = st.selectbox("Kernel:" if st.session_state.language == 'id' else "Kernel:", ["linear", "poly", "rbf", "sigmoid"])
                     gamma = st.selectbox("Gamma (kernel coefficient):" if st.session_state.language == 'id' else "Gamma (koefisien kernel):", ["scale", "auto"])
                     
-                    base_model = SVC(probability=True, random_state=42)
+                    # Parameter lanjutan dalam expander
+                    with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                        coef0 = st.slider("Coefficient for polynomial kernel (coef0):" if st.session_state.language == 'id' else "Koefisien untuk kernel polinomial (coef0):", 0.0, 1.0, 0.0)
+                        shrinking = st.checkbox("Use shrinking heuristic:" if st.session_state.language == 'id' else "Gunakan heuristik shrinking:", value=True)
+                        probability = st.checkbox("Enable probability estimates:" if st.session_state.language == 'id' else "Aktifkan estimasi probabilitas:", value=True)
+                        
+                        # Parameter degree hanya untuk kernel poly
+                        degree = 3  # default
+                        if kernel == "poly":
+                            degree = st.slider("Degree for polynomial kernel:" if st.session_state.language == 'id' else "Derajat untuk kernel polinomial:", 2, 10, 3)
+                    
+                    base_model = SVC(probability=probability, random_state=42)
                     
                     if optimization_method == "GridSearchCV":
                         param_grid = {
@@ -5927,6 +6518,10 @@ with tab4:
                             'kernel': [kernel] if kernel != "rbf" else ['linear', 'rbf'],
                             'gamma': [gamma] if gamma != "scale" else ['scale', 'auto'],
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = GridSearchCV(base_model, param_grid, cv=cv_value, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
@@ -5936,10 +6531,14 @@ with tab4:
                             'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
                             'degree': [2, 3, 4, 5]  # untuk kernel poly
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "SVM", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "SVM", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -5949,14 +6548,43 @@ with tab4:
                             C=C,
                             kernel=kernel,
                             gamma=gamma,
-                            probability=True,
+                            coef0=coef0,
+                            shrinking=shrinking,
+                            probability=probability,
+                            degree=degree if kernel == "poly" else 3,
                             random_state=42
                         )
                         
                 elif model_type == "KNN":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     n_neighbors = st.slider("Number of neighbors (K):" if st.session_state.language == 'id' else "Jumlah tetangga (K):", 1, 20, 5)
                     weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
                     algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
+                    
+                    # Parameter lanjutan dalam expander
+                    with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                        metric = st.selectbox("Distance metric:" if st.session_state.language == 'id' else "Metrik jarak:", ["minkowski", "euclidean", "manhattan", "chebyshev", "wminkowski", "seuclidean", "mahalanobis"], index=0)
+                        p_value = st.slider("Power parameter for Minkowski metric:" if st.session_state.language == 'id' else "Parameter daya untuk metrik Minkowski:", 1, 5, 2)
+                        leaf_size = st.slider("Leaf size:" if st.session_state.language == 'id' else "Ukuran daun:", 10, 50, 30)
+                        
+                        # Metric parameters untuk metrik tertentu
+                        metric_params = None
+                        if metric == "wminkowski":
+                            w = st.text_input("Weight vector for wminkowski (comma-separated):" if st.session_state.language == 'id' else "Vektor bobot untuk wminkowski (pisahkan koma):", "1,1,1")
+                            try:
+                                metric_params = {'w': [float(x.strip()) for x in w.split(",")]}
+                            except:
+                                metric_params = None
+                        elif metric == "mahalanobis":
+                            VI = st.text_input("Inverse covariance matrix for mahalanobis (optional):" if st.session_state.language == 'id' else "Matriks kovarian terbalik untuk mahalanobis (opsional):", "")
+                            if VI:
+                                try:
+                                    # Parse matrix dari string (sederhana)
+                                    metric_params = {'VI': np.eye(10)}  # Default identity matrix
+                                except:
+                                    metric_params = None
                     
                     base_model = KNeighborsClassifier()
                     
@@ -5967,6 +6595,10 @@ with tab4:
                             'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
                             'p': [1, 2]  # Manhattan or Euclidean distance
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -5975,9 +6607,13 @@ with tab4:
                             'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
                             'p': [1, 2, 3, 4, 5]
                         }
+                        # Gabungkan dengan custom parameter ranges
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=20, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -5986,13 +6622,33 @@ with tab4:
                         model = KNeighborsClassifier(
                             n_neighbors=n_neighbors,
                             weights=weights,
-                            algorithm=algorithm
+                            algorithm=algorithm,
+                            metric=metric,
+                            p=p_value,
+                            leaf_size=leaf_size,
+                            metric_params=metric_params
                         )
                         
                 elif model_type == "Decision Tree":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     max_depth = st.slider("Maximum depth:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 50, 10)
                     min_samples_split = st.slider("Minimum samples to split:" if st.session_state.language == 'id' else "Jumlah sampel untuk membagi:", 2, 20, 2)
                     criterion = st.selectbox("Split criterion:" if st.session_state.language == 'id' else "Kriteria membagi:", ["gini", "entropy"])
+                    
+                    # Parameter lanjutan untuk Decision Tree
+                    with st.expander("Parameter Lanjutan Decision Tree" if st.session_state.language == 'id' else "Advanced Decision Tree Parameters"):
+                        min_samples_leaf = st.slider("Minimum samples per leaf:" if st.session_state.language == 'id' else "Jumlah sampel minimum per leaf:", 1, 20, 1)
+                        max_features_options = ["None", "sqrt", "log2", "auto"]
+                        max_features = st.selectbox("Max features for split:" if st.session_state.language == 'id' else "Fitur maksimum untuk pembelahan:", max_features_options)
+                        max_features_value = None if max_features == "None" else max_features
+                        
+                        class_weight_options = ["None", "balanced"]
+                        class_weight = st.selectbox("Class weight:" if st.session_state.language == 'id' else "Bobot kelas:", class_weight_options)
+                        class_weight_value = None if class_weight == "None" else class_weight
+                        
+                        ccp_alpha = st.slider("Cost complexity pruning alpha:" if st.session_state.language == 'id' else "Alpha pemangkasan kompleksitas biaya:", 0.0, 0.1, 0.0, 0.001)
                     
                     base_model = DecisionTreeClassifier(random_state=42)
                     
@@ -6003,6 +6659,10 @@ with tab4:
                             'min_samples_leaf': [1, 2, 4],
                             'criterion': ['gini', 'entropy']
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6011,9 +6671,13 @@ with tab4:
                             'min_samples_leaf': [1, 2, 4, 8, 16, 32],
                             'criterion': ['gini', 'entropy', 'log_loss']
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "Decision Tree", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "Decision Tree", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6022,11 +6686,18 @@ with tab4:
                         model = DecisionTreeClassifier(
                             max_depth=max_depth,
                             min_samples_split=min_samples_split,
+                            min_samples_leaf=min_samples_leaf,
                             criterion=criterion,
+                            max_features=max_features_value,
+                            class_weight=class_weight_value,
+                            ccp_alpha=ccp_alpha,
                             random_state=42
                         )
                         
                 elif model_type == "Naive Bayes":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     var_smoothing = st.slider("Variance smoothing:" if st.session_state.language == 'id' else "Penyesuaian varian:", 1e-10, 1e-8, 1e-9, format="%.1e")
                     
                     base_model = GaussianNB()
@@ -6035,14 +6706,22 @@ with tab4:
                         param_grid = {
                             'var_smoothing': [1e-10, 1e-9, 1e-8]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
                             'var_smoothing': [1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=10, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "Naive Bayes", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "Naive Bayes", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=10, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6053,9 +6732,21 @@ with tab4:
                         )
                         
                 elif model_type == "Gradient Boosting":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     n_estimators = st.slider("Number of boosting stages:" if st.session_state.language == 'id' else "Jumlah boosting stages:", 10, 500, 100)
                     learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
                     max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
+                    
+                    # Parameter lanjutan untuk Gradient Boosting
+                    with st.expander("Parameter Lanjutan Gradient Boosting" if st.session_state.language == 'id' else "Advanced Gradient Boosting Parameters"):
+                        subsample = st.slider("Subsample ratio:" if st.session_state.language == 'id' else "Rasio subsample:", 0.5, 1.0, 1.0, 0.1)
+                        min_samples_split = st.slider("Minimum samples to split:" if st.session_state.language == 'id' else "Jumlah sampel minimum untuk membagi:", 2, 20, 2)
+                        min_samples_leaf = st.slider("Minimum samples per leaf:" if st.session_state.language == 'id' else "Jumlah sampel minimum per leaf:", 1, 20, 1)
+                        max_features_options = ["None", "sqrt", "log2", "auto"]
+                        max_features = st.selectbox("Max features for split:" if st.session_state.language == 'id' else "Fitur maksimum untuk pembelahan:", max_features_options)
+                        max_features_value = None if max_features == "None" else max_features
                     
                     base_model = GradientBoostingClassifier(random_state=42)
                     
@@ -6066,6 +6757,10 @@ with tab4:
                             'max_depth': [3, 6, 9] if max_depth == 3 else [max(1, max_depth-3), max_depth, min(10, max_depth+3)],
                             'subsample': [0.8, 0.9, 1.0]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6076,9 +6771,13 @@ with tab4:
                             'min_samples_split': [2, 5, 10, 15, 20],
                             'min_samples_leaf': [1, 2, 4, 8, 16]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=40, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=40, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6088,10 +6787,17 @@ with tab4:
                             n_estimators=n_estimators,
                             learning_rate=learning_rate,
                             max_depth=max_depth,
+                            subsample=subsample,
+                            min_samples_split=min_samples_split,
+                            min_samples_leaf=min_samples_leaf,
+                            max_features=max_features_value,
                             random_state=42
                         )
                         
                 elif model_type == "MLP (Neural Network)":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     st.subheader("Konfigurasi Neural Network Klasifikasi Lengkap" if st.session_state.language == 'id' else "Complete Neural Network Classification Configuration")
                     
                     # Tambahkan penjelasan teori di bagian atas
@@ -6294,6 +7000,10 @@ with tab4:
                             'learning_rate_init': [0.001, 0.01, 0.1],
                             'max_iter': [200, 500, 1000]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6304,41 +7014,19 @@ with tab4:
                             'learning_rate_init': [0.0001, 0.001, 0.01, 0.1],
                             'max_iter': [200, 500, 1000, 1500]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Classification", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
                         model = MLPClassifier(**best_params)
                     else:
                         model = MLPClassifier(**mlp_params)
-                                           
-                    if optimization_method == "GridSearchCV":
-                        param_grid = {
-                            'hidden_layer_sizes': [(100,), (100,50), (50,50,50)],
-                            'activation': ['relu', 'tanh', 'logistic'],
-                            'solver': ['adam', 'sgd', 'lbfgs'],
-                            'alpha': [0.0001, 0.001, 0.01],
-                            'max_iter': [200, 500, 1000]
-                        }
-                        model = GridSearchCV(base_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
-                    elif optimization_method == "RandomizedSearchCV":
-                        param_dist = {
-                            'hidden_layer_sizes': [(50,), (100,), (150,), (200,), (100,50), (50,50,50), (100,100), (100,50,25)],
-                            'activation': ['relu', 'tanh', 'logistic'],
-                            'solver': ['adam', 'sgd', 'lbfgs'],
-                            'alpha': [0.0001, 0.001, 0.01, 0.1],
-                            'max_iter': [200, 500, 1000, 1500],
-                            'learning_rate_init': [0.001, 0.01, 0.1]
-                        }
-                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='accuracy', n_jobs=-1, n_iter=30, random_state=42)
-                    elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Classification", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
-                        study = optuna.create_study(direction='maximize')
-                        study.optimize(objective, n_trials=30, n_jobs=-1, show_progress_bar=True)
-                        best_params = study.best_params
-                        model = MLPClassifier(**best_params)
 
             else:  # Regression
                 # Regular regression models (non-time series)
@@ -6346,8 +7034,21 @@ with tab4:
                                          ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor", "MLP Regressor"])
                 
                 if model_type == "Random Forest":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     n_estimators = st.slider("Jumlah pepohonan:" if st.session_state.language == 'id' else "Number of Trees:", 10, 500, 100)
                     max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Maximum depth:", 1, 50, 10)
+                    
+                    # Parameter lanjutan dengan expander
+                    with st.expander("Parameter Lanjutan" if st.session_state.language == 'id' else "Advanced Parameters"):
+                        min_samples_split = st.slider("Jumlah sampel minimum untuk membagi:" if st.session_state.language == 'id' else "Minimum samples to split:", 2, 20, 2)
+                        min_samples_leaf = st.slider("Jumlah sampel minimum di leaf:" if st.session_state.language == 'id' else "Minimum samples in leaf:", 1, 10, 1)
+                        max_features = st.selectbox("Fitur maksimum:" if st.session_state.language == 'id' else "Max features:", ["sqrt", "log2", "None"], index=0)
+                        bootstrap = st.checkbox("Bootstrap sampel:" if st.session_state.language == 'id' else "Bootstrap samples:", value=True)
+                        
+                        # Konversi max_features dari string ke None jika diperlukan
+                        max_features_value = None if max_features == "None" else max_features
                     
                     base_model = RandomForestRegressor(random_state=42)
                     
@@ -6371,7 +7072,7 @@ with tab4:
                         cv_value = cv_params['cv'] if cv_params['cv'] is not None else 5
                         model = RandomizedSearchCV(base_model, param_dist, cv=cv_value, scoring='r2', n_jobs=-1, n_iter=50, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "Random Forest", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=50, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6380,10 +7081,17 @@ with tab4:
                         model = RandomForestRegressor(
                             n_estimators=n_estimators,
                             max_depth=max_depth,
+                            min_samples_split=min_samples_split,
+                            min_samples_leaf=min_samples_leaf,
+                            max_features=max_features_value,
+                            bootstrap=bootstrap,
                             random_state=42
                         )
                         
                 elif model_type == "Gradient Boosting":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     n_estimators = st.slider("Jumlah boosting stages:" if st.session_state.language == 'id' else "Number of boosting stages:", 10, 500, 100)
                     learning_rate = st.slider("Learning rate:" if st.session_state.language == 'id' else "Learning rate:", 0.01, 0.3, 0.1)
                     max_depth = st.slider("Kedalaman maksimum:" if st.session_state.language == 'id' else "Kedalaman maksimum:", 1, 10, 3)
@@ -6409,7 +7117,7 @@ with tab4:
                         }
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=40, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "Gradient Boosting", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=40, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6423,33 +7131,49 @@ with tab4:
                         )
                         
                 elif model_type == "Linear Regression":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     fit_intercept = st.checkbox("Fit intercept" if st.session_state.language == 'id' else "Fit intercept", value=True)
+                    
+                    # Parameter lanjutan untuk Linear Regression
+                    with st.expander("Parameter Lanjutan Linear Regression" if st.session_state.language == 'id' else "Advanced Linear Regression Parameters"):
+                        positive = st.checkbox("Force positive coefficients" if st.session_state.language == 'id' else "Paksa koefisien positif", value=False)
+                        copy_X = st.checkbox("Copy X" if st.session_state.language == 'id' else "Salin X", value=True)
                     
                     base_model = LinearRegression()
                     
                     if optimization_method == "GridSearchCV":
                         param_grid = {
-                            'fit_intercept': [True, False]
-                            # 'normalize' parameter removed to avoid error
+                            'fit_intercept': [True, False],
+                            'positive': [True, False],
+                            'copy_X': [True, False]
                         }
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
-                            'fit_intercept': [True, False]
+                            'fit_intercept': [True, False],
+                            'positive': [True, False],
+                            'copy_X': [True, False]
                         }
-                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=5, random_state=42)
+                        model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=8, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "Linear Regression", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "Linear Regression", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
-                        study.optimize(objective, n_trials=5, n_jobs=-1, show_progress_bar=True)
+                        study.optimize(objective, n_trials=8, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
                         model = LinearRegression(**best_params)
                     else:
                         model = LinearRegression(
-                            fit_intercept=fit_intercept
+                            fit_intercept=fit_intercept,
+                            positive=positive,
+                            copy_X=copy_X
                         )
                         
                 elif model_type == "SVR":
+                    # Dapatkan rentang parameter kustom jika diaktifkan
+                    custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
+                    
                     C = st.slider("Regularization parameter (C):" if st.session_state.language == 'id' else "Parameter regulerisasi (C):", 0.1, 10.0, 1.0)
                     kernel = st.selectbox("Kernel:" if st.session_state.language == 'id' else "Kernel:", ["linear", "poly", "rbf", "sigmoid"])
                     gamma = st.selectbox("Gamma (kernel coefficient):" if st.session_state.language == 'id' else "Gamma (koefisien kernel):", ["scale", "auto"])
@@ -6464,6 +7188,10 @@ with tab4:
                             'gamma': [gamma] if gamma != "scale" else ['scale', 'auto'],
                             'epsilon': [epsilon]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6473,9 +7201,13 @@ with tab4:
                             'epsilon': [0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0],
                             'degree': [2, 3, 4, 5]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=25, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "SVR", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "SVR", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=25, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6536,6 +7268,7 @@ with tab4:
                     weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
                     algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
                     base_model = KNeighborsRegressor()
+                    custom_param_ranges = get_custom_param_inputs("KNN Regressor", st.session_state.X_train)
                     if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_neighbors': [3, 5, 7] if n_neighbors == 5 else [max(1, n_neighbors-2), n_neighbors, min(20, n_neighbors+2)],
@@ -6543,6 +7276,10 @@ with tab4:
                             'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
                             'p': [1, 2]  # Manhattan or Euclidean distance
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6552,9 +7289,13 @@ with tab4:
                             'p': [1, 2, 3],  # Manhattan, Euclidean, or Minkowski distance
                             'leaf_size': list(range(10, 51, 5))
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=20, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "KNN", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params
@@ -6566,6 +7307,7 @@ with tab4:
                             algorithm=algorithm
                         )
                 elif model_type == "MLP Regressor":
+                    custom_param_ranges = get_custom_param_inputs("MLP Regressor", st.session_state.X_train)
                     st.subheader("Konfigurasi Neural Network Regresi Lengkap" if st.session_state.language == 'id' else "Complete Neural Network Regression Configuration")
                     
                     # Tambahkan penjelasan teori di bagian atas
@@ -6788,6 +7530,10 @@ with tab4:
                             'learning_rate_init': [0.001, 0.01, 0.1],
                             'max_iter': [200, 500, 1000]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_grid = merge_custom_param_ranges(param_grid, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_grid = validate_param_ranges(param_grid, st.session_state.X_train, model_type)
                         model = GridSearchCV(base_model, param_grid, cv=5, scoring='r2', n_jobs=-1)
                     elif optimization_method == "RandomizedSearchCV":
                         param_dist = {
@@ -6802,9 +7548,13 @@ with tab4:
                             'learning_rate_init': [0.0001, 0.001, 0.01, 0.1],
                             'max_iter': [200, 500, 1000, 1500]
                         }
+                        # Gabungkan dengan rentang parameter kustom
+                        param_dist = merge_custom_param_ranges(param_dist, custom_param_ranges)
+                        # Validasi parameter berdasarkan data
+                        param_dist = validate_param_ranges(param_dist, st.session_state.X_train, model_type)
                         model = RandomizedSearchCV(base_model, param_dist, cv=5, scoring='r2', n_jobs=-1, n_iter=20, random_state=42)
                     elif optimization_method == "Bayesian Optimization (Optuna)" and OPTUNA_AVAILABLE:
-                        objective = create_optuna_study("Regression", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params)
+                        objective = create_optuna_study("Regression", "MLP", st.session_state.X_train, st.session_state.y_train, cv_params, custom_param_ranges)
                         study = optuna.create_study(direction='maximize')
                         study.optimize(objective, n_trials=20, n_jobs=-1, show_progress_bar=True)
                         best_params = study.best_params

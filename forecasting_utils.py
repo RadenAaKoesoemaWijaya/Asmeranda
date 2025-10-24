@@ -17,8 +17,8 @@ warnings.filterwarnings('ignore')
 # Import untuk LSTM
 try:
     from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout
-    from tensorflow.keras.optimizers import Adam
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
+    from tensorflow.keras.optimizers import Adam, SGD, RMSprop
     import tensorflow as tf
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -450,7 +450,9 @@ def train_holt_winters(data, target_column, trend='add', seasonal='add', seasona
     except Exception as e:
         raise ValueError(f"Gagal melatih model Holt-Winters: {str(e)}")
 
-def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=32):
+def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=32, 
+                     lstm_units=50, num_layers=2, dropout=0.2, recurrent_dropout=0.2, 
+                     bidirectional=False, learning_rate=0.001, optimizer='adam'):
     """
     Melatih model LSTM untuk forecasting time series
     
@@ -466,6 +468,20 @@ def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=3
         Jumlah epochs untuk training
     batch_size : int, optional
         Batch size untuk training
+    lstm_units : int, optional
+        Jumlah unit LSTM
+    num_layers : int, optional
+        Jumlah layer LSTM
+    dropout : float, optional
+        Dropout rate untuk layer
+    recurrent_dropout : float, optional
+        Recurrent dropout rate
+    bidirectional : bool, optional
+        Gunakan bidirectional LSTM
+    learning_rate : float, optional
+        Learning rate untuk optimizer
+    optimizer : str, optional
+        Tipe optimizer ('adam', 'sgd', 'rmsprop')
         
     Returns:
     --------
@@ -508,15 +524,43 @@ def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=3
         X_train, X_test = X[:split_index], X[split_index:]
         y_train, y_test = y[:split_index], y[split_index:]
         
-        # Buat model LSTM
+        # Buat model LSTM dengan parameter arsitektur lanjutan
         model = Sequential()
-        model.add(LSTM(50, return_sequences=True, input_shape=(look_back, 1)))
-        model.add(Dropout(0.2))
-        model.add(LSTM(50, return_sequences=False))
-        model.add(Dropout(0.2))
+        
+        # Layer pertama
+        if bidirectional:
+            model.add(Bidirectional(LSTM(lstm_units, return_sequences=True if num_layers > 1 else False, 
+                                     dropout=dropout, recurrent_dropout=recurrent_dropout, 
+                                     input_shape=(look_back, 1))))
+        else:
+            model.add(LSTM(lstm_units, return_sequences=True if num_layers > 1 else False, 
+                          dropout=dropout, recurrent_dropout=recurrent_dropout, 
+                          input_shape=(look_back, 1)))
+        
+        # Layer tambahan jika num_layers > 1
+        for i in range(1, num_layers):
+            return_sequences = True if i < num_layers - 1 else False
+            if bidirectional:
+                model.add(Bidirectional(LSTM(lstm_units, return_sequences=return_sequences, 
+                                           dropout=dropout, recurrent_dropout=recurrent_dropout)))
+            else:
+                model.add(LSTM(lstm_units, return_sequences=return_sequences, 
+                             dropout=dropout, recurrent_dropout=recurrent_dropout))
+        
+        # Output layer
         model.add(Dense(1))
         
-        model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
+        # Setup optimizer
+        if optimizer == 'adam':
+            opt = Adam(learning_rate=learning_rate)
+        elif optimizer == 'sgd':
+            opt = SGD(learning_rate=learning_rate)
+        elif optimizer == 'rmsprop':
+            opt = RMSprop(learning_rate=learning_rate)
+        else:
+            opt = Adam(learning_rate=learning_rate)
+        
+        model.compile(optimizer=opt, loss='mean_squared_error')
         
         # Training model
         model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, 
@@ -527,7 +571,14 @@ def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=3
             'scaler': scaler,
             'X_test': X_test,
             'y_test': y_test,
-            'look_back': look_back
+            'look_back': look_back,
+            'lstm_units': lstm_units,
+            'num_layers': num_layers,
+            'dropout': dropout,
+            'recurrent_dropout': recurrent_dropout,
+            'bidirectional': bidirectional,
+            'learning_rate': learning_rate,
+            'optimizer': optimizer
         }
         
     except Exception as e:
