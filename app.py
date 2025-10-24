@@ -1972,182 +1972,9 @@ def create_agentic_ai_analysis(data, analysis_type='comprehensive', language='id
     
     return agent_analysis
 
-def create_agentic_research_analysis(data, language='id'):
-    """
-    Membuat analisis AI yang lebih canggih untuk riset dengan pendekatan agentic AI
-    """
-    import random
-    import time
-    from datetime import datetime
-    
-    # Simulate analysis time
-    time.sleep(1)
-    
-    n_rows, n_cols = data.shape
-    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-    datetime_cols = data.select_dtypes(include=['datetime64']).columns.tolist()
-    missing_values = data.isnull().sum().sum()
-    missing_percentage = (missing_values / (n_rows * n_cols)) * 100 if n_rows * n_cols > 0 else 0
-    
-    # Generate research agent name
-    research_agent_names = [
-        "Prof. Research Methodology Expert",
-        "AI Academic Research Advisor",
-        "Smart Research Design Assistant",
-        "Academic Publication Strategist",
-        "Research Methodology Optimizer"
-    ]
-    
-    agent_name = random.choice(research_agent_names)
-    
-    # Analyze dataset characteristics for research
-    dataset_characteristics = []
-    
-    if len(datetime_cols) > 0:
-        dataset_characteristics.append("Dataset mengandung komponen temporal - cocok untuk studi longitudinal atau time series analysis" if language == 'id' else "Dataset contains temporal components - suitable for longitudinal studies or time series analysis")
-    
-    if len(numerical_cols) > len(categorical_cols):
-        dataset_characteristics.append("Data dominan kuantitatif - mendukung analisis statistik parametrik dan regresi" if language == 'id' else "Quantitative-dominant data - supports parametric statistical analysis and regression")
-    else:
-        dataset_characteristics.append("Data kategorikal dominan - memerlukan metode non-parametrik atau encoding khusus" if language == 'id' else "Categorical-dominant data - requires non-parametric methods or special encoding")
-    
-    if n_rows < 100:
-        dataset_characteristics.append("Sample size kecil - memerlukan desain studi yang sangat hati-hati dan power analysis" if language == 'id' else "Small sample size - requires very careful study design and power analysis")
-    elif n_rows < 1000:
-        dataset_characteristics.append("Sample size sedang - cukup untuk studi cross-sectional dengan analisis multivariat" if language == 'id' else "Medium sample size - sufficient for cross-sectional studies with multivariate analysis")
-    else:
-        dataset_characteristics.append("Sample size besar - mendukung analisis kompleks dan generalisasi yang kuat" if language == 'id' else "Large sample size - supports complex analysis and strong generalization")
-    
-    if missing_percentage > 20:
-        dataset_characteristics.append("Tingkat missing data tinggi - memerlukan strategi imputasi yang robust dan analisis sensitivitas" if language == 'id' else "High missing data rate - requires robust imputation strategy and sensitivity analysis")
-    
-    # Generate research opportunities
-    research_opportunities = []
-    
-    if len(numerical_cols) > 0 and len(categorical_cols) > 0:
-        research_opportunities.append({
-            'title': 'Studi Klasifikasi Medis' if language == 'id' else 'Medical Classification Study',
-            'description': 'Menggunakan fitur klinis untuk memprediksi diagnosis atau outcome pasien' if language == 'id' else 'Using clinical features to predict patient diagnosis or outcome',
-            'feasibility': 'Tinggi' if language == 'id' else 'High',
-            'expected_impact': 'Kontribusi signifikan untuk diagnosis dini dan personalized medicine' if language == 'id' else 'Significant contribution to early diagnosis and personalized medicine'
-        })
-    
-    if len(datetime_cols) > 0:
-        research_opportunities.append({
-            'title': 'Analisis Time Series Kesehatan' if language == 'id' else 'Health Time Series Analysis',
-            'description': 'Menganalisis tren temporal dalam data kesehatan untuk forecasting atau deteksi anomali' if language == 'id' else 'Analyzing temporal trends in health data for forecasting or anomaly detection',
-            'feasibility': 'Sedang' if language == 'id' else 'Medium',
-            'expected_impact': 'Peningkatan perencanaan sumber daya kesehatan dan early warning systems' if language == 'id' else 'Improved health resource planning and early warning systems'
-        })
-    
-    if len(numerical_cols) > 5:
-        research_opportunities.append({
-            'title': 'Studi Prediksi Biomarker' if language == 'id' else 'Biomarker Prediction Study',
-            'description': 'Memprediksi level biomarker penting dari fitur klinis yang tersedia' if language == 'id' else 'Predicting important biomarker levels from available clinical features',
-            'feasibility': 'Tinggi' if language == 'id' else 'High',
-            'expected_impact': 'Reduksi biaya tes laboratorium dan peningkatan efisiensi diagnosis' if language == 'id' else 'Reduction in laboratory test costs and improved diagnostic efficiency'
-        })
-    
-    if len(categorical_cols) > 3:
-        research_opportunities.append({
-            'title': 'Studi Segmentasi Pasien' if language == 'id' else 'Patient Segmentation Study',
-            'description': 'Mengidentifikasi subkelompok pasien dengan karakteristik serupa untuk precision medicine' if language == 'id' else 'Identifying patient subgroups with similar characteristics for precision medicine',
-            'feasibility': 'Tinggi' if language == 'id' else 'High',
-            'expected_impact': 'Personalisasi perawatan dan peningkatan outcome klinis' if language == 'id' else 'Personalized care and improved clinical outcomes'
-        })
-    
-    # Journal recommendations based on dataset characteristics
-    journal_recommendations = []
-    
-    if len(datetime_cols) > 0:
-        journal_recommendations.append({
-            'name': 'International Journal of Forecasting',
-            'scope': 'Forecasting theory dan applications dalam berbagai domain termasuk kesehatan',
-            'impact_factor': '4.2',
-            'why_suitable': 'Cocok untuk studi time series dan forecasting dalam konteks kesehatan' if language == 'id' else 'Suitable for time series and forecasting studies in health context',
-            'submission_tips': 'Fokus pada metodologi forecasting dan validasi model yang robust' if language == 'id' else 'Focus on forecasting methodology and robust model validation'
-        })
-    
-    if len(numerical_cols) > len(categorical_cols):
-        journal_recommendations.append({
-            'name': 'Statistics in Medicine',
-            'scope': 'Statistical methods dalam medical research',
-            'impact_factor': '2.3',
-            'why_suitable': 'Specialisasi dalam metode statistik untuk data kuantitatif medis' if language == 'id' else 'Specialization in statistical methods for quantitative medical data',
-            'submission_tips': 'Tekankan validasi statistik dan interpretasi klinis hasil' if language == 'id' else 'Emphasize statistical validation and clinical interpretation of results'
-        })
-    
-    journal_recommendations.append({
-        'name': 'Journal of Medical Internet Research (JMIR)',
-        'scope': 'Digital health dan AI applications dalam kedokteran',
-        'impact_factor': '7.4',
-        'why_suitable': 'Leading journal untuk aplikasi AI dan machine learning dalam kesehatan' if language == 'id' else 'Leading journal for AI and machine learning applications in healthcare',
-        'submission_tips': 'Highlight clinical impact dan implementasi praktis dari metode AI' if language == 'id' else 'Highlight clinical impact and practical implementation of AI methods'
-    })
-    
-    journal_recommendations.append({
-        'name': 'BMC Medical Informatics and Decision Making',
-        'scope': 'Medical informatics dan clinical decision support systems',
-        'impact_factor': '3.5',
-        'why_suitable': 'Fokus pada sistem pendukung keputusan klinis dan informasi medis' if language == 'id' else 'Focus on clinical decision support systems and medical informatics',
-        'submission_tips': 'Demonstrasi implementasi sistem dan evaluasi klinis' if language == 'id' else 'Demonstrate system implementation and clinical evaluation'
-    })
-    
-    journal_recommendations.append({
-        'name': 'Artificial Intelligence in Medicine',
-        'scope': 'AI applications dalam medicine dan healthcare',
-        'impact_factor': '5.1',
-        'why_suitable': 'Specialisasi dalam aplikasi AI untuk masalah medis' if language == 'id' else 'Specialization in AI applications for medical problems',
-        'submission_tips': 'Fokus pada novelty metode AI dan validasi medis yang ketat' if language == 'id' else 'Focus on AI method novelty and rigorous medical validation'
-    })
-    
-    # Research roadmap
-    research_roadmap = []
-    
-    research_roadmap.append({
-        'step': '1. Literature Review & Problem Definition' if language == 'id' else '1. Literature Review & Problem Definition',
-        'description': 'Review literatur yang komprehensif dan definisikan research gap' if language == 'id' else 'Comprehensive literature review and define research gap',
-        'timeline': '2-4 minggu' if language == 'id' else '2-4 weeks',
-        'key_milestones': 'Identifikasi gap penelitian dan formulasi hipotesis' if language == 'id' else 'Research gap identification and hypothesis formulation'
-    })
-    
-    research_roadmap.append({
-        'step': '2. Data Preprocessing & Feature Engineering' if language == 'id' else '2. Data Preprocessing & Feature Engineering',
-        'description': 'Bersihkan data, handle missing values, dan buat fitur yang bermakna' if language == 'id' else 'Clean data, handle missing values, and create meaningful features',
-        'timeline': '3-6 minggu' if language == 'id' else '3-6 weeks',
-        'key_milestones': 'Dataset siap analisis dan dokumentasi preprocessing' if language == 'id' else 'Analysis-ready dataset and preprocessing documentation'
-    })
-    
-    research_roadmap.append({
-        'step': '3. Model Development & Validation' if language == 'id' else '3. Model Development & Validation',
-        'description': 'Kembangkan model ML, lakukan cross-validation, dan tuning hyperparameter' if language == 'id' else 'Develop ML models, perform cross-validation, and hyperparameter tuning',
-        'timeline': '4-8 minggu' if language == 'id' else '4-8 weeks',
-        'key_milestones': 'Model optimal dengan performa tervalidasi' if language == 'id' else 'Optimal model with validated performance'
-    })
-    
-    research_roadmap.append({
-        'step': '4. Results Analysis & Interpretation' if language == 'id' else '4. Results Analysis & Interpretation',
-        'description': 'Analisis hasil, interpretasi klinis, dan bandingkan dengan studi sebelumnya' if language == 'id' else 'Analyze results, clinical interpretation, and comparison with previous studies',
-        'timeline': '2-4 minggu' if language == 'id' else '2-4 weeks',
-        'key_milestones': 'Interpretasi bermakna dan kontribusi ilmiah yang jelas' if language == 'id' else 'Meaningful interpretation and clear scientific contribution'
-    })
-    
-    research_roadmap.append({
-        'step': '5. Manuscript Writing & Submission' if language == 'id' else '5. Manuscript Writing & Submission',
-        'description': 'Tulis manuskrip, review oleh rekan, dan submit ke jurnal target' if language == 'id' else 'Write manuscript, peer review, and submit to target journal',
-        'timeline': '6-12 minggu' if language == 'id' else '6-12 weeks',
-        'key_milestones': 'Manuskrip siap submit dan adherence ke journal guidelines' if language == 'id' else 'Submission-ready manuscript and adherence to journal guidelines'
-    })
-    
-    return {
-        'agent_name': agent_name,
-        'analysis_timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'dataset_characteristics': dataset_characteristics,
-        'research_opportunities': research_opportunities,
-        'journal_recommendations': journal_recommendations,
-        'research_roadmap': research_roadmap
-    }
+def verify_captcha(input_text, correct_text):
+    """Verify captcha input"""
+    return input_text.upper().strip() == correct_text.upper().strip()
 
 def verify_captcha(input_text, correct_text):
     """Verify captcha input"""
@@ -2882,18 +2709,11 @@ with tab1:
             if 'show_ai_analysis' not in st.session_state:
                 st.session_state.show_ai_analysis = False
             
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                if st.button("🧠 Generate Analisis Dataset" if st.session_state.language == 'id' else "🧠 Generate Dataset Analysis", 
-                           type="primary", key="generate_ai_analysis"):
-                    st.session_state.show_ai_analysis = True
-                    st.rerun()
-            
-            with col2:
-                if st.button("🤖 Agentic AI Deep Analysis" if st.session_state.language == 'id' else "🤖 Agentic AI Deep Analysis", 
-                           type="secondary", key="generate_agent_analysis"):
-                    st.session_state.show_agent_analysis = True
-                    st.rerun()
+            # Tombol AI Analysis - Hanya satu tombol utama
+            if st.button("🧠 Generate Analisis Dataset" if st.session_state.language == 'id' else "🧠 Generate Dataset Analysis", 
+                       type="primary", key="generate_ai_analysis"):
+                st.session_state.show_ai_analysis = True
+                st.rerun()
             
             # Display AI Analysis - Fokus pada Potensi Keberhasilan
             if st.session_state.get('show_ai_analysis', False):
@@ -2934,90 +2754,8 @@ with tab1:
                                     st.write("")
                             
                             st.info("💡 **Saran:** Dataset ini memerlukan preprocessing tambahan untuk optimal dalam penelitian." if st.session_state.language == 'id' else "💡 **Suggestion:** This dataset requires additional preprocessing to be optimal for research.")
-            
-            # Display Agentic AI Analysis
-            if st.session_state.get('show_agent_analysis', False):
-                with st.expander("🧠 Agentic AI Deep Analysis" if st.session_state.language == 'id' else "🧠 Agentic AI Deep Analysis", expanded=True):
-                    with st.spinner("Running agentic AI analysis..." if st.session_state.language == 'id' else "Running agentic AI analysis..."):
-                        agent_analysis = create_agentic_ai_analysis(data, language=st.session_state.language)
-                        
-                        # Agent Header
-                        st.markdown(f"### 🤖 {agent_analysis['agent_name']}")
-                        st.caption(f"{'Analisis selesai pada:' if st.session_state.language == 'id' else 'Analysis completed at:'} {agent_analysis['analysis_timestamp']}")
-                        
-                        # Dataset Summary
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("Total Baris" if st.session_state.language == 'id' else "Total Rows", agent_analysis['dataset_summary']['total_rows'])
-                        with col2:
-                            st.metric("Total Kolom" if st.session_state.language == 'id' else "Total Columns", agent_analysis['dataset_summary']['total_columns'])
-                        with col3:
-                            st.metric("Densitas Data" if st.session_state.language == 'id' else "Data Density", f"{agent_analysis['dataset_summary']['data_density']:.1f}%")
-                        with col4:
-                            st.metric("Skor Kompleksitas" if st.session_state.language == 'id' else "Complexity Score", f"{agent_analysis['dataset_summary']['complexity_score']:.1f}/100")
-                        
-                        # Intelligent Insights
-                        st.subheader("🧠 Wawasan Cerdas" if st.session_state.language == 'id' else "🧠 Intelligent Insights")
-                        for insight in agent_analysis['intelligent_insights']:
-                            if insight['type'] == 'success':
-                                st.success(f"**{insight['insight']}**")
-                            elif insight['type'] == 'info':
-                                st.info(f"**{insight['insight']}**")
-                            elif insight['type'] == 'warning':
-                                st.warning(f"**{insight['insight']}**")
-                            
-                            st.write(f"{'Kepercayaan:' if st.session_state.language == 'id' else 'Confidence:'} {insight['confidence']*100:.0f}%")
-                            st.write(f"{'Bukti:' if st.session_state.language == 'id' else 'Evidence:'} {insight['evidence']}")
-                            st.write("")
-                        
-                        # Actionable Recommendations
-                        st.subheader("🎯 Rekomendasi yang Dapat Dilakukan" if st.session_state.language == 'id' else "🎯 Actionable Recommendations")
-                        for rec in agent_analysis['actionable_recommendations']:
-                            st.markdown(f"### 🎯 {rec['action']}")
-                            st.write(f"**{'Prioritas:' if st.session_state.language == 'id' else 'Priority:'}** {rec['priority'].title()}")
-                            st.write(f"**{'Rasional:' if st.session_state.language == 'id' else 'Rationale:'}** {rec['rationale']}")
-                            st.write(f"**{'Implementasi:' if st.session_state.language == 'id' else 'Implementation:'}** {rec['implementation']}")
-                            st.write(f"**{'Dampak yang Diharapkan:' if st.session_state.language == 'id' else 'Expected Impact:'}** {rec['expected_impact']}")
-                            st.write("---")  # Add separator between recommendations
-                        
-                        # Risk Assessment
-                        if agent_analysis['risk_assessment']:
-                            st.subheader("⚠️ Penilaian Risiko" if st.session_state.language == 'id' else "⚠️ Risk Assessment")
-                            for risk in agent_analysis['risk_assessment']:
-                                severity_color = {
-                                    'low': 'info',
-                                    'medium': 'warning',
-                                    'high': 'error'
-                                }
-                                if risk['severity'] == 'high':
-                                    st.error(f"**{risk['risk']}**")
-                                elif risk['severity'] == 'medium':
-                                    st.warning(f"**{risk['risk']}**")
-                                else:
-                                    st.info(f"**{risk['risk']}**")
-                                
-                                st.write(f"**{'Probabilitas:' if st.session_state.language == 'id' else 'Probability:'}** {risk['probability']*100:.0f}%")
-                                st.write(f"**{'Mitigasi:' if st.session_state.language == 'id' else 'Mitigation:'}** {risk['mitigation']}")
-                                st.write("")
-                        
-                        # Success Probability
-                        st.subheader("📈 Probabilitas Keberhasilan" if st.session_state.language == 'id' else "📈 Success Probability")
-                        success_prob = agent_analysis['success_probability']
-                        if success_prob >= 0.8:
-                            st.success(f"**{'Probabilitas Keberhasilan Tinggi' if st.session_state.language == 'id' else 'High Success Probability'}: {success_prob*100:.0f}%**")
-                            st.write("Dataset ini memiliki karakteristik luar biasa untuk keberhasilan pembelajaran mesin." if st.session_state.language == 'id' else "This dataset has excellent characteristics for machine learning success.")
-                        elif success_prob >= 0.6:
-                            st.info(f"**{'Probabilitas Keberhasilan Sedang' if st.session_state.language == 'id' else 'Moderate Success Probability'}: {success_prob*100:.0f}%**")
-                            st.write("Dataset ini seharusnya bekerja dengan baik dengan prapemrosesan yang tepat dan pemilihan model." if st.session_state.language == 'id' else "This dataset should work well with proper preprocessing and model selection.")
-                        else:
-                            st.warning(f"**{'Probabilitas Keberhasilan Rendah' if st.session_state.language == 'id' else 'Low Success Probability'}: {success_prob*100:.0f}%**")
-                            st.write("Dataset ini mungkin memerlukan prapemrosesan yang signifikan dan pemilihan model yang cermat." if st.session_state.language == 'id' else "This dataset may require significant preprocessing and careful model selection.")
-                        
-                        # Reset button
-                        if st.button("🔄 Reset Analysis" if st.session_state.language == 'id' else "🔄 Reset Analysis"):
-                            st.session_state.show_agent_analysis = False
-                            st.session_state.show_ai_analysis = False
-                            st.rerun()
+         
+
         
         # Tambahkan informasi kolom untuk dataset gabungan dari ZIP
         if uploaded_file.name.endswith('.zip') and st.session_state.data is not None:
