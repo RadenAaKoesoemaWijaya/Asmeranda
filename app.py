@@ -7510,6 +7510,22 @@ with tab4:
 
             else:  # Regression
                 # Regular regression models (non-time series)
+                
+                # Opsi rentang parameter kustom untuk regresi
+                use_custom_ranges = False
+                custom_param_ranges = {}
+                
+                if optimization_method in ["GridSearchCV", "RandomizedSearchCV"]:
+                    use_custom_ranges = st.checkbox(
+                        "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
+                        value=False,
+                        help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges"
+                    )
+                    
+                    if use_custom_ranges:
+                        st.info("💡 Gunakan format: min:max:step untuk numerik, atau val1,val2,val3 untuk kategorikal" if st.session_state.language == 'id' else "💡 Use format: min:max:step for numeric, or val1,val2,val3 for categorical")
+                        st.info("⚠️ Kosongkan field untuk menggunakan rentang default" if st.session_state.language == 'id' else "⚠️ Leave field empty to use default ranges")
+                
                 model_type = st.selectbox("Pilih model regresi:" if st.session_state.language == 'id' else "Select a regression model:", 
                                          ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor", "MLP Regressor"])
                 
@@ -7748,7 +7764,7 @@ with tab4:
                     weights = st.selectbox("Weight function:" if st.session_state.language == 'id' else "Fungsi bobot:", ["uniform", "distance"])
                     algorithm = st.selectbox("Algorithm:" if st.session_state.language == 'id' else "Algoritma:", ["auto", "ball_tree", "kd_tree", "brute"])
                     base_model = KNeighborsRegressor()
-                    custom_param_ranges = get_custom_param_inputs("KNN Regressor", st.session_state.X_train)
+                    custom_param_ranges = get_custom_param_inputs("KNN Regressor", use_custom_ranges, st.session_state)
                     if optimization_method == "GridSearchCV":
                         param_grid = {
                             'n_neighbors': [3, 5, 7] if n_neighbors == 5 else [max(1, n_neighbors-2), n_neighbors, min(20, n_neighbors+2)],
@@ -7787,7 +7803,7 @@ with tab4:
                             algorithm=algorithm
                         )
                 elif model_type == "MLP Regressor":
-                    custom_param_ranges = get_custom_param_inputs("MLP Regressor", st.session_state.X_train)
+                    custom_param_ranges = get_custom_param_inputs("MLP Regressor", use_custom_ranges, st.session_state)
                     st.subheader("Konfigurasi Neural Network Regresi Lengkap" if st.session_state.language == 'id' else "Complete Neural Network Regression Configuration")
                     
                     # Tambahkan penjelasan teori di bagian atas
