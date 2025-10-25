@@ -3916,8 +3916,9 @@ with tab3:
             
             # Individual column handling only - removed group handling option
             st.info("Penanganan nilai hilang dilakukan manual satu per satu kolom untuk hasil yang lebih akurat" if st.session_state.language == 'id' else "Missing value handling is done manually one column at a time for more accurate results")
-                # Individual column handling
-                for col in missing_cols:
+            
+            # Individual column handling
+            for col in missing_cols:
                     col_type = "numerical" if data[col].dtype in ['int64', 'float64'] else "categorical"
                     
                     # Enhanced data type detection
