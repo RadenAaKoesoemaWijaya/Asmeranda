@@ -9663,8 +9663,6 @@ with tab5:
                     if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
                         st.session_state.page = "main"
                         st.rerun()
-                
-                return  # Hentikan eksekusi lebih lanjut
             
             # Jika model kompatibel, lanjutkan dengan SHAP
             try:
@@ -10131,8 +10129,6 @@ with tab6:
                                     if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
                                         st.session_state.page = "main"
                                         st.rerun()
-                                
-                                return  # Hentikan eksekusi lebih lanjut
                             
                             # Jika model kompatibel, lanjutkan dengan LIME
                             lime_result = implement_lime_classification(
@@ -10219,8 +10215,6 @@ with tab6:
                                     if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
                                         st.session_state.page = "main"
                                         st.rerun()
-                                
-                                return  # Hentikan eksekusi lebih lanjut
                             
                             # Forecasting - gunakan pendekatan khusus
                             try:
