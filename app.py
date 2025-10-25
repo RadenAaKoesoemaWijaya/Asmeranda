@@ -6828,7 +6828,8 @@ with tab4:
                 use_custom_ranges = st.checkbox(
                     "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
                     value=False,
-                    help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges"
+                    help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges",
+                    key="classification_custom_ranges"
                 )
                 
                 if use_custom_ranges:
@@ -7519,7 +7520,8 @@ with tab4:
                     use_custom_ranges = st.checkbox(
                         "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
                         value=False,
-                        help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges"
+                        help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges",
+                        key="regression_custom_ranges"
                     )
                     
                     if use_custom_ranges:
