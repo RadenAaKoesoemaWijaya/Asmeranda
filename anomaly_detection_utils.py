@@ -44,7 +44,7 @@ class TimeSeriesAnomalyDetector:
         self.results = {}
         self.models = {}
         
-    def isolation_forest_detection(self, data, contamination=0.1, random_state=42):
+    def isolation_forest_detection(self, data, contamination=0.1, random_state=42, fill_method='auto'):
         """
         Isolation Forest for time series anomaly detection
         
@@ -52,16 +52,23 @@ class TimeSeriesAnomalyDetector:
         - data: pandas Series with datetime index
         - contamination: proportion of outliers in the data set
         - random_state: random seed for reproducibility
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         if not isinstance(data, pd.Series):
             data = pd.Series(data)
             
+        # Handle missing values in input data
+        data_clean = self._handle_missing_data(data, fill_method)
+            
         # Prepare features: use rolling statistics
         features = pd.DataFrame()
-        features['value'] = data.values
-        features['rolling_mean'] = data.rolling(window=5).mean().fillna(method='bfill')
-        features['rolling_std'] = data.rolling(window=5).std().fillna(method='bfill')
-        features['diff'] = data.diff().fillna(0)
+        features['value'] = data_clean.values
+        features['rolling_mean'] = data_clean.rolling(window=5).mean()
+        features['rolling_std'] = data_clean.rolling(window=5).std()
+        features['diff'] = data_clean.diff()
+        
+        # Fill missing values created by feature engineering
+        features = self._fill_feature_missing_values(features, fill_method)
         
         # Scale features
         scaler = StandardScaler()
@@ -87,7 +94,76 @@ class TimeSeriesAnomalyDetector:
             'model': iso_forest
         }
     
-    def one_class_svm_detection(self, data, nu=0.1, kernel='rbf'):
+    def _handle_missing_data(self, data, fill_method='auto'):
+        """
+        Handle missing values in time series data
+        
+        Parameters:
+        - data: pandas Series with datetime index
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
+        """
+        if data.isnull().any():
+            if fill_method == 'auto':
+                # Try time-based interpolation first, then fallback to forward fill
+                try:
+                    data_filled = data.interpolate(method='time')
+                    if data_filled.isnull().any():
+                        data_filled = data_filled.fillna(method='ffill').fillna(method='bfill')
+                except:
+                    data_filled = data.fillna(method='ffill').fillna(method='bfill')
+            elif fill_method == 'ffill':
+                data_filled = data.fillna(method='ffill').fillna(method='bfill')
+            elif fill_method == 'bfill':
+                data_filled = data.fillna(method='bfill').fillna(method='ffill')
+            elif fill_method == 'zero':
+                data_filled = data.fillna(0)
+            elif fill_method == 'mean':
+                data_filled = data.fillna(data.mean())
+            elif fill_method == 'median':
+                data_filled = data.fillna(data.median())
+            elif fill_method == 'interpolate':
+                try:
+                    data_filled = data.interpolate(method='time')
+                except:
+                    data_filled = data.interpolate()
+                if data_filled.isnull().any():
+                    data_filled = data_filled.fillna(method='ffill').fillna(method='bfill')
+            else:
+                data_filled = data.fillna(method='ffill').fillna(method='bfill')
+            
+            return data_filled
+        return data
+    
+    def _fill_feature_missing_values(self, features, fill_method='auto'):
+        """
+        Fill missing values created by feature engineering operations
+        
+        Parameters:
+        - features: pandas DataFrame with engineered features
+        - fill_method: method to fill missing values
+        """
+        if fill_method == 'auto':
+            # Use forward fill then backward fill as default
+            return features.fillna(method='ffill').fillna(method='bfill').fillna(0)
+        elif fill_method == 'ffill':
+            return features.fillna(method='ffill').fillna(method='bfill')
+        elif fill_method == 'bfill':
+            return features.fillna(method='bfill').fillna(method='ffill')
+        elif fill_method == 'zero':
+            return features.fillna(0)
+        elif fill_method == 'mean':
+            return features.fillna(features.mean())
+        elif fill_method == 'median':
+            return features.fillna(features.median())
+        elif fill_method == 'interpolate':
+            try:
+                return features.interpolate(method='time').fillna(method='ffill').fillna(method='bfill')
+            except:
+                return features.interpolate().fillna(method='ffill').fillna(method='bfill')
+        else:
+            return features.fillna(method='ffill').fillna(method='bfill')
+    
+    def one_class_svm_detection(self, data, nu=0.1, kernel='rbf', fill_method='auto'):
         """
         One-Class SVM for time series anomaly detection
         
@@ -95,16 +171,23 @@ class TimeSeriesAnomalyDetector:
         - data: pandas Series with datetime index
         - nu: upper bound on the fraction of training errors and lower bound on fraction of support vectors
         - kernel: kernel type for SVM
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         if not isinstance(data, pd.Series):
             data = pd.Series(data)
             
+        # Handle missing values in input data
+        data_clean = self._handle_missing_data(data, fill_method)
+            
         # Prepare features
         features = pd.DataFrame()
-        features['value'] = data.values
-        features['rolling_mean'] = data.rolling(window=5).mean().fillna(method='bfill')
-        features['rolling_std'] = data.rolling(window=5).std().fillna(method='bfill')
-        features['diff'] = data.diff().fillna(0)
+        features['value'] = data_clean.values
+        features['rolling_mean'] = data_clean.rolling(window=5).mean()
+        features['rolling_std'] = data_clean.rolling(window=5).std()
+        features['diff'] = data_clean.diff()
+        
+        # Fill missing values created by feature engineering
+        features = self._fill_feature_missing_values(features, fill_method)
         
         # Scale features
         scaler = StandardScaler()
@@ -130,7 +213,7 @@ class TimeSeriesAnomalyDetector:
             'model': svm
         }
     
-    def lstm_autoencoder_detection(self, data, sequence_length=10, epochs=50, contamination=0.1):
+    def lstm_autoencoder_detection(self, data, sequence_length=10, epochs=50, contamination=0.1, fill_method='auto'):
         """
         LSTM Autoencoder for time series anomaly detection
         
@@ -139,6 +222,7 @@ class TimeSeriesAnomalyDetector:
         - sequence_length: length of sequences for LSTM
         - epochs: number of training epochs
         - contamination: proportion of outliers
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         if not TF_AVAILABLE:
             raise ImportError("TensorFlow not available. Install with: pip install tensorflow")
@@ -146,8 +230,11 @@ class TimeSeriesAnomalyDetector:
         if not isinstance(data, pd.Series):
             data = pd.Series(data)
             
+        # Handle missing values in input data
+        data_clean = self._handle_missing_data(data, fill_method)
+            
         # Prepare sequences
-        values = data.values.reshape(-1, 1)
+        values = data_clean.values.reshape(-1, 1)
         scaler = StandardScaler()
         values_scaled = scaler.fit_transform(values)
         
@@ -204,7 +291,7 @@ class TimeSeriesAnomalyDetector:
             'model': model
         }
     
-    def prophet_based_detection(self, data, contamination=0.1, changepoint_prior_scale=0.05):
+    def prophet_based_detection(self, data, contamination=0.1, changepoint_prior_scale=0.05, fill_method='auto'):
         """
         Prophet-based anomaly detection for time series
         
@@ -212,6 +299,7 @@ class TimeSeriesAnomalyDetector:
         - data: pandas Series with datetime index
         - contamination: proportion of outliers
         - changepoint_prior_scale: flexibility of trend changes
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         if not PROPHET_AVAILABLE:
             raise ImportError("Prophet not available. Install with: pip install prophet")
@@ -219,10 +307,13 @@ class TimeSeriesAnomalyDetector:
         if not isinstance(data, pd.Series):
             data = pd.Series(data)
             
+        # Handle missing values in input data
+        data_clean = self._handle_missing_data(data, fill_method)
+            
         # Prepare data for Prophet
         df = pd.DataFrame({
-            'ds': data.index,
-            'y': data.values
+            'ds': data_clean.index,
+            'y': data_clean.values
         })
         
         # Fit Prophet model
@@ -234,7 +325,7 @@ class TimeSeriesAnomalyDetector:
         forecast = model.predict(future)
         
         # Calculate residuals
-        residuals = np.abs(data.values - forecast['yhat'].values)
+        residuals = np.abs(data_clean.values - forecast['yhat'].values)
         
         # Determine threshold
         threshold = np.percentile(residuals, (1 - contamination) * 100)
@@ -256,7 +347,7 @@ class TimeSeriesAnomalyDetector:
             'model': model
         }
     
-    def statistical_detection(self, data, window_size=5, threshold=3):
+    def statistical_detection(self, data, window_size=5, threshold=3, fill_method='auto'):
         """
         Statistical anomaly detection using rolling statistics
         
@@ -264,16 +355,27 @@ class TimeSeriesAnomalyDetector:
         - data: pandas Series with datetime index
         - window_size: size of rolling window
         - threshold: number of standard deviations for anomaly detection
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         if not isinstance(data, pd.Series):
             data = pd.Series(data)
             
+        # Handle missing values in input data
+        data_clean = self._handle_missing_data(data, fill_method)
+            
         # Calculate rolling statistics
-        rolling_mean = data.rolling(window=window_size).mean()
-        rolling_std = data.rolling(window=window_size).std()
+        rolling_mean = data_clean.rolling(window=window_size).mean()
+        rolling_std = data_clean.rolling(window=window_size).std()
+        
+        # Fill missing values created by rolling operations
+        rolling_mean = rolling_mean.fillna(method='ffill').fillna(method='bfill')
+        rolling_std = rolling_std.fillna(method='ffill').fillna(method='bfill')
         
         # Calculate z-scores
-        z_scores = np.abs((data - rolling_mean) / rolling_std)
+        z_scores = np.abs((data_clean - rolling_mean) / rolling_std)
+        
+        # Handle cases where rolling_std is zero
+        z_scores = z_scores.fillna(0)
         
         # Detect anomalies
         anomaly_mask = z_scores > threshold
@@ -292,7 +394,7 @@ class TimeSeriesAnomalyDetector:
             'threshold': threshold
         }
     
-    def ensemble_detection(self, data, methods=['isolation_forest', 'statistical'], contamination=0.1, z_threshold=3.0):
+    def ensemble_detection(self, data, methods=['isolation_forest', 'statistical'], contamination=0.1, z_threshold=3.0, fill_method='auto'):
         """
         Ensemble anomaly detection combining multiple methods
         
@@ -301,25 +403,26 @@ class TimeSeriesAnomalyDetector:
         - methods: list of detection methods to use
         - contamination: proportion of outliers
         - z_threshold: Z-score threshold for statistical method
+        - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
         """
         results = {}
         
         for method in methods:
             if method == 'isolation_forest':
-                result = self.isolation_forest_detection(data, contamination)
+                result = self.isolation_forest_detection(data, contamination, fill_method=fill_method)
             elif method == 'one_class_svm':
-                result = self.one_class_svm_detection(data, nu=contamination)
+                result = self.one_class_svm_detection(data, nu=contamination, fill_method=fill_method)
             elif method == 'statistical':
-                result = self.statistical_detection(data, threshold=z_threshold)
+                result = self.statistical_detection(data, threshold=z_threshold, fill_method=fill_method)
             elif method == 'lstm_autoencoder' and TF_AVAILABLE:
                 try:
-                    result = self.lstm_autoencoder_detection(data, contamination=contamination)
+                    result = self.lstm_autoencoder_detection(data, contamination=contamination, fill_method=fill_method)
                 except Exception as e:
                     print(f"LSTM Autoencoder error: {e}")
                     continue
             elif method == 'prophet' and PROPHET_AVAILABLE:
                 try:
-                    result = self.prophet_based_detection(data, contamination=contamination)
+                    result = self.prophet_based_detection(data, contamination=contamination, fill_method=fill_method)
                 except Exception as e:
                     print(f"Prophet error: {e}")
                     continue
@@ -428,7 +531,7 @@ class TimeSeriesAnomalyDetector:
         return summary
 
 
-def detect_and_visualize_anomalies(data, target_column, date_column=None, methods=None, contamination=0.1, z_threshold=3.0):
+def detect_and_visualize_anomalies(data, target_column, date_column=None, methods=None, contamination=0.1, z_threshold=3.0, fill_method='auto'):
     """
     Complete pipeline for anomaly detection in time series data
     
@@ -439,6 +542,7 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
     - methods: list of detection methods to use
     - contamination: proportion of outliers
     - z_threshold: Z-score threshold for statistical method
+    - fill_method: method to fill missing values ('auto', 'ffill', 'bfill', 'zero', 'mean', 'median', 'interpolate')
     
     Returns:
     - Dictionary with results for each method
@@ -466,9 +570,22 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
     if ts_data.std() == 0:
         raise ValueError("Data memiliki nilai konstan. Deteksi anomali tidak dapat dilakukan")
     
-    # Handle missing values
+    # Handle missing values using the specified method
     if ts_data.isnull().any():
-        ts_data = ts_data.dropna()
+        if fill_method == 'auto':
+            # Try time-based interpolation first, then fallback to forward fill
+            try:
+                ts_data = ts_data.interpolate(method='time')
+                if ts_data.isnull().any():
+                    ts_data = ts_data.fillna(method='ffill').fillna(method='bfill')
+            except:
+                ts_data = ts_data.fillna(method='ffill').fillna(method='bfill')
+        elif fill_method == 'drop':
+            ts_data = ts_data.dropna()
+        else:
+            # Use the specified fill method
+            detector = TimeSeriesAnomalyDetector()
+            ts_data = detector._handle_missing_data(ts_data, fill_method)
     
     # Initialize detector
     detector = TimeSeriesAnomalyDetector()
@@ -478,17 +595,17 @@ def detect_and_visualize_anomalies(data, target_column, date_column=None, method
     for method in methods:
         try:
             if method == 'isolation_forest':
-                result = detector.isolation_forest_detection(ts_data, contamination=contamination)
+                result = detector.isolation_forest_detection(ts_data, contamination, fill_method=fill_method)
             elif method == 'one_class_svm':
-                result = detector.one_class_svm_detection(ts_data)
+                result = detector.one_class_svm_detection(ts_data, fill_method=fill_method)
             elif method == 'statistical':
-                result = detector.statistical_detection(ts_data)
+                result = detector.statistical_detection(ts_data, threshold=z_threshold, fill_method=fill_method)
             elif method == 'lstm_autoencoder':
-                result = detector.lstm_autoencoder_detection(ts_data, contamination=contamination)
+                result = detector.lstm_autoencoder_detection(ts_data, contamination=contamination, fill_method=fill_method)
             elif method == 'prophet':
-                result = detector.prophet_based_detection(ts_data, contamination=contamination)
+                result = detector.prophet_based_detection(ts_data, contamination=contamination, fill_method=fill_method)
             elif method == 'ensemble':
-                result = detector.ensemble_detection(ts_data, contamination=contamination)
+                result = detector.ensemble_detection(ts_data, contamination=contamination, fill_method=fill_method)
             
             results[method] = {
                 'detector': detector,

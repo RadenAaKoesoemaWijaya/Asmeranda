@@ -7790,8 +7790,20 @@ with tab4:
             if model is not None and st.button("Train Model"):
                 with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
                     try:
+                        # Preprocessing: Remove NaN values from training data
+                        # This is crucial for models like GradientBoostingRegressor that don't handle NaN natively
+                        X_train_clean = st.session_state.X_train.dropna()
+                        y_train_clean = st.session_state.y_train.loc[X_train_clean.index]
+                        
+                        # Check if we have enough data after cleaning
+                        if len(X_train_clean) == 0:
+                            raise ValueError("Tidak ada data yang valid untuk training setelah menghapus nilai NaN. Silakan periksa data Anda." if st.session_state.language == 'id' else "No valid data available for training after removing NaN values. Please check your data.")
+                        
+                        if len(X_train_clean) < 10:
+                            st.warning(f"Hanya {len(X_train_clean)} sampel tersedia untuk training. Hasil mungkin tidak optimal." if st.session_state.language == 'id' else f"Only {len(X_train_clean)} samples available for training. Results may not be optimal.")
+                        
                         start_time = time.time()
-                        model.fit(st.session_state.X_train, st.session_state.y_train)
+                        model.fit(X_train_clean, y_train_clean)
                         training_time = time.time() - start_time
                         
                         # Tambahkan validasi sebelum prediksi
@@ -7811,13 +7823,22 @@ with tab4:
                             st.write(model.best_params_)
                             st.write(f"Skor terbaik (CV): {model.best_score_:.4f}" if st.session_state.language == 'id' else f"Best Score (CV): {model.best_score_:.4f}")
 
-                            # Gunakan model terbaik untuk prediksi
-                            y_pred = model.best_estimator_.predict(st.session_state.X_test)
+                            # Gunakan model terbaik untuk prediksi (dengan handling NaN)
+                            X_test_clean = st.session_state.X_test.dropna()
+                            y_test_clean = st.session_state.y_test.loc[X_test_clean.index]
+                            y_pred = model.best_estimator_.predict(X_test_clean)
                             st.session_state.model = model.best_estimator_
+                            # Update y_test untuk evaluasi
+                            st.session_state.y_test_eval = y_test_clean
                         else:
                             st.success(f"Model selesai dilatih dalam {training_time:.2f} detik" if st.session_state.language == 'id' else f"Model training completed in {training_time:.2f} seconds!")
-                            y_pred = model.predict(st.session_state.X_test)
+                            # Gunakan model terbaik untuk prediksi (dengan handling NaN)
+                            X_test_clean = st.session_state.X_test.dropna()
+                            y_test_clean = st.session_state.y_test.loc[X_test_clean.index]
+                            y_pred = model.predict(X_test_clean)
                             st.session_state.model = model
+                            # Update y_test untuk evaluasi
+                            st.session_state.y_test_eval = y_test_clean
                         
                         # Cross-validation evaluation
                         if cv_params['cv'] is not None:
@@ -7828,11 +7849,11 @@ with tab4:
                                     # Get the actual model (best estimator if using optimization)
                                     eval_model = model.best_estimator_ if optimization_method != "None" else model
                                     
-                                    # Perform cross-validation
+                                    # Perform cross-validation using cleaned data (without NaN values)
                                     cv_scores = cross_val_score(
                                         eval_model, 
-                                        st.session_state.X_train, 
-                                        st.session_state.y_train,
+                                        X_train_clean, 
+                                        y_train_clean,
                                         cv=cv_params['cv'],
                                         scoring=cv_params['scoring'],
                                         n_jobs=-1
@@ -7886,11 +7907,11 @@ with tab4:
                         
                         # Evaluasi model
                         if problem_type == "Classification":
-                            accuracy = accuracy_score(st.session_state.y_test, y_pred)
+                            accuracy = accuracy_score(st.session_state.y_test_eval, y_pred)
                             st.write(f"Accuracy: {accuracy:.4f}")
                             
                             # Confusion Matrix
-                            cm = confusion_matrix(st.session_state.y_test, y_pred)
+                            cm = confusion_matrix(st.session_state.y_test_eval, y_pred)
                             fig, ax = plt.subplots(figsize=(10, 8))
                             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
                             plt.title('Confusion Matrix')
@@ -7899,7 +7920,7 @@ with tab4:
                             st.pyplot(fig)
                             
                             # Classification Report
-                            report = classification_report(st.session_state.y_test, y_pred, output_dict=True)
+                            report = classification_report(st.session_state.y_test_eval, y_pred, output_dict=True)
                             report_df = pd.DataFrame(report).transpose()
                             st.write("Label Report" if st.session_state.language == 'id' else "Classification Report:")
                             st.dataframe(report_df)
@@ -7910,16 +7931,16 @@ with tab4:
                             # Cek apakah model mendukung predict_proba
                             if hasattr(model, 'predict_proba'):
                                 # Untuk klasifikasi biner
-                                if len(np.unique(st.session_state.y_test)) == 2:
-                                    y_prob = model.predict_proba(st.session_state.X_test)[:, 1]
+                                if len(np.unique(st.session_state.y_test_eval)) == 2:
+                                    y_prob = model.predict_proba(X_test_clean)[:, 1]
                                     # Menangani kasus ketika y_test berisi nilai kategorikal seperti '<20', '>20'
-                                    if isinstance(st.session_state.y_test.iloc[0], str):
+                                    if isinstance(st.session_state.y_test_eval.iloc[0], str):
                                         # Konversi nilai kategorikal ke numerik (0 dan 1)
-                                        unique_values = sorted(np.unique(st.session_state.y_test))
+                                        unique_values = sorted(np.unique(st.session_state.y_test_eval))
                                         pos_label = unique_values[1]  # Nilai kedua sebagai pos_label
-                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob, pos_label=pos_label)
+                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test_eval, y_prob, pos_label=pos_label)
                                     else:
-                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test, y_prob)
+                                        fpr, tpr, thresholds = roc_curve(st.session_state.y_test_eval, y_prob)
                                     roc_auc = auc(fpr, tpr)
                                     
                                     # Plot ROC Curve
@@ -7939,10 +7960,10 @@ with tab4:
                                 # Untuk klasifikasi multi-kelas
                                 else:
                                     try:
-                                        y_prob = model.predict_proba(st.session_state.X_test)
+                                        y_prob = model.predict_proba(X_test_clean)
                                         
                                         # Buat label biner untuk setiap kelas
-                                        y_test_bin = pd.get_dummies(st.session_state.y_test).values
+                                        y_test_bin = pd.get_dummies(st.session_state.y_test_eval).values
                                         
                                         # Pastikan jumlah kelas dalam y_prob dan y_test_bin sama
                                         n_classes = min(y_prob.shape[1], y_test_bin.shape[1])
@@ -7991,7 +8012,7 @@ with tab4:
                                                   if st.session_state.language == 'id' else 
                                                   "Make sure the test data contains all classes present in the training data.")
                                         # Tampilkan informasi tambahan untuk debugging
-                                        st.write(f"Jumlah kelas unik dalam y_test: {len(np.unique(st.session_state.y_test))}")
+                                        st.write(f"Jumlah kelas unik dalam y_test: {len(np.unique(st.session_state.y_test_eval))}")
                                         if hasattr(model, 'classes_'):
                                             st.write(f"Kelas dalam model: {model.classes_}")
                                             st.write(f"Jumlah kelas dalam model: {len(model.classes_)}")
@@ -8005,12 +8026,12 @@ with tab4:
                                           "This model doesn't support probability prediction, so ROC curve cannot be displayed.")
                             
                         else:  # Regression
-                            mse = mean_squared_error(st.session_state.y_test, y_pred)
+                            mse = mean_squared_error(st.session_state.y_test_eval, y_pred)
                             rmse = np.sqrt(mse)
-                            r2 = r2_score(st.session_state.y_test, y_pred)
+                            r2 = r2_score(st.session_state.y_test_eval, y_pred)
                             # Tambahan: Adjusted R²
-                            n = st.session_state.X_test.shape[0]
-                            k = st.session_state.X_test.shape[1]
+                            n = X_test_clean.shape[0]
+                            k = X_test_clean.shape[1]
                             adj_r2 = adjusted_r2_score(r2, n, k)
                             st.write(f"Mean Squared Error: {mse:.4f}")
                             st.write(f"Root Mean Squared Error: {rmse:.4f}")
@@ -8025,7 +8046,7 @@ with tab4:
 
                                 # Tambahan: Uji Heteroskedastisitas (Breusch-Pagan) - hanya untuk Linear Regression
                                 st.subheader("Uji Heteroskedastisitas (Breusch-Pagan)" if st.session_state.language == 'id' else "Heteroskedasticity Test (Breusch-Pagan)")
-                                bp_result = breusch_pagan_test(st.session_state.y_test, y_pred, st.session_state.X_test)
+                                bp_result = breusch_pagan_test(st.session_state.y_test_eval, y_pred, X_test_clean)
                                 st.write(f"Lagrange multiplier statistic: {bp_result['Lagrange multiplier statistic']:.4f}")
                                 st.write(f"p-value: {bp_result['p-value']:.4f}")
                                 st.write(f"f-value: {bp_result['f-value']:.4f}")
@@ -8058,9 +8079,9 @@ with tab4:
                             
                             # Plot actual vs predicted
                             fig, ax = plt.subplots(figsize=(10, 6))
-                            ax.scatter(st.session_state.y_test, y_pred, alpha=0.5)
-                            ax.plot([st.session_state.y_test.min(), st.session_state.y_test.max()], 
-                                   [st.session_state.y_test.min(), st.session_state.y_test.max()], 
+                            ax.scatter(st.session_state.y_test_eval, y_pred, alpha=0.5)
+                            ax.plot([st.session_state.y_test_eval.min(), st.session_state.y_test_eval.max()], 
+                                   [st.session_state.y_test_eval.min(), st.session_state.y_test_eval.max()], 
                                    'r--')
                             plt.title('Actual vs Predicted')
                             plt.xlabel('Actual')
@@ -8068,7 +8089,7 @@ with tab4:
                             st.pyplot(fig)
                             
                             # Residual plot
-                            residuals = st.session_state.y_test - y_pred
+                            residuals = st.session_state.y_test_eval - y_pred
                             fig, ax = plt.subplots(figsize=(10, 6))
                             ax.scatter(y_pred, residuals, alpha=0.5)
                             ax.axhline(y=0, color='r', linestyle='--')
@@ -8388,9 +8409,9 @@ with tab4:
                     # Tambahkan perhitungan metrik evaluasi
                     if problem_type == "Regression" and hasattr(st.session_state, 'y_test'):
                         y_pred = st.session_state.model.predict(st.session_state.X_test)
-                        mse = mean_squared_error(st.session_state.y_test, y_pred)
+                        mse = mean_squared_error(st.session_state.y_test_eval, y_pred)
                         rmse = np.sqrt(mse)
-                        r2 = r2_score(st.session_state.y_test, y_pred)
+                        r2 = r2_score(st.session_state.y_test_eval, y_pred)
                         
                         pdf.cell(0, 10, f'Mean Squared Error (MSE): {mse:.4f}', 0, 1)
                         pdf.cell(0, 10, f'Root Mean Squared Error (RMSE): {rmse:.4f}', 0, 1)
@@ -9175,7 +9196,7 @@ with tab6:
                         st.write("Data sampel:" if st.session_state.language == 'id' else "Sample data:")
                         st.dataframe(pd.DataFrame([sample], columns=selected_features))
 
-                        actual = st.session_state.y_test.iloc[sample_idx]
+                        actual = st.session_state.y_test_eval.iloc[sample_idx]
                         original_sample = st.session_state.X_test.iloc[sample_idx:sample_idx+1]
                         predicted = st.session_state.model.predict(original_sample)[0]
                         st.write(f"Nilai aktual: {actual}")

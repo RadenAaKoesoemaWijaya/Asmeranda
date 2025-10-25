@@ -50,8 +50,30 @@ def train_arima_model(data, target_column, order=(1,1,1)):
     model : statsmodels.tsa.arima.model.ARIMAResults
         Model ARIMA yang telah dilatih
     """
-    # Pastikan data tidak memiliki nilai yang hilang
-    data = data.dropna()
+    # Gunakan data yang sudah diimputasi jika tersedia, bukan drop sembarangan
+    if data.isnull().any().any():
+        # Coba gunakan imputasi yang lebih halus untuk data time series
+        data_clean = data.copy()
+        
+        # Untuk kolom target, gunakan interpolasi time-based
+        if data_clean[target_column].isnull().any():
+            data_clean[target_column] = data_clean[target_column].interpolate(method='time')
+            # Isi sisa dengan forward/backward fill
+            data_clean[target_column] = data_clean[target_column].fillna(method='ffill').fillna(method='bfill')
+        
+        # Untuk kolom lain, gunakan metode yang sesuai
+        for col in data_clean.columns:
+            if data_clean[col].dtype in ['float64', 'int64'] and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].interpolate(method='linear')
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+            elif data_clean[col].dtype == 'object' and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+        
+        data = data_clean
+    
+    # Validasi data tetap diperlukan
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model ARIMA")
     
     # Validasi apakah ada data yang cukup untuk training
     if len(data) == 0:
@@ -309,8 +331,30 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
     model : statsmodels.tsa.statespace.sarimax.SARIMAXResults
         Model SARIMA yang telah dilatih
     """
-    # Pastikan data tidak memiliki nilai yang hilang
-    data = data.dropna()
+    # Gunakan data yang sudah diimputasi jika tersedia, bukan drop sembarangan
+    if data.isnull().any().any():
+        # Coba gunakan imputasi yang lebih halus untuk data time series
+        data_clean = data.copy()
+        
+        # Untuk kolom target, gunakan interpolasi time-based
+        if data_clean[target_column].isnull().any():
+            data_clean[target_column] = data_clean[target_column].interpolate(method='time')
+            # Isi sisa dengan forward/backward fill
+            data_clean[target_column] = data_clean[target_column].fillna(method='ffill').fillna(method='bfill')
+        
+        # Untuk kolom lain, gunakan metode yang sesuai
+        for col in data_clean.columns:
+            if data_clean[col].dtype in ['float64', 'int64'] and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].interpolate(method='linear')
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+            elif data_clean[col].dtype == 'object' and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+        
+        data = data_clean
+    
+    # Validasi data tetap diperlukan
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model SARIMA")
     
     # Validasi apakah ada data yang cukup untuk training
     if len(data) == 0:
@@ -339,7 +383,7 @@ def train_sarima_model(data, target_column, order=(1,1,1), seasonal_order=(1,1,1
 
 def train_sarimax_model(data, target_column, exog_columns=None, order=(1,1,1), seasonal_order=(1,1,1,12)):
     """
-    Melatih model SARIMAX dengan variabel eksternal
+    Melatih model SARIMAX untuk data timeseries dengan variabel eksogen
     
     Parameters:
     -----------
@@ -348,7 +392,7 @@ def train_sarimax_model(data, target_column, exog_columns=None, order=(1,1,1), s
     target_column : str
         Nama kolom target yang akan diprediksi
     exog_columns : list, optional
-        Daftar kolom eksternal yang akan digunakan
+        Daftar nama kolom eksogen
     order : tuple, optional
         Order ARIMA (p,d,q)
     seasonal_order : tuple, optional
@@ -359,8 +403,30 @@ def train_sarimax_model(data, target_column, exog_columns=None, order=(1,1,1), s
     model : statsmodels.tsa.statespace.sarimax.SARIMAXResults
         Model SARIMAX yang telah dilatih
     """
-    # Pastikan data tidak memiliki nilai yang hilang
-    data = data.dropna()
+    # Gunakan data yang sudah diimputasi jika tersedia, bukan drop sembarangan
+    if data.isnull().any().any():
+        # Coba gunakan imputasi yang lebih halus untuk data time series
+        data_clean = data.copy()
+        
+        # Untuk kolom target, gunakan interpolasi time-based
+        if data_clean[target_column].isnull().any():
+            data_clean[target_column] = data_clean[target_column].interpolate(method='time')
+            # Isi sisa dengan forward/backward fill
+            data_clean[target_column] = data_clean[target_column].fillna(method='ffill').fillna(method='bfill')
+        
+        # Untuk kolom lain, gunakan metode yang sesuai
+        for col in data_clean.columns:
+            if data_clean[col].dtype in ['float64', 'int64'] and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].interpolate(method='linear')
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+            elif data_clean[col].dtype == 'object' and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+        
+        data = data_clean
+    
+    # Validasi data tetap diperlukan
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model SARIMAX")
     
     # Validasi apakah ada data yang cukup untuk training
     if len(data) == 0:
@@ -491,8 +557,26 @@ def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=3
     if not TENSORFLOW_AVAILABLE:
         raise ValueError("TensorFlow tidak tersedia. Silakan install TensorFlow terlebih dahulu.")
     
-    # Pastikan data tidak memiliki nilai yang hilang
-    data = data.dropna()
+    # Gunakan data yang sudah diimputasi jika tersedia, bukan drop sembarangan
+    if data.isnull().any().any():
+        # Coba gunakan imputasi yang lebih halus untuk data time series
+        data_clean = data.copy()
+        
+        # Untuk kolom target, gunakan interpolasi time-based
+        if data_clean[target_column].isnull().any():
+            data_clean[target_column] = data_clean[target_column].interpolate(method='time')
+            # Isi sisa dengan forward/backward fill
+            data_clean[target_column] = data_clean[target_column].fillna(method='ffill').fillna(method='bfill')
+        
+        # Untuk kolom lain, gunakan metode yang sesuai
+        for col in data_clean.columns:
+            if data_clean[col].dtype in ['float64', 'int64'] and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].interpolate(method='linear')
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+            elif data_clean[col].dtype == 'object' and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+        
+        data = data_clean
     
     # Validasi apakah ada data yang cukup untuk training
     if len(data) == 0:
@@ -584,7 +668,7 @@ def train_lstm_model(data, target_column, look_back=60, epochs=100, batch_size=3
     except Exception as e:
         raise ValueError(f"Gagal melatih model LSTM: {str(e)}")
 
-def train_exponential_smoothing(data, target_column, trend=None, seasonal=None, seasonal_periods=None):
+def train_exponential_smoothing(data, target_column, trend='add', seasonal='add', seasonal_periods=12):
     """
     Melatih model Exponential Smoothing untuk data timeseries
     
@@ -595,19 +679,41 @@ def train_exponential_smoothing(data, target_column, trend=None, seasonal=None, 
     target_column : str
         Nama kolom target yang akan diprediksi
     trend : str, optional
-        Tipe trend ('add', 'mul', None)
+        Jenis trend ('add', 'mul', None)
     seasonal : str, optional
-        Tipe seasonal ('add', 'mul', None)
+        Jenis seasonal ('add', 'mul', None)
     seasonal_periods : int, optional
-        Jumlah periode dalam satu siklus musiman
+        Periode musiman
         
     Returns:
     --------
     model : statsmodels.tsa.holtwinters.ExponentialSmoothingResults
         Model Exponential Smoothing yang telah dilatih
     """
-    # Pastikan data tidak memiliki nilai yang hilang
-    data = data.dropna()
+    # Gunakan data yang sudah diimputasi jika tersedia, bukan drop sembarangan
+    if data.isnull().any().any():
+        # Coba gunakan imputasi yang lebih halus untuk data time series
+        data_clean = data.copy()
+        
+        # Untuk kolom target, gunakan interpolasi time-based
+        if data_clean[target_column].isnull().any():
+            data_clean[target_column] = data_clean[target_column].interpolate(method='time')
+            # Isi sisa dengan forward/backward fill
+            data_clean[target_column] = data_clean[target_column].fillna(method='ffill').fillna(method='bfill')
+        
+        # Untuk kolom lain, gunakan metode yang sesuai
+        for col in data_clean.columns:
+            if data_clean[col].dtype in ['float64', 'int64'] and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].interpolate(method='linear')
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+            elif data_clean[col].dtype == 'object' and data_clean[col].isnull().any():
+                data_clean[col] = data_clean[col].fillna(method='ffill').fillna(method='bfill')
+        
+        data = data_clean
+    
+    # Validasi data tetap diperlukan
+    if len(data) == 0:
+        raise ValueError("Tidak ada data yang valid untuk training model Exponential Smoothing")
     
     # Validasi apakah ada data yang cukup untuk training
     if len(data) == 0:

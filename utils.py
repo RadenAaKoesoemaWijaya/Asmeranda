@@ -523,7 +523,207 @@ def create_features_from_date(df, date_column):
     
     return df_new
 
-def create_lag_features(df, target_column, lag_periods=[1, 2, 3, 7, 14, 30]):
+def validate_data_for_ml(df, target_column=None, feature_columns=None, 
+                        max_missing_ratio=0.5, min_samples=10, 
+                        handle_missing='auto', verbose=True):
+    """
+    Validasi dan membersihkan data untuk machine learning dengan pendekatan yang konsisten
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame yang akan divalidasi
+    target_column : str, optional
+        Nama kolom target (jika ada)
+    feature_columns : list, optional
+        Daftar kolom fitur yang akan digunakan (jika None, gunakan semua kolom numerik)
+    max_missing_ratio : float, optional
+        Rasio missing value maksimum yang diizinkan per kolom (default: 0.5)
+    min_samples : int, optional
+        Jumlah minimum sampel yang dibutuhkan (default: 10)
+    handle_missing : str, optional
+        Metode penanganan missing value ('auto', 'drop', 'impute', 'none')
+    verbose : bool, optional
+        Apakah akan menampilkan informasi proses validasi
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi:
+        - 'data': DataFrame yang sudah divalidasi dan dibersihkan
+        - 'target_column': Nama kolom target (jika ada)
+        - 'feature_columns': Daftar kolom fitur yang digunakan
+        - 'missing_handled': Informasi bagaimana missing value ditangani
+        - 'warnings': Daftar peringatan jika ada
+        - 'errors': Daftar error jika ada
+    """
+    
+    result = {
+        'data': None,
+        'target_column': target_column,
+        'feature_columns': feature_columns,
+        'missing_handled': {},
+        'warnings': [],
+        'errors': []
+    }
+    
+    # Validasi input
+    if df is None or df.empty:
+        result['errors'].append("DataFrame kosong atau None")
+        return result
+    
+    if len(df) < min_samples:
+        result['errors'].append(f"Jumlah sampel ({len(df)}) kurang dari minimum ({min_samples})")
+        return result
+    
+    # Buat salinan data
+    df_clean = df.copy()
+    
+    # Identifikasi kolom fitur jika tidak ditentukan
+    if feature_columns is None:
+        # Gunakan semua kolom numerik kecuali target column
+        numeric_columns = df_clean.select_dtypes(include=[np.number]).columns.tolist()
+        if target_column and target_column in numeric_columns:
+            feature_columns = [col for col in numeric_columns if col != target_column]
+        else:
+            feature_columns = numeric_columns
+    
+    result['feature_columns'] = feature_columns
+    
+    # Validasi target column jika ada
+    if target_column and target_column not in df_clean.columns:
+        result['errors'].append(f"Kolom target '{target_column}' tidak ditemukan")
+        return result
+    
+    # Validasi feature columns
+    missing_features = [col for col in feature_columns if col not in df_clean.columns]
+    if missing_features:
+        result['errors'].append(f"Kolom fitur tidak ditemukan: {missing_features}")
+        return result
+    
+    # Analisis missing values
+    columns_to_check = feature_columns.copy()
+    if target_column:
+        columns_to_check.append(target_column)
+    
+    missing_analysis = df_clean[columns_to_check].isnull().sum()
+    missing_ratio = missing_analysis / len(df_clean)
+    
+    if verbose:
+        print("Analisis Missing Values:")
+        for col in columns_to_check:
+            ratio = missing_ratio[col]
+            count = missing_analysis[col]
+            print(f"  {col}: {count} missing ({ratio:.2%})")
+    
+    # Identifikasi kolom dengan terlalu banyak missing values
+    high_missing_cols = missing_ratio[missing_ratio > max_missing_ratio].index.tolist()
+    
+    if high_missing_cols:
+        result['warnings'].append(f"Kolom dengan missing > {max_missing_ratio:.0%}: {high_missing_cols}")
+        
+        if handle_missing == 'auto':
+            # Drop kolom dengan terlalu banyak missing
+            df_clean = df_clean.drop(columns=high_missing_cols)
+            result['missing_handled']['dropped_columns'] = high_missing_cols
+            
+            # Update feature columns
+            feature_columns = [col for col in feature_columns if col not in high_missing_cols]
+            result['feature_columns'] = feature_columns
+            
+            if verbose:
+                print(f"Menghapus kolom dengan terlalu banyak missing: {high_missing_cols}")
+    
+    # Tangani missing values pada kolom yang tersisa
+    if handle_missing == 'auto':
+        # Gunakan strategi yang sesuai untuk setiap tipe data
+        for col in feature_columns:
+            if df_clean[col].dtype in ['float64', 'int64']:
+                # Untuk data numerik, gunakan median
+                if df_clean[col].isnull().any():
+                    median_val = df_clean[col].median()
+                    df_clean[col] = df_clean[col].fillna(median_val)
+                    result['missing_handled'][col] = f'filled_with_median({median_val:.2f})'
+                    
+            elif df_clean[col].dtype == 'object':
+                # Untuk data kategorikal, gunakan mode
+                if df_clean[col].isnull().any():
+                    mode_val = df_clean[col].mode().iloc[0] if not df_clean[col].mode().empty else 'unknown'
+                    df_clean[col] = df_clean[col].fillna(mode_val)
+                    result['missing_handled'][col] = f'filled_with_mode({mode_val})'
+        
+        # Tangani missing values pada target column
+        if target_column and df_clean[target_column].isnull().any():
+            if df_clean[target_column].dtype in ['float64', 'int64']:
+                median_val = df_clean[target_column].median()
+                df_clean[target_column] = df_clean[target_column].fillna(median_val)
+                result['missing_handled'][target_column] = f'filled_with_median({median_val:.2f})'
+            else:
+                mode_val = df_clean[target_column].mode().iloc[0] if not df_clean[target_column].mode().empty else 'unknown'
+                df_clean[target_column] = df_clean[target_column].fillna(mode_val)
+                result['missing_handled'][target_column] = f'filled_with_mode({mode_val})'
+                
+    elif handle_missing == 'drop':
+        # Hapus baris dengan missing values
+        initial_rows = len(df_clean)
+        df_clean = df_clean.dropna(subset=columns_to_check)
+        dropped_rows = initial_rows - len(df_clean)
+        
+        if dropped_rows > 0:
+            result['missing_handled']['dropped_rows'] = dropped_rows
+            if verbose:
+                print(f"Menghapus {dropped_rows} baris dengan missing values")
+                
+    elif handle_missing == 'impute':
+        # Gunakan imputasi yang lebih canggih (mirip dengan yang ada di app.py)
+        for col in columns_to_check:
+            if df_clean[col].isnull().any():
+                if df_clean[col].dtype in ['float64', 'int64']:
+                    # Gunakan interpolasi untuk data time series jika memungkinkan
+                    try:
+                        df_clean[col] = df_clean[col].interpolate(method='linear')
+                        df_clean[col] = df_clean[col].fillna(method='ffill').fillna(method='bfill')
+                        result['missing_handled'][col] = 'interpolated_and_filled'
+                    except:
+                        # Fallback ke median
+                        median_val = df_clean[col].median()
+                        df_clean[col] = df_clean[col].fillna(median_val)
+                        result['missing_handled'][col] = f'filled_with_median({median_val:.2f})'
+                else:
+                    mode_val = df_clean[col].mode().iloc[0] if not df_clean[col].mode().empty else 'unknown'
+                    df_clean[col] = df_clean[col].fillna(mode_val)
+                    result['missing_handled'][col] = f'filled_with_mode({mode_val})'
+    
+    # Validasi final
+    final_missing = df_clean[columns_to_check].isnull().sum().sum()
+    if final_missing > 0:
+        result['warnings'].append(f"Masih ada {final_missing} missing values setelah cleaning")
+        if verbose:
+            print(f"Peringatan: Masih ada {final_missing} missing values")
+    
+    # Validasi ukuran data akhir
+    if len(df_clean) < min_samples:
+        result['errors'].append(f"Jumlah sampel akhir ({len(df_clean)}) kurang dari minimum ({min_samples})")
+        return result
+    
+    # Hasil akhir
+    result['data'] = df_clean
+    
+    if verbose:
+        print(f"\nValidasi selesai:")
+        print(f"  Jumlah sampel awal: {len(df)}")
+        print(f"  Jumlah sampel akhir: {len(df_clean)}")
+        print(f"  Kolom fitur: {len(feature_columns)}")
+        if target_column:
+            print(f"  Kolom target: {target_column}")
+        if result['missing_handled']:
+            print(f"  Missing values ditangani: {result['missing_handled']}")
+        if result['warnings']:
+            print(f"  Peringatan: {result['warnings']}")
+    
+    return result
+
+def create_lag_features(df, target_column, lag_periods=[1, 2, 3, 7, 14, 30], fill_method='ffill'):
     """
     Membuat fitur lag dari kolom target
     
@@ -535,6 +735,8 @@ def create_lag_features(df, target_column, lag_periods=[1, 2, 3, 7, 14, 30]):
         Nama kolom target
     lag_periods : list, optional
         Daftar periode lag yang akan dibuat
+    fill_method : str, optional
+        Metode untuk mengisi NaN yang dihasilkan dari lag (ffill, bfill, zero, mean, median)
         
     Returns:
     --------
@@ -548,9 +750,28 @@ def create_lag_features(df, target_column, lag_periods=[1, 2, 3, 7, 14, 30]):
     for lag in lag_periods:
         df_new[f'{target_column}_lag_{lag}'] = df_new[target_column].shift(lag)
     
+    # Tangani NaN yang dihasilkan dari operasi lag
+    lag_columns = [f'{target_column}_lag_{lag}' for lag in lag_periods]
+    
+    if fill_method == 'ffill':
+        df_new[lag_columns] = df_new[lag_columns].fillna(method='ffill')
+    elif fill_method == 'bfill':
+        df_new[lag_columns] = df_new[lag_columns].fillna(method='bfill')
+    elif fill_method == 'zero':
+        df_new[lag_columns] = df_new[lag_columns].fillna(0)
+    elif fill_method == 'mean':
+        for col in lag_columns:
+            df_new[col] = df_new[col].fillna(df_new[col].mean())
+    elif fill_method == 'median':
+        for col in lag_columns:
+            df_new[col] = df_new[col].fillna(df_new[col].median())
+    else:
+        # Default: gunakan forward fill dan backward fill
+        df_new[lag_columns] = df_new[lag_columns].fillna(method='ffill').fillna(method='bfill')
+    
     return df_new
 
-def create_rolling_features(df, target_column, windows=[7, 14, 30]):
+def create_rolling_features(df, target_column, windows=[7, 14, 30], fill_method='ffill', min_periods=None):
     """
     Membuat fitur rolling (rata-rata, standar deviasi, min, max) dari kolom target
     
@@ -562,6 +783,10 @@ def create_rolling_features(df, target_column, windows=[7, 14, 30]):
         Nama kolom target
     windows : list, optional
         Daftar ukuran window untuk rolling
+    fill_method : str, optional
+        Metode untuk mengisi NaN yang dihasilkan dari rolling (ffill, bfill, zero, mean, median)
+    min_periods : int, optional
+        Jumlah minimum observasi yang dibutuhkan untuk menghitung rolling statistics
         
     Returns:
     --------
@@ -571,11 +796,41 @@ def create_rolling_features(df, target_column, windows=[7, 14, 30]):
     # Buat salinan data
     df_new = df.copy()
     
+    # Set min_periods jika tidak ditentukan (setengah dari window size)
+    if min_periods is None:
+        min_periods = 1  # Minimal 1 observasi untuk menghitung
+    
     # Buat fitur rolling
     for window in windows:
-        df_new[f'{target_column}_rolling_mean_{window}'] = df_new[target_column].rolling(window=window).mean()
-        df_new[f'{target_column}_rolling_std_{window}'] = df_new[target_column].rolling(window=window).std()
-        df_new[f'{target_column}_rolling_min_{window}'] = df_new[target_column].rolling(window=window).min()
-        df_new[f'{target_column}_rolling_max_{window}'] = df_new[target_column].rolling(window=window).max()
+        df_new[f'{target_column}_rolling_mean_{window}'] = df_new[target_column].rolling(window=window, min_periods=min_periods).mean()
+        df_new[f'{target_column}_rolling_std_{window}'] = df_new[target_column].rolling(window=window, min_periods=min_periods).std()
+        df_new[f'{target_column}_rolling_min_{window}'] = df_new[target_column].rolling(window=window, min_periods=min_periods).min()
+        df_new[f'{target_column}_rolling_max_{window}'] = df_new[target_column].rolling(window=window, min_periods=min_periods).max()
+    
+    # Tangani NaN yang dihasilkan dari operasi rolling
+    rolling_columns = []
+    for window in windows:
+        rolling_columns.extend([
+            f'{target_column}_rolling_mean_{window}',
+            f'{target_column}_rolling_std_{window}',
+            f'{target_column}_rolling_min_{window}',
+            f'{target_column}_rolling_max_{window}'
+        ])
+    
+    if fill_method == 'ffill':
+        df_new[rolling_columns] = df_new[rolling_columns].fillna(method='ffill')
+    elif fill_method == 'bfill':
+        df_new[rolling_columns] = df_new[rolling_columns].fillna(method='bfill')
+    elif fill_method == 'zero':
+        df_new[rolling_columns] = df_new[rolling_columns].fillna(0)
+    elif fill_method == 'mean':
+        for col in rolling_columns:
+            df_new[col] = df_new[col].fillna(df_new[col].mean())
+    elif fill_method == 'median':
+        for col in rolling_columns:
+            df_new[col] = df_new[col].fillna(df_new[col].median())
+    else:
+        # Default: gunakan forward fill dan backward fill
+        df_new[rolling_columns] = df_new[rolling_columns].fillna(method='ffill').fillna(method='bfill')
     
     return df_new
