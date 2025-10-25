@@ -196,6 +196,345 @@ def plot_timeseries_analysis(timeseries, figsize=(15, 12)):
         plt.tight_layout()
         return fig
 
+def interpret_forecasting_model(model, X_train, y_train, X_test, feature_names=None, 
+                               method='shap', n_samples=100, random_state=42):
+    """
+    Fungsi untuk interpretasi model forecasting menggunakan SHAP atau LIME
+    
+    Parameters:
+    -----------
+    model : sklearn model
+        Model forecasting yang telah dilatih
+    X_train : pandas.DataFrame atau numpy.array
+        Data training
+    y_train : pandas.Series atau numpy.array
+        Target training
+    X_test : pandas.DataFrame atau numpy.array
+        Data testing untuk interpretasi
+    feature_names : list, optional
+        Nama fitur
+    method : str, default='shap'
+        Metode interpretasi ('shap' atau 'lime')
+    n_samples : int, default=100
+        Jumlah sampel untuk interpretasi
+    random_state : int, default=42
+        Random state untuk reproduktivitas
+        
+    Returns:
+    --------
+    dict
+        Hasil interpretasi yang berisi:
+        - shap_values atau lime_explanations
+        - feature_importance
+        - summary_plot
+    """
+    
+    # Validasi input
+    if method not in ['shap', 'lime']:
+        raise ValueError("Method harus 'shap' atau 'lime'")
+    
+    # Konversi ke numpy array jika perlu
+    if hasattr(X_train, 'values'):
+        X_train = X_train.values
+    if hasattr(X_test, 'values'):
+        X_test = X_test.values
+    if hasattr(y_train, 'values'):
+        y_train = y_train.values
+    
+    # Siapkan nama fitur
+    if feature_names is None:
+        if hasattr(X_train, 'columns'):
+            feature_names = list(X_train.columns)
+        else:
+            feature_names = [f'feature_{i}' for i in range(X_train.shape[1])]
+    
+    # Pilih sampel untuk interpretasi
+    if len(X_test) > n_samples:
+        np.random.seed(random_state)
+        indices = np.random.choice(len(X_test), n_samples, replace=False)
+        X_sample = X_test[indices]
+    else:
+        X_sample = X_test.copy()
+    
+    results = {}
+    
+    if method == 'shap':
+        try:
+            import shap
+            
+            # Buat explainer berdasarkan tipe model
+            if hasattr(model, 'tree_'):  # Tree-based models
+                explainer = shap.TreeExplainer(model)
+            else:  # Other models
+                # Untuk forecasting, kita gunakan KernelExplainer dengan background data
+                background = shap.sample(X_train, min(100, len(X_train)))
+                explainer = shap.KernelExplainer(model.predict, background)
+            
+            # Hitung SHAP values
+            shap_values = explainer.shap_values(X_sample)
+            
+            # Simpan hasil
+            results['shap_values'] = shap_values
+            results['explainer'] = explainer
+            results['X_sample'] = X_sample
+            results['feature_names'] = feature_names
+            
+            # Hitung feature importance (rata-rata absolute SHAP values)
+            if len(shap_values.shape) == 3:  # Multi-output
+                feature_importance = np.mean(np.abs(shap_values), axis=(0, 2))
+            elif len(shap_values.shape) == 2:  # Single output
+                feature_importance = np.mean(np.abs(shap_values), axis=0)
+            else:  # 1D array
+                feature_importance = np.abs(shap_values)
+            
+            results['feature_importance'] = dict(zip(feature_names, feature_importance))
+            
+            # Buat summary plot
+            plt.figure(figsize=(10, 6))
+            shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
+            results['summary_plot'] = plt.gcf()
+            plt.close()
+            
+        except ImportError:
+            raise ImportError("SHAP tidak terinstal. Silakan install dengan: pip install shap")
+        except Exception as e:
+            raise Exception(f"Error dalam menghitung SHAP values: {str(e)}")
+    
+    elif method == 'lime':
+        try:
+            import lime
+            import lime.lime_tabular
+            
+            # Buat LIME explainer
+            explainer = lime.lime_tabular.LimeTabularExplainer(
+                X_train,
+                feature_names=feature_names,
+                mode='regression',
+                random_state=random_state
+            )
+            
+            # Generate explanations untuk beberapa sampel
+            lime_explanations = []
+            n_lime_samples = min(10, len(X_sample))  # Batasi untuk efisiensi
+            
+            for i in range(n_lime_samples):
+                explanation = explainer.explain_instance(
+                    X_sample[i], 
+                    model.predict,
+                    num_features=len(feature_names)
+                )
+                lime_explanations.append(explanation)
+            
+            # Simpan hasil
+            results['lime_explanations'] = lime_explanations
+            results['explainer'] = explainer
+            results['X_sample'] = X_sample[:n_lime_samples]
+            results['feature_names'] = feature_names
+            
+            # Ekstrak feature importance dari LIME
+            feature_importance = {}
+            for exp in lime_explanations:
+                for feature, weight in exp.as_list():
+                    # Ekstrak nama fitur dari string LIME
+                    feature_name = feature.split('=')[0].strip()
+                    if feature_name in feature_importance:
+                        feature_importance[feature_name] += abs(weight)
+                    else:
+                        feature_importance[feature_name] = abs(weight)
+            
+            # Rata-ratakan importance
+            for feature in feature_importance:
+                feature_importance[feature] /= len(lime_explanations)
+            
+            results['feature_importance'] = feature_importance
+            
+        except ImportError:
+            raise ImportError("LIME tidak terinstal. Silakan install dengan: pip install lime")
+        except Exception as e:
+            raise Exception(f"Error dalam menghitung LIME explanations: {str(e)}")
+    
+    return results
+
+def create_forecasting_interpretation_dashboard(interpretation_results, method='shap'):
+    """
+    Membuat dashboard visualisasi untuk hasil interpretasi forecasting
+    
+    Parameters:
+    -----------
+    interpretation_results : dict
+        Hasil dari interpret_forecasting_model()
+    method : str, default='shap'
+        Metode interpretasi yang digunakan
+        
+    Returns:
+    --------
+    matplotlib.figure.Figure
+        Figure yang berisi dashboard interpretasi
+    """
+    
+    if method == 'shap':
+        return create_shap_forecasting_dashboard(interpretation_results)
+    elif method == 'lime':
+        return create_lime_forecasting_dashboard(interpretation_results)
+    else:
+        raise ValueError("Method harus 'shap' atau 'lime'")
+
+def create_shap_forecasting_dashboard(results):
+    """
+    Membuat dashboard SHAP untuk forecasting
+    """
+    fig = plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Feature Importance
+    ax1 = plt.subplot(2, 2, 1)
+    feature_importance = results['feature_importance']
+    features = list(feature_importance.keys())
+    importance = list(feature_importance.values())
+    
+    # Sort by importance
+    sorted_idx = np.argsort(importance)[::-1]
+    features = [features[i] for i in sorted_idx]
+    importance = [importance[i] for i in sorted_idx]
+    
+    ax1.barh(features, importance)
+    ax1.set_xlabel('Mean |SHAP Value|')
+    ax1.set_title('Feature Importance (Forecasting)')
+    ax1.grid(True, alpha=0.3)
+    
+    # Plot 2: SHAP Summary Plot (jika tersedia)
+    ax2 = plt.subplot(2, 2, 2)
+    if 'summary_plot' in results:
+        # Tampilkan summary plot yang sudah dibuat
+        ax2.text(0.5, 0.5, 'Summary plot tersedia di objek results', 
+                ha='center', va='center', transform=ax2.transAxes)
+        ax2.set_title('SHAP Summary Plot')
+    else:
+        # Buat summary plot sederhana
+        shap_values = results['shap_values']
+        X_sample = results['X_sample']
+        feature_names = results['feature_names']
+        
+        # Plot rata-rata absolute SHAP values
+        if len(shap_values.shape) == 2:
+            mean_shap = np.mean(np.abs(shap_values), axis=0)
+        else:
+            mean_shap = np.mean(np.abs(shap_values))
+        
+        ax2.bar(range(len(feature_names)), mean_shap)
+        ax2.set_xticks(range(len(feature_names)))
+        ax2.set_xticklabels(feature_names, rotation=45)
+        ax2.set_ylabel('Mean |SHAP Value|')
+        ax2.set_title('SHAP Feature Impact')
+    
+    # Plot 3: SHAP Values Distribution
+    ax3 = plt.subplot(2, 2, 3)
+    shap_values = results['shap_values']
+    
+    if len(shap_values.shape) == 2:
+        # Flatten SHAP values untuk distribusi
+        flat_shap = shap_values.flatten()
+        ax3.hist(flat_shap, bins=30, alpha=0.7, edgecolor='black')
+        ax3.set_xlabel('SHAP Value')
+        ax3.set_ylabel('Frequency')
+        ax3.set_title('Distribution of SHAP Values')
+        ax3.grid(True, alpha=0.3)
+    else:
+        ax3.text(0.5, 0.5, 'Distribusi SHAP tidak tersedia\nuntuk bentuk data ini', 
+                ha='center', va='center', transform=ax3.transAxes)
+    
+    # Plot 4: Sample Interpretation
+    ax4 = plt.subplot(2, 2, 4)
+    X_sample = results['X_sample']
+    feature_names = results['feature_names']
+    
+    # Tampilkan interpretasi untuk sampel pertama
+    if len(X_sample) > 0:
+        sample_idx = 0
+        sample_features = X_sample[sample_idx]
+        
+        # Buat bar plot untuk nilai fitur sampel
+        ax4.bar(range(len(feature_names)), sample_features)
+        ax4.set_xticks(range(len(feature_names)))
+        ax4.set_xticklabels(feature_names, rotation=45)
+        ax4.set_ylabel('Feature Value')
+        ax4.set_title(f'Sample Features (Index {sample_idx})')
+        ax4.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+def create_lime_forecasting_dashboard(results):
+    """
+    Membuat dashboard LIME untuk forecasting
+    """
+    fig = plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Feature Importance
+    ax1 = plt.subplot(2, 2, 1)
+    feature_importance = results['feature_importance']
+    features = list(feature_importance.keys())
+    importance = list(feature_importance.values())
+    
+    # Sort by importance
+    sorted_idx = np.argsort(importance)[::-1]
+    features = [features[i] for i in sorted_idx]
+    importance = [importance[i] for i in sorted_idx]
+    
+    ax1.barh(features, importance)
+    ax1.set_xlabel('Mean |LIME Weight|')
+    ax1.set_title('Feature Importance (LIME)')
+    ax1.grid(True, alpha=0.3)
+    
+    # Plot 2: LIME Explanation untuk sampel pertama
+    ax2 = plt.subplot(2, 2, 2)
+    lime_explanations = results['lime_explanations']
+    
+    if lime_explanations:
+        first_exp = lime_explanations[0]
+        features, weights = zip(*first_exp.as_list())
+        
+        # Buat horizontal bar plot
+        y_pos = np.arange(len(features))
+        colors = ['red' if w < 0 else 'green' for w in weights]
+        
+        ax2.barh(y_pos, weights, color=colors, alpha=0.7)
+        ax2.set_yticks(y_pos)
+        ax2.set_yticklabels(features)
+        ax2.set_xlabel('LIME Weight')
+        ax2.set_title('LIME Explanation (Sample 0)')
+        ax2.grid(True, alpha=0.3)
+        ax2.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+    
+    # Plot 3: Distribusi bobot LIME
+    ax3 = plt.subplot(2, 2, 3)
+    all_weights = []
+    for exp in lime_explanations:
+        for _, weight in exp.as_list():
+            all_weights.append(weight)
+    
+    ax3.hist(all_weights, bins=20, alpha=0.7, edgecolor='black')
+    ax3.set_xlabel('LIME Weight')
+    ax3.set_ylabel('Frequency')
+    ax3.set_title('Distribution of LIME Weights')
+    ax3.grid(True, alpha=0.3)
+    ax3.axvline(x=0, color='red', linestyle='--', alpha=0.7)
+    
+    # Plot 4: Rata-rata absolute importance per fitur
+    ax4 = plt.subplot(2, 2, 4)
+    feature_importance = results['feature_importance']
+    features = list(feature_importance.keys())
+    importance = list(feature_importance.values())
+    
+    ax4.bar(range(len(features)), importance)
+    ax4.set_xticks(range(len(features)))
+    ax4.set_xticklabels(features, rotation=45)
+    ax4.set_ylabel('Mean |LIME Weight|')
+    ax4.set_title('Average Feature Importance')
+    ax4.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
 def analyze_trend_seasonality_cycle(timeseries, period=None):
     """
     Menganalisis tren, seasonality, dan siklus dalam data timeseries
@@ -522,6 +861,285 @@ def create_features_from_date(df, date_column):
     df_new['is_month_end'] = df_new[date_column].dt.is_month_end.astype(int)
     
     return df_new
+
+def implement_shap_classification(model, X_sample, problem_type='binary', class_names=None, feature_names=None):
+    """
+    Implementasi SHAP untuk model klasifikasi dengan penanganan multi-class
+    
+    Parameters:
+    -----------
+    model : sklearn model
+        Model yang telah dilatih
+    X_sample : pandas.DataFrame
+        Sample data untuk interpretasi
+    problem_type : str, optional
+        'binary' atau 'multiclass'
+    class_names : list, optional
+        Nama kelas untuk klasifikasi
+    feature_names : list, optional
+        Nama fitur
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi SHAP values dan informasi interpretasi
+    """
+    import shap
+    
+    result = {
+        'shap_values': None,
+        'expected_value': None,
+        'explainer': None,
+        'problem_type': problem_type,
+        'class_names': class_names,
+        'feature_names': feature_names or X_sample.columns.tolist()
+    }
+    
+    try:
+        # Tentukan jenis explainer berdasarkan model
+        if hasattr(model, 'tree_'):  # Tree-based models
+            explainer = shap.TreeExplainer(model)
+        else:  # General models
+            explainer = shap.KernelExplainer(model.predict_proba, X_sample)
+        
+        # Hitung SHAP values
+        shap_values = explainer.shap_values(X_sample)
+        
+        # Penanganan untuk berbagai jenis output
+        if problem_type == 'binary':
+            # Binary classification: SHAP values untuk kelas positif
+            if isinstance(shap_values, list) and len(shap_values) == 2:
+                result['shap_values'] = shap_values[1]  # Kelas positif
+                result['expected_value'] = explainer.expected_value[1] if hasattr(explainer, 'expected_value') else None
+            else:
+                result['shap_values'] = shap_values
+                result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
+                
+        elif problem_type == 'multiclass':
+            # Multi-class classification
+            if isinstance(shap_values, list):
+                result['shap_values'] = shap_values  # List of SHAP values untuk setiap kelas
+                result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
+            else:
+                result['shap_values'] = shap_values
+                result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
+        
+        result['explainer'] = explainer
+        result['success'] = True
+        
+    except Exception as e:
+        result['error'] = str(e)
+        result['success'] = False
+        
+    return result
+
+def handle_multiclass_shap(shap_values, predicted_class=None, method='individual'):
+    """
+    Penanganan SHAP values untuk multi-class classification
+    
+    Parameters:
+    -----------
+    shap_values : list or array
+        SHAP values dari model multi-class
+    predicted_class : int, optional
+        Kelas yang diprediksi untuk focus
+    method : str, optional
+        'individual' (fokus pada kelas tertentu) atau 'average' (rata-rata semua kelas)
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi processed SHAP values
+    """
+    result = {}
+    
+    if isinstance(shap_values, list):
+        n_classes = len(shap_values)
+        
+        if method == 'individual' and predicted_class is not None:
+            # Fokus pada kelas yang diprediksi
+            result['shap_values_focused'] = shap_values[predicted_class]
+            result['class_focused'] = predicted_class
+            result['method'] = 'individual'
+            
+        elif method == 'average':
+            # Rata-rata absolute SHAP values untuk semua kelas
+            avg_shap = np.mean([np.abs(values) for values in shap_values], axis=0)
+            result['shap_values_average'] = avg_shap
+            result['method'] = 'average'
+            result['n_classes'] = n_classes
+            
+        else:
+            # Simpan semua SHAP values
+            result['shap_values_all'] = shap_values
+            result['n_classes'] = n_classes
+            result['method'] = 'all'
+            
+    else:
+        result['shap_values'] = shap_values
+        result['method'] = 'single'
+        
+    return result
+
+def implement_lime_classification(model, X_sample, y_sample=None, problem_type='binary', 
+                                class_names=None, feature_names=None, num_features=10):
+    """
+    Implementasi LIME untuk model klasifikasi
+    
+    Parameters:
+    -----------
+    model : sklearn model
+        Model yang telah dilatih
+    X_sample : pandas.DataFrame
+        Sample data untuk interpretasi
+    y_sample : array, optional
+        Target untuk sample data
+    problem_type : str, optional
+        'binary' atau 'multiclass'
+    class_names : list, optional
+        Nama kelas untuk klasifikasi
+    feature_names : list, optional
+        Nama fitur
+    num_features : int, optional
+        Jumlah fitur terpenting yang akan ditampilkan
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi LIME explanations dan informasi interpretasi
+    """
+    try:
+        import lime
+        import lime.lime_tabular
+        
+        result = {
+            'explanations': [],
+            'problem_type': problem_type,
+            'class_names': class_names,
+            'feature_names': feature_names or X_sample.columns.tolist(),
+            'num_features': num_features
+        }
+        
+        # Buat LIME explainer
+        explainer = lime.lime_tabular.LimeTabularExplainer(
+            X_sample.values,
+            feature_names=result['feature_names'],
+            class_names=class_names,
+            mode='classification'
+        )
+        
+        # Fungsi prediksi untuk LIME
+        if problem_type == 'binary':
+            predict_fn = lambda x: model.predict_proba(x)[:, 1]  # Probabilitas kelas positif
+        else:
+            predict_fn = model.predict_proba  # Semua probabilitas untuk multi-class
+        
+        # Generate explanations untuk beberapa sample
+        n_samples = min(5, len(X_sample))  # Maksimal 5 sample
+        
+        for i in range(n_samples):
+            explanation = explainer.explain_instance(
+                X_sample.iloc[i].values,
+                predict_fn,
+                num_features=num_features,
+                top_labels=1 if problem_type == 'binary' else len(class_names)
+            )
+            
+            result['explanations'].append({
+                'sample_index': i,
+                'predicted_class': model.predict(X_sample.iloc[i:i+1])[0],
+                'predicted_proba': model.predict_proba(X_sample.iloc[i:i+1])[0],
+                'explanation': explanation
+            })
+        
+        result['explainer'] = explainer
+        result['predict_fn'] = predict_fn
+        result['success'] = True
+        
+    except Exception as e:
+        result['error'] = str(e)
+        result['success'] = False
+        
+    return result
+
+def detect_model_type(model):
+    """
+    Mendeteksi jenis model (classification, regression, atau forecasting)
+    
+    Parameters:
+    -----------
+    model : sklearn/statsmodels model
+        Model yang akan dideteksi
+        
+    Returns:
+    --------
+    str
+        'classification', 'regression', atau 'forecasting'
+    """
+    # Cek apakah model memiliki classes_ (indikator classification)
+    if hasattr(model, 'classes_'):
+        return 'classification'
+    
+    # Cek apakah model memiliki predict_proba (indikator classification)
+    if hasattr(model, 'predict_proba'):
+        return 'classification'
+    
+    # Cek model forecasting (ARIMA, SARIMA, dsb)
+    model_name = type(model).__name__.lower()
+    forecasting_models = ['arima', 'sarima', 'sarimax', 'holtwinters', 'exponentialsmoothing', 'var', 'vecm']
+    if any(fm in model_name for fm in forecasting_models):
+        return 'forecasting'
+    
+    # Default ke regression
+    return 'regression'
+
+def prepare_forecasting_data_for_interpretation(X_train, X_test, selected_features, sample_idx):
+    """
+    Mempersiapkan data forecasting untuk interpretasi SHAP/LIME
+    
+    Parameters:
+    -----------
+    X_train : pandas.DataFrame
+        Data training
+    X_test : pandas.DataFrame
+        Data testing  
+    selected_features : list
+        Daftar fitur yang dipilih
+    sample_idx : int
+        Indeks sampel yang akan dijelaskan
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi data yang siap untuk interpretasi
+    """
+    try:
+        # Filter data berdasarkan fitur yang dipilih
+        X_train_selected = X_train[selected_features]
+        X_test_selected = X_test[selected_features]
+        
+        # Pastikan sample_idx valid
+        if sample_idx >= len(X_test_selected):
+            sample_idx = len(X_test_selected) - 1
+        
+        # Ambil sampel yang akan dijelaskan
+        sample = X_test_selected.iloc[sample_idx]
+        
+        result = {
+            'X_train': X_train_selected,
+            'X_test': X_test_selected,
+            'sample': sample,
+            'sample_idx': sample_idx,
+            'success': True
+        }
+        
+        return result
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 def validate_data_for_ml(df, target_column=None, feature_columns=None, 
                         max_missing_ratio=0.5, min_samples=10, 

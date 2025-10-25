@@ -1,7 +1,15 @@
 # Aplikasi Analisis Data dan Machine Learning Komprehensif
 
 ## Deskripsi
-Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang dibangun dengan Streamlit. Aplikasi ini memungkinkan pengguna untuk menganalisis data, melakukan preprocessing, melatih model machine learning, dan menginterpretasikan hasil menggunakan nilai SHAP.
+Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang dibangun dengan Streamlit. Aplikasi ini memungkinkan pengguna untuk menganalisis data, melakukan preprocessing, melatih model machine learning, dan menginterpretasikan hasil menggunakan nilai SHAP dan LIME (Local Interpretable Model-agnostic Explanations).
+
+### 🆕 Update Terbaru: LIME Integration
+Aplikasi kini mendukung **LIME (Local Interpretable Model-agnostic Explanations)** untuk interpretasi model:
+- ✅ **LIME untuk Klasifikasi**: Interpretasi lokal untuk semua model klasifikasi
+- ✅ **LIME untuk Regresi**: Visualisasi kontribusi fitur untuk model regresi  
+- ✅ **LIME untuk Forecasting**: Support untuk time series forecasting (ARIMA, LSTM, Prophet, dsb)
+- ✅ **Multi-Algorithm Support**: Bekerja dengan Random Forest, Gradient Boosting, Neural Networks, dan semua model ML
+- ✅ **Interactive Visualizations**: Plot kontribusi fitur interaktif dengan penjelasan detail
 
 ## Fitur Utama
 Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
@@ -54,11 +62,16 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Preset Configurations**: Konfigurasi siap pakai untuk berbagai skenario
 - **Custom Parameter Ranges**: Fleksibilitas definisi rentang parameter
 
-### 7. 🔍 Interpretasi Model dengan SHAP
+### 7. 🔍 Interpretasi Model dengan SHAP & LIME
 - **SHAP Values Analysis**: Visualisasi kontribusi fitur terhadap prediksi
 - **Feature Importance**: Analisis kepentingan fitur global dan lokal
 - **Model Interpretation**: Penjelasan interpretabel untuk hasil model
 - **Prediction Explanation**: Detail kontribusi setiap fitur untuk prediksi individual
+- **LIME Integration**: Local Interpretable Model-agnostic Explanations untuk interpretasi model
+- **Multi-Model Support**: SHAP & LIME untuk klasifikasi, regresi, dan forecasting
+- **Interactive Visualizations**: Plot interaktif untuk interpretasi model
+- **Local & Global Explanations**: Penjelasan lokal per prediksi dan global per model
+- **LIME Workflow**: Langkah-langkah menggunakan LIME dalam alur kerja penggunaan
 
 ### 8. 📈 Time Series Forecasting & Analisis Prediktif
 - **Comprehensive Forecasting Models**:
@@ -155,79 +168,89 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 ## Keunggulan Aplikasi
 Aplikasi ini memiliki beberapa keunggulan dibandingkan tools sejenis:
 
-### 1. **All-in-One Research Platform**
+### 1. **Advanced Model Interpretability with SHAP & LIME**
+- **Dual Interpretation Engine**: Kombinasi SHAP untuk interpretasi global dan LIME untuk interpretasi lokal
+- **Multi-Model Support**: Berfungsi untuk klasifikasi, regresi, dan time series forecasting
+- **Interactive Visualizations**: Plot kontribusi fitur yang interaktif dan informatif
+- **Local Explanations**: Penjelasan detail untuk setiap prediksi individual
+- **Model-Agnostic**: Bekerja dengan semua jenis algoritma machine learning
+- **Compliance Ready**: Interpretasi model untuk kebutuhan audit dan regulatory compliance
+
+### 2. **All-in-One Research Platform**
 - Platform lengkap untuk penelitian berbasis data dari awal hingga akhir
 - Integrasi autentikasi pengguna, unggah data, analisis, modeling, dan reporting
 - Tidak perlu berpindah-pindah tools atau environment
 - Workflow penelitian yang seamless dan terintegrasi
 
-### 2. **AI-Powered Research Recommendations**
+### 3. **AI-Powered Research Recommendations**
 - Rekomendasi jenis penelitian otomatis berbasis karakteristik dataset
 - Saran metodologi dan pendekatan ML yang tepat
 - Referensi jurnal ilmiah dengan impact factor dan DOI
 - Analisis potensi keberhasilan dataset untuk penelitian
 
-### 3. **Advanced Security & User Management**
+### 4. **Advanced Security & User Management**
 - Sistem autentikasi lengkap dengan registrasi dan login
 - Perlindungan captcha untuk keamanan dari bot
 - Manajemen sesi pengguna yang aman dan terenkripsi
 - Support multi-pengguna dengan isolasi data
 
-### 4. **Comprehensive Data Support**
+### 5. **Comprehensive Data Support**
 - Multi-format data: CSV, Excel (XLSX), ZIP (dataset gabungan)
 - Support dataset train/test split dalam format ZIP
 - Deteksi otomatis tipe data, kolom datetime, dan time series
 - Penanganan missing values yang canggih dan otomatis
 
-### 5. **Advanced Feature Engineering & Selection**
+### 6. **Advanced Feature Engineering & Selection**
 - 8+ metode seleksi fitur dengan ensemble capabilities
 - Feature engineering otomatis (polynomial, interaction, binning)
 - Encoding methods lengkap: one-hot, label, target encoding
 - Multiple scaling options dan outlier detection
 
-### 6. **State-of-the-Art ML Algorithms**
+### 7. **State-of-the-Art ML Algorithms**
 - 15+ algoritma klasifikasi dan regresi termasuk XGBoost, LightGBM, CatBoost
 - Neural networks dan deep learning untuk pola kompleks
 - Time series forecasting dengan ARIMA, LSTM, Prophet, VAR
 - Ensemble methods untuk performa optimal
 
-### 7. **Advanced Hyperparameter Optimization**
+### 8. **Advanced Hyperparameter Optimization**
 - 3 metode optimasi parameter: GridSearchCV, RandomizedSearchCV, Bayesian Optimization
 - Smart parameter validation berbasis karakteristik data
 - Preset configurations untuk berbagai skenario (Fast, High Accuracy, Small Dataset)
 - Custom parameter ranges dengan fleksibilitas penuh
 
-### 8. **SHAP Integration & Model Interpretability**
-- Interpretasi model yang mendalam dengan SHAP values
-- Visualisasi kontribusi fitur global dan lokal
-- Prediction explanation untuk setiap instance
+### 9. **SHAP & LIME Integration & Model Interpretability**
+- Interpretasi model yang mendalam dengan SHAP values dan LIME explanations
+- Visualisasi kontribusi fitur global dan lokal untuk semua jenis model
+- Prediction explanation untuk setiap instance dengan detail kontribusi fitur
 - Model interpretability untuk compliance dan audit
+- Local Interpretable Model-agnostic Explanations (LIME) untuk interpretasi yang lebih intuitif
+- Support untuk klasifikasi, regresi, dan time series forecasting
 
-### 9. **Advanced Time Series & Anomaly Detection**
+### 10. **Advanced Time Series & Anomaly Detection**
 - Multiple forecasting algorithms dengan auto-parameter selection
 - Anomaly detection real-time dengan berbagai metode
 - Time series decomposition dan stationarity testing
 - Multi-horizon forecasting dengan confidence intervals
 
-### 10. **Interactive Visualization & Reporting**
+### 11. **Interactive Visualization & Reporting**
 - Visualisasi interaktif dengan zoom, pan, dan hover capabilities
 - Multi-format export: CSV, PDF, PNG, HTML reports
 - Real-time dashboard updates selama analisis
 - Customizable dashboard layouts dan themes
 
-### 11. **Bilingual & Accessibility Support**
+### 12. **Bilingual & Accessibility Support**
 - Dukungan Bahasa Indonesia dan English
 - Interface yang dapat disesuaikan preferensi bahasa
 - Accessibility features untuk pengguna dengan kebutuhan khusus
 - Dokumentasi dan help system bilingual
 
-### 12. **Scalability & Performance**
+### 13. **Scalability & Performance**
 - Optimasi performa untuk dataset besar
 - Parallel processing untuk training dan hyperparameter tuning
 - Memory efficient untuk resource yang terbatas
 - Caching system untuk hasil analisis yang cepat
 
-### 13. **Enhanced Missing Data Handling (NEW)**
+### 14. **Enhanced Missing Data Handling (NEW)**
 - **Advanced Imputation Methods**: Time-weighted interpolation, multiple imputation strategies
 - **Robust Processing**: Handle missing data >30% dengan otomatis
 - **Time Series Aware**: Smart interpolation untuk temporal data
@@ -301,6 +324,16 @@ streamlit run app.py
 - **Smart Validation System**: `validate_data_for_ml()` untuk quality assurance data
 - **Enhanced Error Handling**: Validasi parameter dan error handling yang lebih robust
 
+### 🔍 LIME Model Interpretation (Update Terbaru)
+- **LIME for Classification**: Local Interpretable Model-agnostic Explanations untuk model klasifikasi
+- **LIME for Regression**: Interpretasi lokal untuk model regresi dengan visualisasi kontribusi fitur
+- **LIME for Forecasting**: Support LIME untuk time series forecasting models (ARIMA, LSTM, Prophet, dsb)
+- **Multi-Algorithm Support**: LIME untuk Random Forest, Gradient Boosting, Neural Networks, dan semua model ML
+- **Interactive Visualizations**: Plot kontribusi fitur interaktif dengan penjelasan detail
+- **Feature Importance Local**: Analisis kepentingan fitur untuk prediksi individual
+- **Model-Agnostic**: Bekerja dengan semua jenis model machine learning
+- **Integration with SHAP**: Kombinasi LIME dan SHAP untuk interpretasi komprehensif
+
 ### 🔍 AI-Powered Research Recommendations
 - **Analisis Otomatis Dataset**: Sistem AI yang menganalisis karakteristik dataset dan memberikan rekomendasi jenis penelitian yang sesuai
 - **Rekomendasi Metodologi**: Saran metodologi penelitian berbasis tipe data dan domain penelitian
@@ -353,6 +386,7 @@ streamlit run app.py
 - **LightGBM**: 3.3+ untuk high-performance boosting
 - **CatBoost**: 1.2+ untuk categorical feature handling
 - **SHAP**: 0.42+ untuk model interpretability
+- **LIME**: 0.2.0+ untuk local model interpretability
 - **Plotly**: 5.17+ untuk interactive visualization
 - **Prophet**: 1.1+ untuk time series forecasting
 - **SQLite**: Untuk user database dan session management
@@ -406,12 +440,14 @@ streamlit run app.py
    - Validasi parameter otomatis berbasis karakteristik data
    - Training dengan parallel processing untuk performa optimal
 
-### 7. **Interpretasi Model dengan SHAP**
+### 7. **Interpretasi Model dengan SHAP & LIME**
    - Gunakan tab "Interpretasi Model" untuk analisis mendalam
-   - Visualisasi SHAP values untuk kontribusi fitur global dan lokal
-   - Prediksi explanation untuk setiap instance individual
-   - Feature importance ranking dengan confidence intervals
-   - Export interpretasi untuk reporting dan compliance
+   - Visualisasi SHAP values untuk interpretasi model global
+   - Gunakan LIME untuk interpretasi lokal per prediksi individual
+   - Analisis feature importance global dan lokal
+   - Dapatkan prediction explanation untuk setiap instance
+   - Gunakan interpretasi untuk compliance dan audit
+   - Support untuk klasifikasi, regresi, dan time series forecasting
 
 ### 8. **Time Series Forecasting & Anomaly Detection**
    - Untuk data temporal, gunakan tab "Analisis Time Series":
