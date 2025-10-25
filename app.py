@@ -43,7 +43,8 @@ from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_
                    implement_shap_classification, handle_multiclass_shap,
                    implement_lime_classification, detect_model_type,
                    prepare_forecasting_data_for_interpretation,
-                   interpret_forecasting_model, create_forecasting_interpretation_dashboard)
+                   interpret_forecasting_model, create_forecasting_interpretation_dashboard,
+                   check_model_compatibility)
 from param_presets import get_available_presets, get_preset_params, get_all_presets, save_custom_preset, load_custom_presets, export_preset_to_json, import_preset_from_json, create_preset_summary
 
 try:
