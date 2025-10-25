@@ -862,6 +862,265 @@ def create_features_from_date(df, date_column):
     
     return df_new
 
+def check_model_compatibility(model, method='shap', language='id'):
+    """
+    Mengecek kompatibilitas model dengan metode interpretasi SHAP atau LIME
+    
+    Parameters:
+    -----------
+    model : object
+        Model yang akan dicek kompatibilitasnya
+    method : str, optional
+        Metode interpretasi ('shap' atau 'lime')
+    language : str, optional
+        Bahasa untuk pesan error ('id' atau 'en')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi:
+        - 'compatible': Boolean apakah model kompatibel
+        - 'message': Pesan penjelasan
+        - 'suggestion': Saran alternatif
+        - 'error_type': Tipe error jika tidak kompatibel
+    """
+    
+    # Pesan error dalam berbagai bahasa
+    messages = {
+        'id': {
+            'unsupported_model': "Model ini belum didukung untuk interpretasi {method}.",
+            'ensemble_not_supported': "Model ensemble kompleks belum didukung untuk interpretasi {method}.",
+            'neural_network': "Model neural network memerlukan pendekatan khusus untuk interpretasi.",
+            'deep_learning': "Model deep learning memerlukan library khusus seperti DeepSHAP atau Integrated Gradients.",
+            'clustering': "Model clustering bukan model prediktif dan tidak dapat diinterpretasi dengan {method}.",
+            'dimensionality_reduction': "Model reduksi dimensi bukan model prediktif dan tidak dapat diinterpretasi dengan {method}.",
+            'suggestion': "\n\nSaran:\n",
+            'alternatives': "- Gunakan model yang lebih sederhana (Random Forest, XGBoost, LightGBM)\n",
+            'lime_alternative': "- Cobalah metode LIME jika SHAP tidak didukung\n",
+            'shap_alternative': "- Cobalah metode SHAP jika LIME tidak didukung\n",
+            'library_suggestion': "- Install library tambahan: {library}\n",
+            'expert_help': "- Konsultasikan dengan tim data science untuk pendekatan interpretasi yang sesuai"
+        },
+        'en': {
+            'unsupported_model': "This model is not yet supported for {method} interpretation.",
+            'ensemble_not_supported': "Complex ensemble models are not yet supported for {method} interpretation.",
+            'neural_network': "Neural network models require special approaches for interpretation.",
+            'deep_learning': "Deep learning models require specialized libraries like DeepSHAP or Integrated Gradients.",
+            'clustering': "Clustering models are not predictive models and cannot be interpreted with {method}.",
+            'dimensionality_reduction': "Dimensionality reduction models are not predictive models and cannot be interpreted with {method}.",
+            'suggestion': "\n\nSuggestions:\n",
+            'alternatives': "- Use simpler models (Random Forest, XGBoost, LightGBM)\n",
+            'lime_alternative': "- Try LIME method if SHAP is not supported\n",
+            'shap_alternative': "- Try SHAP method if LIME is not supported\n",
+            'library_suggestion': "- Install additional library: {library}\n",
+            'expert_help': "- Consult with data science team for appropriate interpretation approach"
+        }
+    }
+    
+    lang = messages.get(language, messages['id'])
+    
+    try:
+        # Cek apakah model memiliki method yang diperlukan
+        if not hasattr(model, 'predict'):
+            return {
+                'compatible': False,
+                'message': f"{lang['unsupported_model'].format(method=method.upper())} Model tidak memiliki method 'predict'.",
+                'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
+                'error_type': 'missing_predict_method'
+            }
+        
+        # Dapatkan tipe model
+        model_type = type(model).__name__.lower()
+        module_name = type(model).__module__.lower()
+        
+        # Model yang jelas tidak didukung
+        unsupported_models = [
+            'kmeans', 'dbscan', 'hierarchical', 'agglomerative',  # Clustering
+            'pca', 'tsne', 'umap', 'lda', 'nmf',  # Dimensionality reduction
+            'isolationforest', 'oneclasssvm', 'localoutlierfactor'  # Anomaly detection
+        ]
+        
+        for unsupported in unsupported_models:
+            if unsupported in model_type or unsupported in module_name:
+                if 'cluster' in unsupported:
+                    error_msg = lang['clustering']
+                elif unsupported in ['pca', 'tsne', 'umap', 'lda', 'nmf']:
+                    error_msg = lang['dimensionality_reduction']
+                else:
+                    error_msg = lang['unsupported_model'].format(method=method.upper())
+                    
+                return {
+                    'compatible': False,
+                    'message': error_msg,
+                    'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
+                    'error_type': 'unsupported_model_type'
+                }
+        
+        # Cek untuk neural networks dan deep learning
+        neural_networks = ['mlp', 'neural', 'dense', 'lstm', 'gru', 'cnn', 'rnn']
+        if any(nn in model_type for nn in neural_networks) or 'keras' in module_name or 'torch' in module_name:
+            if method == 'shap':
+                return {
+                    'compatible': False,
+                    'message': lang['deep_learning'] if 'deep' in model_type else lang['neural_network'],
+                    'suggestion': f"{lang['suggestion']}{lang['library_suggestion'].format(library='shap[deep] atau deepexplain')}{lang['expert_help']}",
+                    'error_type': 'neural_network'
+                }
+            else:  # LIME
+                return {
+                    'compatible': True,
+                    'message': f"Model neural network dapat diinterpretasi dengan LIME, namun hasil mungkin terbatas.",
+                    'suggestion': "- Pastikan data input dalam format yang tepat\n- Perhatikan interpretasi secara hati-hati",
+                    'error_type': None
+                }
+        
+        # Cek untuk ensemble kompleks
+        complex_ensembles = ['voting', 'stacking', 'blending']
+        if any(ensemble in model_type for ensemble in complex_ensembles):
+            return {
+                'compatible': False,
+                'message': lang['ensemble_not_supported'].format(method=method.upper()),
+                'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
+                'error_type': 'complex_ensemble'
+            }
+        
+        # Model yang umumnya didukung
+        supported_models = [
+            'randomforest', 'xgb', 'lgbm', 'catboost',  # Tree-based
+            'linear', 'logistic', 'ridge', 'lasso', 'elastic',  # Linear
+            'svm', 'svc', 'svr',  # SVM
+            'knn', 'nearest',  # KNN
+            'decisiontree', 'extratree'  # Tree models
+        ]
+        
+        # Cek apakah model termasuk dalam kategori yang didukung
+        is_supported = any(supported in model_type for supported in supported_models)
+        
+        if is_supported:
+            # Berikan saran berdasarkan metode
+            suggestions = []
+            if method == 'shap' and ('tree' in model_type or 'forest' in model_type or 'xgb' in model_type or 'lgbm' in model_type):
+                suggestions.append("- Gunakan TreeExplainer untuk hasil yang lebih cepat dan akurat")
+            elif method == 'lime':
+                suggestions.append("- Pastikan data dalam format yang dapat diinterpretasi oleh LIME")
+            
+            return {
+                'compatible': True,
+                'message': f"Model {model_type} didukung untuk interpretasi {method.upper()}.",
+                'suggestion': '\n'.join(suggestions) if suggestions else "",
+                'error_type': None
+            }
+        
+        # Default: model tidak dikenali
+        return {
+            'compatible': False,
+            'message': f"{lang['unsupported_model'].format(method=method.upper())} Tipe model: {model_type}",
+            'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['shap_alternative'] if method == 'lime' else lang['lime_alternative']}{lang['expert_help']}",
+            'error_type': 'unknown_model_type'
+        }
+        
+    except Exception as e:
+        return {
+            'compatible': False,
+            'message': f"Error saat mengecek kompatibilitas model: {str(e)}",
+            'suggestion': f"{lang['suggestion']}{lang['expert_help']}",
+            'error_type': 'compatibility_check_error'
+        }
+
+def get_model_interpretation_recommendations(model, language='id'):
+    """
+    Memberikan rekomendasi metode interpretasi yang sesuai untuk model
+    
+    Parameters:
+    -----------
+    model : object
+        Model yang akan direkomendasikan metode interpretasinya
+    language : str, optional
+        Bahasa untuk pesan ('id' atau 'en')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi rekomendasi interpretasi
+    """
+    
+    lang = language if language in ['id', 'en'] else 'id'
+    
+    # Dapatkan tipe model
+    model_type = type(model).__name__.lower()
+    module_name = type(model).__module__.lower()
+    
+    # Rekomendasi berdasarkan tipe model
+    recommendations = {
+        'tree_based': {
+            'primary': 'SHAP (TreeExplainer)',
+            'secondary': 'LIME',
+            'reason': 'Model berbasis pohon sangat cocok dengan SHAP TreeExplainer karena cepat dan akurat',
+            'alternatives': ['Feature Importance', 'Permutation Importance']
+        },
+        'linear': {
+            'primary': 'SHAP (LinearExplainer)',
+            'secondary': 'LIME',
+            'reason': 'Model linear memiliki interpretasi yang sangat baik dengan SHAP LinearExplainer',
+            'alternatives': ['Coefficients', 'Feature Importance']
+        },
+        'neural_network': {
+            'primary': 'LIME',
+            'secondary': 'SHAP (DeepSHAP)',
+            'reason': 'Neural network lebih cocok dengan LIME untuk interpretasi lokal',
+            'alternatives': ['Integrated Gradients', 'Grad-CAM']
+        },
+        'ensemble': {
+            'primary': 'SHAP',
+            'secondary': 'LIME',
+            'reason': 'Ensemble model dapat diinterpretasi dengan SHAP untuk hasil global yang baik',
+            'alternatives': ['Feature Importance', 'Permutation Importance']
+        },
+        'unsupported': {
+            'primary': 'Tidak tersedia',
+            'secondary': 'Tidak tersedia',
+            'reason': 'Model ini tidak cocok untuk interpretasi otomatis',
+            'alternatives': ['Analisis manual', 'Visualisasi data']
+        }
+    }
+    
+    # Kategorikan model
+    if any(tree in model_type for tree in ['randomforest', 'xgb', 'lgbm', 'catboost', 'decisiontree', 'extratree']):
+        category = 'tree_based'
+    elif any(linear in model_type for linear in ['linear', 'logistic', 'ridge', 'lasso', 'elastic']):
+        category = 'linear'
+    elif any(nn in model_type for nn in ['mlp', 'neural', 'dense', 'lstm', 'gru']) or 'keras' in module_name or 'torch' in module_name:
+        category = 'neural_network'
+    elif any(ensemble in model_type for ensemble in ['voting', 'bagging', 'boosting']):
+        category = 'ensemble'
+    elif any(unsupported in model_type for unsupported in ['kmeans', 'pca', 'tsne']):
+        category = 'unsupported'
+    else:
+        category = 'ensemble'  # Default ke ensemble untuk model yang tidak dikenal
+    
+    rec = recommendations[category]
+    
+    if lang == 'id':
+        return {
+            'primary_method': rec['primary'],
+            'secondary_method': rec['secondary'],
+            'reason': rec['reason'],
+            'alternatives': rec['alternatives'],
+            'explanation': f"Model Anda tergolong {category.replace('_', ' ')}. "
+                          f"Metode yang paling direkomendasikan adalah {rec['primary']}. "
+                          f"Alasan: {rec['reason']}"
+        }
+    else:
+        return {
+            'primary_method': rec['primary'],
+            'secondary_method': rec['secondary'],
+            'reason': rec['reason'],
+            'alternatives': rec['alternatives'],
+            'explanation': f"Your model is categorized as {category.replace('_', ' ')}. "
+                          f"The most recommended method is {rec['primary']}. "
+                          f"Reason: {rec['reason']}"
+        }
+
 def implement_shap_classification(model, X_sample, problem_type='binary', class_names=None, feature_names=None):
     """
     Implementasi SHAP untuk model klasifikasi dengan penanganan multi-class

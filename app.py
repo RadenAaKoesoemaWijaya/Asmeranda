@@ -9140,6 +9140,43 @@ with tab5:
                     st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
                 else:
                     with st.spinner("Menghitung nilai SHAP..." if st.session_state.language == 'id' else "Calculating SHAP values..."):
+                        # Cek kompatibilitas model terlebih dahulu
+                        compatibility_check = check_model_compatibility(
+                            st.session_state.model, 
+                            method='shap', 
+                            language=st.session_state.language
+                        )
+                        
+                        if not compatibility_check['compatible']:
+                            st.error(f"❌ {compatibility_check['message']}")
+                            st.warning(f"💡 {compatibility_check['suggestion']}")
+                            
+                            # Tampilkan rekomendasi alternatif
+                            recommendations = get_model_interpretation_recommendations(
+                                st.session_state.model, 
+                                language=st.session_state.language
+                            )
+                            
+                            st.info(f"🎯 {recommendations['explanation']}")
+                            
+                            if recommendations['alternatives']:
+                                st.write("**Alternatif lain:**" if st.session_state.language == 'id' else "**Other alternatives:**")
+                                for alt in recommendations['alternatives']:
+                                    st.write(f"• {alt}")
+                            
+                            # Berikan opsi untuk menggunakan metode lain
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("Coba dengan LIME" if st.session_state.language == 'id' else "Try with LIME"):
+                                    st.session_state.interpretation_method = 'LIME'
+                                    st.rerun()
+                            with col2:
+                                if st.button("Kembali ke menu utama" if st.session_state.language == 'id' else "Back to main menu"):
+                                    st.session_state.page = 'main'
+                                    st.rerun()
+                            
+                            st.stop()
+                        
                         # Persiapkan data untuk SHAP
                         X_sample = st.session_state.X_test[selected_features].sample(min(sample_size, len(st.session_state.X_test)), random_state=42)
                         
@@ -9358,7 +9395,57 @@ with tab5:
                         
                         # Handle case where shap_result indicates failure but wasn't caught by except block
                         if not shap_result.get('success', False):
-                            st.error(f"Error dalam implementasi SHAP klasifikasi: {shap_result.get('error', 'Unknown error')}")
+                            error_msg = shap_result.get('error', 'Unknown error')
+                            st.error(f"❌ Error dalam implementasi SHAP klasifikasi: {error_msg}")
+                            
+                            # Berikan penjelasan yang lebih detail
+                            if st.session_state.language == 'id':
+                                st.warning("""
+                                **Penjelasan Error:**
+                                
+                                Model Anda tidak dapat diinterpretasi menggunakan metode SHAP karena:
+                                
+                                1. **Tipe Model Tidak Didukung**: Model ini mungkin tergolong model yang belum didukung oleh library SHAP
+                                2. **Struktur Model Kompleks**: Model dengan struktur yang terlalu kompleks mungkin memerlukan pendekatan khusus
+                                3. **Library yang Diperlukan**: Mungkin diperlukan library tambahan untuk interpretasi model ini
+                                
+                                **Solusi yang Tersedia:**
+                                """)
+                            else:
+                                st.warning("""
+                                **Error Explanation:**
+                                
+                                Your model cannot be interpreted using the SHAP method because:
+                                
+                                1. **Unsupported Model Type**: This model may be categorized as unsupported by the SHAP library
+                                2. **Complex Model Structure**: Models with overly complex structures may require special approaches
+                                3. **Required Libraries**: Additional libraries may be needed to interpret this model
+                                
+                                **Available Solutions:**
+                                """)
+                            
+                            # Tampilkan rekomendasi alternatif
+                            recommendations = get_model_interpretation_recommendations(
+                                st.session_state.model, 
+                                language=st.session_state.language
+                            )
+                            
+                            st.info(f"🎯 {recommendations['explanation']}")
+                            
+                            # Opsi untuk pengguna
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                if st.button("🔄 Coba dengan LIME" if st.session_state.language == 'id' else "🔄 Try with LIME"):
+                                    st.session_state.interpretation_method = 'LIME'
+                                    st.rerun()
+                            with col2:
+                                if st.button("📊 Lihat Feature Importance" if st.session_state.language == 'id' else "📊 View Feature Importance"):
+                                    st.session_state.page = 'model_evaluation'
+                                    st.rerun()
+                            with col3:
+                                if st.button("🏠 Kembali ke Menu" if st.session_state.language == 'id' else "🏠 Back to Menu"):
+                                    st.session_state.page = 'main'
+                                    st.rerun()
         else:
             st.warning("Model belum tersedia. Silakan latih model terlebih dahulu." if st.session_state.language == 'id' else "Model not available. Please train a model first.")
                         
@@ -9546,6 +9633,40 @@ with tab5:
         st.header("Interpretasi Model dengan SHAP" if st.session_state.language == 'id' else "Model Interpretation with SHAP")
 
         if st.session_state.model is not None:
+            # Cek kompatibilitas model dengan SHAP
+            compatibility_result = check_model_compatibility(st.session_state.model, 'shap')
+            
+            if not compatibility_result['compatible']:
+                st.error(f"❌ {compatibility_result['message']}")
+                st.warning(f"ℹ️ {compatibility_result['suggestion']}")
+                
+                # Tampilkan rekomendasi metode interpretasi alternatif
+                recommendations = get_model_interpretation_recommendations(st.session_state.model)
+                st.info(f"💡 {recommendations['recommendation']}")
+                
+                # Tampilkan alasan secara detail
+                with st.expander("Penjelasan Detail" if st.session_state.language == 'id' else "Detailed Explanation"):
+                    st.write(compatibility_result['reason'])
+                
+                # Tombol aksi untuk pengguna
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("Coba dengan LIME" if st.session_state.language == 'id' else "Try with LIME"):
+                        st.session_state.interpretation_method = "LIME"
+                        st.rerun()
+                with col2:
+                    if st.button("Lihat Feature Importance" if st.session_state.language == 'id' else "View Feature Importance"):
+                        # Redirect ke bagian feature importance
+                        st.session_state.page = "feature_importance"
+                        st.rerun()
+                with col3:
+                    if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                        st.session_state.page = "main"
+                        st.rerun()
+                
+                return  # Hentikan eksekusi lebih lanjut
+            
+            # Jika model kompatibel, lanjutkan dengan SHAP
             try:
                 # Pilih fitur untuk SHAP
                 st.subheader("Konfigurasi SHAP" if st.session_state.language == 'id' else "SHAP Configuration")
@@ -9609,7 +9730,26 @@ with tab5:
                     progress_bar.progress(75)
                     
                 except Exception as e:
-                    st.error(f"Error saat membuat explainer: {str(e)}")
+                    st.error(f"❌ Error saat membuat explainer: {str(e)}")
+                    st.warning(f"ℹ️ {'Model ini mungkin tidak kompatibel dengan SHAP. Silakan coba metode interpretasi lainnya.' if st.session_state.language == 'id' else 'This model may not be compatible with SHAP. Please try other interpretation methods.'}")
+                    
+                    # Berikan saran spesifik berdasarkan jenis error
+                    if "TreeExplainer" in str(e):
+                        st.info(f"💡 {'Model ini bukan model berbasis pohon. Silakan gunakan KernelExplainer atau coba dengan LIME.' if st.session_state.language == 'id' else 'This is not a tree-based model. Please use KernelExplainer or try with LIME.'}")
+                    elif "KernelExplainer" in str(e):
+                        st.info(f"💡 {'KernelExplainer gagal. Model ini mungkin terlalu kompleks. Silakan coba dengan LIME.' if st.session_state.language == 'id' else 'KernelExplainer failed. This model may be too complex. Please try with LIME.'}")
+                    
+                    # Tombol aksi alternatif
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Coba dengan LIME" if st.session_state.language == 'id' else "Try with LIME"):
+                            st.session_state.interpretation_method = "LIME"
+                            st.rerun()
+                    with col2:
+                        if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                            st.session_state.page = "main"
+                            st.rerun()
+                    
                     shap_values_selected = None
                 
                 progress_bar.progress(100)
@@ -9628,7 +9768,8 @@ with tab5:
                         st.pyplot(fig)
                         plt.clf()
                     except Exception as e:
-                        st.warning(f"Gagal membuat Summary Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Summary Plot: {str(e)}")
+                        st.warning(f"⚠️ Gagal membuat Summary Plot: {str(e)}" if st.session_state.language == 'id' else f"⚠️ Failed to create Summary Plot: {str(e)}")
+                        st.info(f"💡 {'Plot ini mungkin gagal karena format data SHAP yang tidak sesuai. Silakan coba metode interpretasi lainnya.' if st.session_state.language == 'id' else 'This plot may fail due to incompatible SHAP data format. Please try other interpretation methods.'}")
                     
                     # 2. Feature Importance Plot
                     st.write("### Feature Importance Plot")
@@ -9639,7 +9780,8 @@ with tab5:
                         st.pyplot(fig)
                         plt.clf()
                     except Exception as e:
-                        st.warning(f"Gagal membuat Feature Importance Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Feature Importance Plot: {str(e)}")
+                        st.warning(f"⚠️ Gagal membuat Feature Importance Plot: {str(e)}" if st.session_state.language == 'id' else f"⚠️ Failed to create Feature Importance Plot: {str(e)}")
+                        st.info(f"💡 {'Plot ini memerlukan format data SHAP tertentu. Jika gagal, fitur importance dapat dilihat dari model langsung.' if st.session_state.language == 'id' else 'This plot requires specific SHAP data format. If it fails, feature importance can be viewed from the model directly.'}")
                     
                     # 3. Dependence Plots untuk fitur teratas
                     st.write("### Dependence Plots")
@@ -9959,6 +10101,40 @@ with tab6:
 
                         # Gunakan fungsi utilitas untuk klasifikasi dan forecasting
                         if st.session_state.problem_type == "Classification":
+                            # Cek kompatibilitas model dengan LIME
+                            compatibility_result = check_model_compatibility(st.session_state.model, 'lime')
+                            
+                            if not compatibility_result['compatible']:
+                                st.error(f"❌ {compatibility_result['message']}")
+                                st.warning(f"ℹ️ {compatibility_result['suggestion']}")
+                                
+                                # Tampilkan rekomendasi metode interpretasi alternatif
+                                recommendations = get_model_interpretation_recommendations(st.session_state.model)
+                                st.info(f"💡 {recommendations['recommendation']}")
+                                
+                                # Tampilkan alasan secara detail
+                                with st.expander("Penjelasan Detail" if st.session_state.language == 'id' else "Detailed Explanation"):
+                                    st.write(compatibility_result['reason'])
+                                
+                                # Tombol aksi untuk pengguna
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    if st.button("Coba dengan SHAP" if st.session_state.language == 'id' else "Try with SHAP"):
+                                        st.session_state.interpretation_method = "SHAP"
+                                        st.rerun()
+                                with col2:
+                                    if st.button("Lihat Feature Importance" if st.session_state.language == 'id' else "View Feature Importance"):
+                                        # Redirect ke bagian feature importance
+                                        st.session_state.page = "feature_importance"
+                                        st.rerun()
+                                with col3:
+                                    if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                                        st.session_state.page = "main"
+                                        st.rerun()
+                                
+                                return  # Hentikan eksekusi lebih lanjut
+                            
+                            # Jika model kompatibel, lanjutkan dengan LIME
                             lime_result = implement_lime_classification(
                                 st.session_state.model,
                                 X_train_selected,
@@ -9993,8 +10169,59 @@ with tab6:
                                 explanation_df = explanation_df.sort_values("Kontribusi", ascending=False)
                                 st.dataframe(explanation_df)
                             else:
-                                st.error(f"Error dalam implementasi LIME klasifikasi: {lime_result['error']}")
+                                st.error(f"❌ Error dalam implementasi LIME klasifikasi: {lime_result['error']}")
+                                st.warning(f"ℹ️ {'LIME gagal menghasilkan interpretasi. Ini bisa terjadi karena model terlalu kompleks atau data tidak sesuai.' if st.session_state.language == 'id' else 'LIME failed to generate interpretation. This may happen because the model is too complex or data is incompatible.'}")
+                                
+                                # Berikan saran spesifik berdasarkan jenis error
+                                if "explainer" in lime_result['error'].lower():
+                                    st.info(f"💡 {'Gagal membuat LIME explainer. Model ini mungkin memiliki struktur yang tidak umum. Silakan coba SHAP.' if st.session_state.language == 'id' else 'Failed to create LIME explainer. This model may have an unusual structure. Please try SHAP.'}")
+                                elif "explanation" in lime_result['error'].lower():
+                                    st.info(f"💡 {'Gagal menghasilkan penjelasan. Model ini mungkin terlalu kompleks untuk LIME. Silakan coba SHAP.' if st.session_state.language == 'id' else 'Failed to generate explanation. This model may be too complex for LIME. Please try SHAP.'}")
+                                
+                                # Tombol aksi alternatif
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if st.button("Coba dengan SHAP" if st.session_state.language == 'id' else "Try with SHAP"):
+                                        st.session_state.interpretation_method = "SHAP"
+                                        st.rerun()
+                                with col2:
+                                    if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                                        st.session_state.page = "main"
+                                        st.rerun()
                         elif st.session_state.problem_type == "Forecasting":
+                            # Cek kompatibilitas model dengan LIME untuk forecasting
+                            compatibility_result = check_model_compatibility(st.session_state.model, 'lime')
+                            
+                            if not compatibility_result['compatible']:
+                                st.error(f"❌ {compatibility_result['message']}")
+                                st.warning(f"ℹ️ {compatibility_result['suggestion']}")
+                                
+                                # Tampilkan rekomendasi metode interpretasi alternatif
+                                recommendations = get_model_interpretation_recommendations(st.session_state.model)
+                                st.info(f"💡 {recommendations['recommendation']}")
+                                
+                                # Tampilkan alasan secara detail
+                                with st.expander("Penjelasan Detail" if st.session_state.language == 'id' else "Detailed Explanation"):
+                                    st.write(compatibility_result['reason'])
+                                
+                                # Tombol aksi untuk pengguna
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    if st.button("Coba dengan SHAP" if st.session_state.language == 'id' else "Try with SHAP"):
+                                        st.session_state.interpretation_method = "SHAP"
+                                        st.rerun()
+                                with col2:
+                                    if st.button("Lihat Feature Importance" if st.session_state.language == 'id' else "View Feature Importance"):
+                                        # Redirect ke bagian feature importance
+                                        st.session_state.page = "feature_importance"
+                                        st.rerun()
+                                with col3:
+                                    if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                                        st.session_state.page = "main"
+                                        st.rerun()
+                                
+                                return  # Hentikan eksekusi lebih lanjut
+                            
                             # Forecasting - gunakan pendekatan khusus
                             try:
                                 # Siapkan data untuk forecasting
@@ -10053,9 +10280,39 @@ with tab6:
                                     High LIME values on lag features indicate that the model heavily relies on recent historical patterns.
                                     """)
                                 else:
-                                    st.error("Tidak dapat menyiapkan data untuk interpretasi LIME forecasting." if st.session_state.language == 'id' else "Could not prepare data for LIME forecasting interpretation.")
+                                    st.error("❌ Tidak dapat menyiapkan data untuk interpretasi LIME forecasting." if st.session_state.language == 'id' else "❌ Could not prepare data for LIME forecasting interpretation.")
+                                    st.warning(f"ℹ️ {'Pastikan data training dan testing tersedia untuk forecasting.' if st.session_state.language == 'id' else 'Ensure training and testing data are available for forecasting.'}")
+                                    
+                                    # Tombol aksi alternatif
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        if st.button("Coba dengan SHAP" if st.session_state.language == 'id' else "Try with SHAP"):
+                                            st.session_state.interpretation_method = "SHAP"
+                                            st.rerun()
+                                    with col2:
+                                        if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                                            st.session_state.page = "main"
+                                            st.rerun()
                             except Exception as e:
-                                st.error(f"Error dalam implementasi LIME forecasting: {str(e)}")
+                                st.error(f"❌ Error dalam implementasi LIME forecasting: {str(e)}")
+                                st.warning(f"ℹ️ {'LIME forecasting gagal. Ini bisa terjadi karena struktur data time series yang kompleks atau model yang tidak umum.' if st.session_state.language == 'id' else 'LIME forecasting failed. This may happen due to complex time series data structure or uncommon model.'}")
+                                
+                                # Berikan saran spesifik berdasarkan jenis error
+                                if "explainer" in str(e).lower():
+                                    st.info(f"💡 {'Gagal membuat LIME explainer untuk data forecasting. Silakan coba SHAP yang lebih cocok untuk time series.' if st.session_state.language == 'id' else 'Failed to create LIME explainer for forecasting data. Please try SHAP which is more suitable for time series.'}")
+                                elif "explain_instance" in str(e).lower():
+                                    st.info(f"💡 {'Gagal menghasilkan penjelasan. Data time series mungkin memiliki struktur yang tidak cocok untuk LIME. Silakan coba SHAP.' if st.session_state.language == 'id' else 'Failed to generate explanation. Time series data may have structure incompatible with LIME. Please try SHAP.'}")
+                                
+                                # Tombol aksi alternatif
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if st.button("Coba dengan SHAP" if st.session_state.language == 'id' else "Try with SHAP"):
+                                        st.session_state.interpretation_method = "SHAP"
+                                        st.rerun()
+                                with col2:
+                                    if st.button("Kembali ke Menu" if st.session_state.language == 'id' else "Back to Menu"):
+                                        st.session_state.page = "main"
+                                        st.rerun()
                         else:
                             # Regresi - gunakan logika lama
                             lime_mode = "regression"
