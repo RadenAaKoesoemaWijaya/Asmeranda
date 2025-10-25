@@ -292,7 +292,7 @@ class TimeSeriesAnomalyDetector:
             'threshold': threshold
         }
     
-    def ensemble_detection(self, data, methods=['isolation_forest', 'statistical'], contamination=0.1):
+    def ensemble_detection(self, data, methods=['isolation_forest', 'statistical'], contamination=0.1, z_threshold=3.0):
         """
         Ensemble anomaly detection combining multiple methods
         
@@ -300,6 +300,7 @@ class TimeSeriesAnomalyDetector:
         - data: pandas Series with datetime index
         - methods: list of detection methods to use
         - contamination: proportion of outliers
+        - z_threshold: Z-score threshold for statistical method
         """
         results = {}
         
@@ -332,7 +333,7 @@ class TimeSeriesAnomalyDetector:
         
         self.models['ensemble'] = {
             'individual_results': results,
-            'combined_anomalies': combined_anomalies
+            'anomalies': combined_anomalies
         }
         
         return {

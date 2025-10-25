@@ -908,7 +908,7 @@ def get_custom_param_inputs(model_name, use_custom_ranges, st_session):
     Args:
         model_name: Name of the model
         use_custom_ranges: Whether custom ranges are enabled
-        st_session: Streamlit session object
+        st_session: Streamlit session object (for language settings)
     
     Returns:
         Dictionary of custom parameter ranges
@@ -922,39 +922,39 @@ def get_custom_param_inputs(model_name, use_custom_ranges, st_session):
     available_presets = get_available_presets(model_name)
     
     if available_presets:
-        st_session.subheader("🎯 Preset Parameter" if st_session.language == 'id' else "🎯 Parameter Presets")
+        st.subheader("🎯 Preset Parameter" if st_session.language == 'id' else "🎯 Parameter Presets")
         
-        col1, col2, col3 = st_session.columns([3, 2, 2])
+        col1, col2, col3 = st.columns([3, 2, 2])
         with col1:
-            selected_preset = st_session.selectbox(
+            selected_preset = st.selectbox(
                 "Pilih preset:" if st_session.language == 'id' else "Select preset:",
                 ["None"] + available_presets,
                 help="Pilih preset parameter yang telah dikonfigurasi sebelumnya" if st_session.language == 'id' else "Select pre-configured parameter preset"
             )
         
         with col2:
-            if st_session.button("Terapkan Preset" if st_session.language == 'id' else "Apply Preset"):
+            if st.button("Terapkan Preset" if st_session.language == 'id' else "Apply Preset"):
                 if selected_preset != "None":
                     preset_params = get_preset_params(model_name, selected_preset)
                     custom_ranges.update(preset_params)
-                    st_session.success(f"Preset '{selected_preset}' diterapkan!" if st_session.language == 'id' else f"Preset '{selected_preset}' applied!")
+                    st.success(f"Preset '{selected_preset}' diterapkan!" if st_session.language == 'id' else f"Preset '{selected_preset}' applied!")
         
         with col3:
-            if st_session.button("Lihat Detail" if st_session.language == 'id' else "View Details"):
+            if st.button("Lihat Detail" if st_session.language == 'id' else "View Details"):
                 if selected_preset != "None":
                     preset_params = get_preset_params(model_name, selected_preset)
                     summary = create_preset_summary(model_name, selected_preset, preset_params)
-                    st_session.markdown(summary)
+                    st.markdown(summary)
         
-        st_session.markdown("---")
+        st.markdown("---")
     
     # Tambahkan fitur impor/ekspor preset
-    with st_session.expander("💾 Impor/Ekspor Preset" if st_session.language == 'id' else "💾 Import/Export Presets"):
-        col1, col2 = st_session.columns(2)
+    with st.expander("💾 Impor/Ekspor Preset" if st_session.language == 'id' else "💾 Import/Export Presets"):
+        col1, col2 = st.columns(2)
         
         with col1:
-            st_session.subheader("Impor Preset" if st_session.language == 'id' else "Import Preset")
-            uploaded_file = st_session.file_uploader(
+            st.subheader("Impor Preset" if st_session.language == 'id' else "Import Preset")
+            uploaded_file = st.file_uploader(
                 "Pilih file JSON preset:" if st_session.language == 'id' else "Choose preset JSON file:",
                 type=['json'],
                 key=f"preset_import_{model_name}"
@@ -962,34 +962,34 @@ def get_custom_param_inputs(model_name, use_custom_ranges, st_session):
             if uploaded_file is not None:
                 try:
                     imported_data = json.load(uploaded_file)
-                    if st_session.button("Impor" if st_session.language == 'id' else "Import"):
+                    if st.button("Impor" if st_session.language == 'id' else "Import"):
                         if all(key in imported_data for key in ["model_type", "preset_name", "parameters"]):
                             custom_ranges.update(imported_data["parameters"])
-                            st_session.success(f"Preset '{imported_data['preset_name']}' berhasil diimpor!" if st_session.language == 'id' else f"Preset '{imported_data['preset_name']}' successfully imported!")
+                            st.success(f"Preset '{imported_data['preset_name']}' berhasil diimpor!" if st_session.language == 'id' else f"Preset '{imported_data['preset_name']}' successfully imported!")
                 except Exception as e:
-                    st_session.error(f"Error mengimpor preset: {str(e)}" if st_session.language == 'id' else f"Error importing preset: {str(e)}")
+                    st.error(f"Error mengimpor preset: {str(e)}" if st_session.language == 'id' else f"Error importing preset: {str(e)}")
         
         with col2:
-            st_session.subheader("Ekspor Preset" if st_session.language == 'id' else "Export Preset")
+            st.subheader("Ekspor Preset" if st_session.language == 'id' else "Export Preset")
             if custom_ranges:
-                preset_name_export = st_session.text_input(
+                preset_name_export = st.text_input(
                     "Nama preset untuk diekspor:" if st_session.language == 'id' else "Preset name to export:",
                     value=f"custom_{model_name.lower()}",
                     key=f"preset_export_name_{model_name}"
                 )
-                if st_session.button("Ekspor ke JSON" if st_session.language == 'id' else "Export to JSON"):
+                if st.button("Ekspor ke JSON" if st_session.language == 'id' else "Export to JSON"):
                     filename = export_preset_to_json(model_name, preset_name_export, custom_ranges)
                     if filename:
                         with open(filename, 'rb') as f:
-                            st_session.download_button(
+                            st.download_button(
                                 label="Unduh File JSON" if st_session.language == 'id' else "Download JSON File",
                                 data=f.read(),
                                 file_name=filename,
                                 mime="application/json"
                             )
-                        st_session.success(f"Preset berhasil diekspor ke {filename}!" if st_session.language == 'id' else f"Preset successfully exported to {filename}!")
+                        st.success(f"Preset berhasil diekspor ke {filename}!" if st_session.language == 'id' else f"Preset successfully exported to {filename}!")
             else:
-                st_session.info("Tidak ada parameter kustom untuk diekspor" if st_session.language == 'id' else "No custom parameters to export")
+                st.info("Tidak ada parameter kustom untuk diekspor" if st_session.language == 'id' else "No custom parameters to export")
 
 def merge_custom_param_ranges(default_param_grid, custom_param_ranges):
     """
