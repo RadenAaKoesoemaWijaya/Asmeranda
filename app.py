@@ -10946,3 +10946,32 @@ def display_forecast_summary(forecast_results, target_column, data):
     except Exception as e:
         st.error(f"Error dalam menampilkan ringkasan: {str(e)}")
         return None
+
+# Footer Copyright - Muncul di setiap halaman
+st.markdown("---")
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f8f9fa;
+        color: #6c757d;
+        text-align: center;
+        padding: 10px 0;
+        font-size: 12px;
+        border-top: 1px solid #dee2e6;
+        z-index: 1000;
+    }
+    </style>
+    <div class="footer">
+        Copyright © 2025 Puskesmas Kepulauan Seribu Utara. All rights reserved.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Tambahkan margin bottom untuk konten agar tidak tertutup footer
+st.markdown("<style>.main { padding-bottom: 60px; }</style>", unsafe_allow_html=True)
