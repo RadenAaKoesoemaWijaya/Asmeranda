@@ -4434,6 +4434,149 @@ with tab3:
             ["None", "StandardScaler", "MinMaxScaler", "RobustScaler"]
         )
 
+        # Outlier detection before scaling
+        detect_outliers = st.checkbox(
+            "Deteksi Outlier Sebelum Scaling" if st.session_state.language == 'id' else "Detect Outliers Before Scaling",
+            value=False,
+            help="Deteksi dan tangani outlier sebelum menerapkan normalisasi" if st.session_state.language == 'id' else "Detect and handle outliers before applying normalization"
+        )
+        
+        if detect_outliers:
+            st.subheader("Deteksi Outlier" if st.session_state.language == 'id' else "Outlier Detection")
+            
+            # Get numeric columns for outlier detection
+            numeric_cols_outlier = X_train.select_dtypes(include=[np.number]).columns
+            
+            if len(numeric_cols_outlier) > 0:
+                # Outlier detection method
+                outlier_method = st.selectbox(
+                    "Metode deteksi outlier:" if st.session_state.language == 'id' else "Outlier detection method:",
+                    ["IQR Method", "Z-Score Method"]
+                )
+                
+                # Parameters for outlier detection
+                if outlier_method == "IQR Method":
+                    iqr_multiplier = st.slider(
+                        "IQR Multiplier:" if st.session_state.language == 'id' else "IQR Multiplier:",
+                        1.0, 3.0, 1.5, 0.1,
+                        help="Semakin tinggi nilai, semakin sedikit outlier yang terdeteksi" if st.session_state.language == 'id' else "Higher values detect fewer outliers"
+                    )
+                else:
+                    z_threshold = st.slider(
+                        "Z-Score Threshold:" if st.session_state.language == 'id' else "Z-Score Threshold:",
+                        2.0, 4.0, 3.0, 0.1,
+                        help="Semakin tinggi nilai, semakin sedikit outlier yang terdeteksi" if st.session_state.language == 'id' else "Higher values detect fewer outliers"
+                    )
+                
+                # Handle outliers method
+                handle_method = st.selectbox(
+                    "Metode penanganan outlier:" if st.session_state.language == 'id' else "Outlier handling method:",
+                    ["Hapus Outlier" if st.session_state.language == 'id' else "Remove Outliers",
+                     "Ganti dengan Batas IQR" if st.session_state.language == 'id' else "Replace with IQR Bounds",
+                     "Ganti dengan Median" if st.session_state.language == 'id' else "Replace with Median"]
+                )
+                
+                if st.button("Deteksi dan Tangani Outlier" if st.session_state.language == 'id' else "Detect and Handle Outliers"):
+                    try:
+                        # Detect outliers
+                        outlier_mask = pd.DataFrame(False, index=X_train.index, columns=numeric_cols_outlier)
+                        outlier_summary = {}
+                        
+                        for col in numeric_cols_outlier:
+                            if outlier_method == "IQR Method":
+                                Q1 = X_train[col].quantile(0.25)
+                                Q3 = X_train[col].quantile(0.75)
+                                IQR = Q3 - Q1
+                                lower_bound = Q1 - iqr_multiplier * IQR
+                                upper_bound = Q3 + iqr_multiplier * IQR
+                                
+                                col_outliers = (X_train[col] < lower_bound) | (X_train[col] > upper_bound)
+                                outlier_mask[col] = col_outliers
+                                
+                                outlier_summary[col] = {
+                                    'count': col_outliers.sum(),
+                                    'percentage': (col_outliers.sum() / len(X_train)) * 100,
+                                    'lower_bound': lower_bound,
+                                    'upper_bound': upper_bound
+                                }
+                            else:  # Z-Score Method
+                                z_scores = np.abs((X_train[col] - X_train[col].mean()) / X_train[col].std())
+                                col_outliers = z_scores > z_threshold
+                                outlier_mask[col] = col_outliers
+                                
+                                outlier_summary[col] = {
+                                    'count': col_outliers.sum(),
+                                    'percentage': (col_outliers.sum() / len(X_train)) * 100,
+                                    'threshold': z_threshold
+                                }
+                        
+                        # Display outlier summary
+                        st.write("**Ringkasan Outlier:**" if st.session_state.language == 'id' else "**Outlier Summary:**")
+                        summary_df = pd.DataFrame(outlier_summary).T
+                        st.dataframe(summary_df)
+                        
+                        # Handle outliers
+                        total_outliers = outlier_mask.any(axis=1).sum()
+                        
+                        if handle_method == "Hapus Outlier" or handle_method == "Remove Outliers":
+                            # Remove rows with outliers
+                            clean_mask = ~outlier_mask.any(axis=1)
+                            X_train = X_train[clean_mask]
+                            y_train = y_train[clean_mask]
+                            st.success(f"Menghapus {total_outliers} baris dengan outlier. Sisa data: {len(X_train)} baris" if st.session_state.language == 'id' else f"Removed {total_outliers} rows with outliers. Remaining data: {len(X_train)} rows")
+                            
+                        elif handle_method == "Ganti dengan Batas IQR" or handle_method == "Replace with IQR Bounds":
+                            # Replace outliers with IQR bounds
+                            for col in numeric_cols_outlier:
+                                Q1 = X_train[col].quantile(0.25)
+                                Q3 = X_train[col].quantile(0.75)
+                                IQR = Q3 - Q1
+                                lower_bound = Q1 - iqr_multiplier * IQR
+                                upper_bound = Q3 + iqr_multiplier * IQR
+                                
+                                X_train.loc[outlier_mask[col], col] = np.clip(
+                                    X_train.loc[outlier_mask[col], col], 
+                                    lower_bound, upper_bound
+                                )
+                            st.success(f"Mengganti {total_outliers} outlier dengan batas IQR" if st.session_state.language == 'id' else f"Replaced {total_outliers} outliers with IQR bounds")
+                            
+                        else:  # Replace with Median
+                            # Replace outliers with median
+                            for col in numeric_cols_outlier:
+                                median_val = X_train[col].median()
+                                X_train.loc[outlier_mask[col], col] = median_val
+                            st.success(f"Mengganti {total_outliers} outlier dengan median" if st.session_state.language == 'id' else f"Replaced {total_outliers} outliers with median")
+                        
+                        # Update X_test with same handling if needed
+                        if handle_method != "Hapus Outlier" and handle_method != "Remove Outliers":
+                            for col in numeric_cols_outlier:
+                                if outlier_method == "IQR Method":
+                                    Q1 = X_test[col].quantile(0.25)
+                                    Q3 = X_test[col].quantile(0.75)
+                                    IQR = Q3 - Q1
+                                    lower_bound = Q1 - iqr_multiplier * IQR
+                                    upper_bound = Q3 + iqr_multiplier * IQR
+                                    
+                                    test_outliers = (X_test[col] < lower_bound) | (X_test[col] > upper_bound)
+                                    if handle_method == "Ganti dengan Batas IQR" or handle_method == "Replace with IQR Bounds":
+                                        X_test.loc[test_outliers, col] = np.clip(
+                                            X_test.loc[test_outliers, col], 
+                                            lower_bound, upper_bound
+                                        )
+                                    else:  # Replace with Median
+                                        X_test.loc[test_outliers, col] = X_test[col].median()
+                                else:  # Z-Score Method
+                                    z_scores = np.abs((X_test[col] - X_test[col].mean()) / X_test[col].std())
+                                    test_outliers = z_scores > z_threshold
+                                    if handle_method == "Ganti dengan Median" or handle_method == "Replace with Median":
+                                        X_test.loc[test_outliers, col] = X_test[col].median()
+                        
+                    except Exception as e:
+                        st.error(f"Error saat deteksi outlier: {str(e)}" if st.session_state.language == 'id' else f"Error during outlier detection: {str(e)}")
+            
+            else:
+                st.warning("Tidak ada fitur numerik untuk deteksi outlier" if st.session_state.language == 'id' else "No numeric features for outlier detection")
+
         if normalization_method != "None":
             from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
             
@@ -4444,6 +4587,11 @@ with tab3:
             elif normalization_method == "RobustScaler":
                 scaler = RobustScaler()
             
+            # Simpan scaler ke session state untuk inverse transform
+            st.session_state.scaler = scaler
+            st.session_state.normalization_method = normalization_method
+            st.session_state.numeric_cols = list(X_train.select_dtypes(include=[np.number]).columns)
+            
             # Fit dan transform hanya pada fitur numerik
             numeric_cols = X_train.select_dtypes(include=[np.number]).columns
             if len(numeric_cols) > 0:
@@ -4452,6 +4600,42 @@ with tab3:
                 
                 st.success(f"Normalisasi {normalization_method} berhasil diterapkan")
                 st.info(f"Fitur numerik yang dinormalisasi: {len(numeric_cols)} fitur")
+                
+                # Tambahkan tombol untuk inverse transform
+                if st.button("Tampilkan Inverse Transform" if st.session_state.language == 'id' else "Show Inverse Transform"):
+                    try:
+                        # Lakukan inverse transform pada data training
+                        X_train_inverse = X_train.copy()
+                        X_test_inverse = X_test.copy()
+                        
+                        if len(numeric_cols) > 0:
+                            X_train_inverse[numeric_cols] = scaler.inverse_transform(X_train[numeric_cols])
+                            X_test_inverse[numeric_cols] = scaler.inverse_transform(X_test[numeric_cols])
+                        
+                        # Tampilkan perbandingan
+                        st.subheader("Perbandingan Data Asli vs Dinormalisasi" if st.session_state.language == 'id' else "Comparison of Original vs Normalized Data")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Setelah Normalisasi:**" if st.session_state.language == 'id' else "**Normalized Data:**")
+                            st.dataframe(X_train[numeric_cols[:5]].head())
+                        with col2:
+                            st.write("**Data Asli (Inverse Transform):**" if st.session_state.language == 'id' else "**Original Data (Inverse Transform):**")
+                            st.dataframe(X_train_inverse[numeric_cols[:5]].head())
+                        
+                        # Tampilkan statistik perbandingan
+                        st.write("**Statistik Perbandingan:**" if st.session_state.language == 'id' else "**Comparison Statistics:**")
+                        comparison_stats = pd.DataFrame({
+                            'Fitur': numeric_cols[:5],
+                            'Mean_Normalized': X_train[numeric_cols[:5]].mean(),
+                            'Mean_Original': X_train_inverse[numeric_cols[:5]].mean(),
+                            'Std_Normalized': X_train[numeric_cols[:5]].std(),
+                            'Std_Original': X_train_inverse[numeric_cols[:5]].std()
+                        })
+                        st.dataframe(comparison_stats)
+                        
+                    except Exception as e:
+                        st.error(f"Error saat inverse transform: {str(e)}" if st.session_state.language == 'id' else f"Error during inverse transform: {str(e)}")
         
         # Handle class imbalance for training data (classification only)
         if st.session_state.problem_type == "Classification" and IMB_AVAILABLE:
@@ -4461,7 +4645,7 @@ with tab3:
             train_counts = pd.Series(y_train).value_counts()
             imbalance_ratio = train_counts.max() / train_counts.min()
             
-            if imbalance_ratio > 1.5:  # Only show if there's significant imbalance
+            if imbalance_ratio > 3.0:  # Only show if there's significant imbalance (ratio > 3:1)
                 st.warning(f"Terdeteksi ketidakseimbangan kelas dengan rasio {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Detected class imbalance with ratio {imbalance_ratio:.2f}")
                 
                 # Imbalance handling options
@@ -4478,6 +4662,15 @@ with tab3:
                 if balance_method != "Tidak ada" and balance_method != "None":
                     with st.spinner("Menerapkan penyeimbangan dataset..." if st.session_state.language == 'id' else "Applying dataset balancing..."):
                         try:
+                            # Validasi minimum samples untuk SMOTE-based methods
+                            if balance_method in ["SMOTE", "SMOTEENN", "SMOTETomek"]:
+                                min_samples_per_class = pd.Series(y_train).value_counts().min()
+                                if min_samples_per_class < 6:
+                                    st.error(f"Error: {balance_method} membutuhkan minimal 6 sampel per kelas. Kelas dengan jumlah terkecil memiliki {min_samples_per_class} sampel." if st.session_state.language == 'id' else 
+                                            f"Error: {balance_method} requires at least 6 samples per class. Smallest class has {min_samples_per_class} samples.")
+                                    st.info("Menggunakan Random Over Sampling sebagai alternatif..." if st.session_state.language == 'id' else "Using Random Over Sampling as alternative...")
+                                    balance_method = "Random Over Sampling"
+                            
                             if balance_method == "Random Over Sampling":
                                 ros = RandomOverSampler(random_state=random_state)
                                 X_train_bal, y_train_bal = ros.fit_resample(X_train, y_train)
@@ -4652,24 +4845,91 @@ with tab3:
                 step=1
             )
             
+            # Cross-validation option
+            use_cv = st.checkbox(
+                "Gunakan Cross-Validation" if st.session_state.language == 'id' else "Use Cross-Validation",
+                value=False,
+                help="Gunakan cross-validation untuk evaluasi yang lebih robust" if st.session_state.language == 'id' else "Use cross-validation for more robust evaluation"
+            )
+            
+            cv_folds = 5
+            if use_cv:
+                cv_folds = st.number_input(
+                    "Jumlah lipatan CV:" if st.session_state.language == 'id' else "Number of CV folds:",
+                    min_value=3,
+                    max_value=10,
+                    value=5,
+                    step=1
+                )
+            
             if st.button("Jalankan SelectKBest" if st.session_state.language == 'id' else "Run SelectKBest"):
                 try:
-                    # Initialize SelectKBest
-                    selector = SelectKBest(score_func=score_func, k=k_features)
-                    
-                    # Fit and transform the training data
-                    X_train_selected = selector.fit_transform(X_train_for_selection, y_train_for_selection)
-                    
-                    # Get selected feature names
-                    selected_mask = selector.get_support()
-                    selected_features = [all_columns[i] for i, selected in enumerate(selected_mask) if selected]
-                    
-                    # Get feature scores
-                    feature_scores = pd.DataFrame({
-                        'Feature': all_columns,
-                        'Score': selector.scores_,
-                        'Selected': selected_mask
-                    }).sort_values('Score', ascending=False)
+                    if use_cv:
+                        # Use cross-validation for more robust feature selection
+                        from sklearn.model_selection import cross_val_score
+                        
+                        # Get scores for each feature individually using CV
+                        cv_scores = []
+                        for i, feature in enumerate(all_columns):
+                            X_single = X_train_for_selection[:, i].reshape(-1, 1)
+                            if problem_type == "Regression":
+                                from sklearn.ensemble import RandomForestRegressor
+                                model = RandomForestRegressor(n_estimators=50, random_state=42)
+                                scores = cross_val_score(model, X_single, y_train_for_selection, 
+                                                       cv=cv_folds, scoring='neg_mean_squared_error')
+                                score = -np.mean(scores)  # Convert to positive (lower is better)
+                            else:
+                                from sklearn.ensemble import RandomForestClassifier
+                                model = RandomForestClassifier(n_estimators=50, random_state=42)
+                                scores = cross_val_score(model, X_single, y_train_for_selection, 
+                                                       cv=cv_folds, scoring='accuracy')
+                                score = np.mean(scores)  # Higher is better
+                            
+                            cv_scores.append(score)
+                        
+                        # Select top k features based on CV scores
+                        # For regression: lower MSE is better, for classification: higher accuracy is better
+                        if problem_type == "Regression":
+                            top_indices = np.argsort(cv_scores)[:k_features]  # Take lowest scores (best MSE)
+                        else:
+                            top_indices = np.argsort(cv_scores)[-k_features:]  # Take highest scores (best accuracy)
+                        
+                        selected_mask = np.zeros(len(all_columns), dtype=bool)
+                        selected_mask[top_indices] = True
+                        selected_features = [all_columns[i] for i in top_indices]
+                        
+                        # Create feature scores dataframe
+                        feature_scores = pd.DataFrame({
+                            'Feature': all_columns,
+                            'Score': cv_scores,
+                            'Selected': selected_mask
+                        })
+                        
+                        if problem_type == "Regression":
+                            feature_scores = feature_scores.sort_values('Score', ascending=True)  # Lower MSE is better
+                        else:
+                            feature_scores = feature_scores.sort_values('Score', ascending=False)  # Higher accuracy is better
+                        
+                        # Apply selection to training data
+                        X_train_selected = X_train_for_selection[:, selected_mask]
+                        
+                    else:
+                        # Original SelectKBest without cross-validation
+                        selector = SelectKBest(score_func=score_func, k=k_features)
+                        
+                        # Fit and transform the training data
+                        X_train_selected = selector.fit_transform(X_train_for_selection, y_train_for_selection)
+                        
+                        # Get selected feature names
+                        selected_mask = selector.get_support()
+                        selected_features = [all_columns[i] for i, selected in enumerate(selected_mask) if selected]
+                        
+                        # Get feature scores
+                        feature_scores = pd.DataFrame({
+                            'Feature': all_columns,
+                            'Score': selector.scores_,
+                            'Selected': selected_mask
+                        }).sort_values('Score', ascending=False)
                     
                     # Display results
                     st.success("SelectKBest selesai!" if st.session_state.language == 'id' else "SelectKBest completed!")
@@ -5471,7 +5731,7 @@ with tab3:
                         "Random Forest Importance"
                     ], key="ensemble_method1_stage2")
                     method2_stage2 = st.selectbox("Metode kedua (tahap 2):" if st.session_state.language == 'id' else "Second method (stage 2):", [
-                        "Random Forest Importance"
+                        "Random Forest Importance",
                         "Mutual Information",
                         "Pearson Correlation",
                         "Recursive Feature Elimination (RFE)",
