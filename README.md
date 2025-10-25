@@ -38,7 +38,12 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Feature Selection**: 8 metode seleksi fitur (Manual, MI, Pearson, RFE, LASSO, GB, RF, Ensemble)
 - **Encoding Methods**: One-hot encoding, label encoding, target encoding
 - **Scaling Options**: StandardScaler, MinMaxScaler, RobustScaler, Normalizer
-- **Missing Value Handling**: Mean, median, mode, forward/backward fill, interpolation
+- **Advanced Missing Value Handling**: 
+  - Mean, median, mode, forward/backward fill, interpolation
+  - **NEW**: Time-weighted interpolation untuk data time series
+  - **NEW**: Multiple imputation strategies (auto, drop, impute)
+  - **NEW**: Robust handling untuk missing data >30%
+  - **NEW**: Smart detection dan handling untuk short time series
 - **Outlier Detection**: IQR, Z-score, Isolation Forest untuk deteksi outlier
 
 ### 6. 🛠️ Feature Engineering & Pelatihan Model
@@ -57,24 +62,43 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 
 ### 8. 📈 Time Series Forecasting & Analisis Prediktif
 - **Comprehensive Forecasting Models**:
-  - **ARIMA/SARIMA**: Model statistik klasik untuk time series
+  - **ARIMA/SARIMA**: Model statistik klasik untuk time series dengan **NEW**: robust handling untuk missing data
   - **Exponential Smoothing**: Holt-Winters untuk data dengan tren dan musiman
-  - **LSTM**: Deep learning untuk prediksi kompleks jangka panjang
-  - **Random Forest & Gradient Boosting**: Ensemble learning untuk forecasting
+  - **LSTM**: Deep learning untuk prediksi kompleks jangka panjang dengan **NEW**: enhanced missing data imputation
+  - **Random Forest & Gradient Boosting**: Ensemble learning untuk forecasting dengan **NEW**: improved data validation
   - **Linear Regression**: Baseline untuk perbandingan performa
+  - **NEW**: Prophet Integration untuk forecasting dengan komponen tren dan musiman
 
 - **Advanced Time Series Analysis**:
   - **Stationarity Testing**: Augmented Dickey-Fuller test otomatis
   - **Decomposition Analysis**: Analisis tren, musiman, dan komponen siklis
   - **ACF/PACF Analysis**: Plot autokorelasi untuk identifikasi order
   - **Seasonal Detection**: Deteksi otomatis pola musiman
+  - **NEW**: VAR Models untuk multivariate time series
+
+- **Enhanced Missing Data Handling**:
+  - **NEW**: Time-weighted interpolation untuk time series dengan missing values
+  - **NEW**: Smart handling untuk short time series (< 10 data points)
+  - **NEW**: Multiple imputation strategies dengan validasi otomatis
+  - **NEW**: Robust processing untuk high percentage missing data (>30%)
 
 - **Forecasting Evaluation**: MAE, MSE, RMSE, MAPE, R² dengan confidence intervals
 - **Multi-horizon Forecasting**: Prediksi multi-step ke depan
 - **External Features**: Support fitur eksternal untuk forecasting
 
 ### 9. ⚠️ Deteksi Anomali Time Series
-- **Multiple Algorithms**: Isolation Forest, One-Class SVM, Statistical (Z-Score), Ensemble
+- **Multiple Algorithms**: 
+  - **Isolation Forest**: Dengan **NEW**: robust missing data handling
+  - **One-Class SVM**: Dengan **NEW**: enhanced feature engineering untuk missing values
+  - **Statistical (Z-Score)**: Dengan **NEW**: improved statistical calculations
+  - **LSTM Autoencoder**: Deep learning untuk deteksi kompleks dengan **NEW**: missing data imputation
+  - **Prophet-based Detection**: **NEW**: Anomali detection menggunakan Prophet decomposition
+  - **Ensemble Methods**: Kombinasi multiple algorithms untuk hasil optimal
+- **Enhanced Missing Data Support**:
+  - **NEW**: Semua algoritma mendukung data dengan missing values
+  - **NEW**: Flexible fill methods (auto, drop, impute, interpolation)
+  - **NEW**: Time-aware interpolation untuk time series data
+  - **NEW**: Robust handling untuk high missing data percentages
 - **Real-time Detection**: Deteksi anomali real-time pada data streaming
 - **Configurable Parameters**: Threshold adjustment dan parameter kontrol
 - **Comparative Analysis**: Perbandingan performa antar metode deteksi
@@ -119,12 +143,14 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - Neural Network Regressor
 
 ### Time Series Forecasting
-- **ARIMA/SARIMA**: Untuk data dengan pola musiman
+- **ARIMA/SARIMA**: Untuk data dengan pola musiman dengan **NEW**: robust missing data handling
 - **Exponential Smoothing (Holt-Winters)**: Untuk data dengan tren dan musiman
-- **LSTM**: Deep learning untuk prediksi kompleks
-- **Random Forest Regressor**: Untuk data time series dengan fitur eksternal
+- **LSTM**: Deep learning untuk prediksi kompleks dengan **NEW**: enhanced missing data imputation
+- **Random Forest Regressor**: Untuk data time series dengan fitur eksternal dengan **NEW**: improved data validation
 - **Gradient Boosting**: Untuk forecasting non-linear kompleks
 - **Linear Regression**: Baseline untuk perbandingan performa
+- **Prophet**: Facebook Prophet untuk forecasting dengan komponen tren dan musiman
+- **VAR**: Vector Autoregression untuk multivariate time series
 
 ## Keunggulan Aplikasi
 Aplikasi ini memiliki beberapa keunggulan dibandingkan tools sejenis:
@@ -201,6 +227,15 @@ Aplikasi ini memiliki beberapa keunggulan dibandingkan tools sejenis:
 - Memory efficient untuk resource yang terbatas
 - Caching system untuk hasil analisis yang cepat
 
+### 13. **Enhanced Missing Data Handling (NEW)**
+- **Advanced Imputation Methods**: Time-weighted interpolation, multiple imputation strategies
+- **Robust Processing**: Handle missing data >30% dengan otomatis
+- **Time Series Aware**: Smart interpolation untuk temporal data
+- **Flexible Strategies**: Auto, drop, impute, atau custom handling
+- **Validation System**: `validate_data_for_ml()` untuk data quality assurance
+- **Short Series Support**: Special handling untuk time series pendek (<10 data points)
+- **Cross-Method Consistency**: Missing data handling konsisten di semua algoritma
+
 ## Cara Menjalankan Aplikasi
 1. Pastikan semua persyaratan telah terpenuhi dengan menjalankan:
 
@@ -218,6 +253,10 @@ streamlit run app.py
 ├── app.py                 # File utama aplikasi Streamlit (5000+ baris)
 ├── requirements.txt       # Daftar dependensi Python
 ├── README.md              # File dokumentasi ini
+├── test_missing_data_fixes_fixed.py  # **NEW**: Test script untuk missing data handling
+├── utils.py               # **UPDATED**: Fungsi utilitas dengan enhanced missing data handling
+├── forecasting_utils.py   # **UPDATED**: Forecasting dengan robust missing data support
+├── anomaly_detection_utils.py  # **UPDATED**: Anomaly detection dengan missing data handling
 ├── 📁 assets/               # Folder untuk assets
 │   ├── 📁 images/           # Folder untuk gambar dan ikon
 │   ├── 📁 styles/           # Folder untuk styling CSS
@@ -252,6 +291,15 @@ streamlit run app.py
 - `DFI/`, `KIMIA DARAH/`, `PROLANIS/` - Folder dataset contoh
 
 ## Fitur Baru & Update Terbaru
+
+### 🆕 Enhanced Missing Data Handling (Update Terbaru)
+- **Time-Weighted Interpolation**: Interpolasi cerdas untuk data time series dengan missing values
+- **Multiple Imputation Strategies**: Opsi auto, drop, impute dengan validasi otomatis
+- **Robust High Missing Data Processing**: Handle missing data >30% dengan algoritma adaptif
+- **Short Time Series Support**: Special handling untuk time series pendek (<10 data points)
+- **Cross-Algorithm Consistency**: Missing data handling konsisten di semua metode ML dan forecasting
+- **Smart Validation System**: `validate_data_for_ml()` untuk quality assurance data
+- **Enhanced Error Handling**: Validasi parameter dan error handling yang lebih robust
 
 ### 🔍 AI-Powered Research Recommendations
 - **Analisis Otomatis Dataset**: Sistem AI yang menganalisis karakteristik dataset dan memberikan rekomendasi jenis penelitian yang sesuai
@@ -408,6 +456,26 @@ A: Pastikan Python 3.8+ terinstall dan semua dependencies terinstall dengan `pip
 
 **Q: Dataset besar membuat aplikasi lambat?**
 A: Gunakan fitur sampling untuk EDA, dan processing penuh hanya untuk modeling. Pertimbangkan untuk upgrade RAM ke 16GB+
+
+**Q: Bagaimana menangani missing data yang tinggi (>30%)?**
+A: Gunakan fitur **Enhanced Missing Data Handling** yang baru:
+- Pilih strategi "auto" untuk handling otomatis
+- Gunakan "impute" dengan time-weighted interpolation untuk time series
+- Gunakan "drop" jika missing data terlalu tinggi
+- Sistem akan memberikan warning dan rekomendasi otomatis
+
+**Q: Time series pendek (<10 data points) error?**
+A: Fitur baru **Short Time Series Support** secara otomatis akan:
+- Gunakan interpolasi yang sesuai untuk data pendek
+- Berikan warning tentang keterbatasan prediksi
+- Sarankan metode yang tepat untuk dataset kecil
+- Validasi parameter secara otomatis
+
+**Q: Error "time-weighted interpolation requires DatetimeIndex"?**
+A: Pastikan data time series Anda memiliki datetime column yang benar:
+- Format tanggal harus konsisten
+- Gunakan fungsi validasi data sebelum processing
+- Sistem akan otomatis konversi jika format sesuai
 
 **Q: Model training gagal atau error?**
 A: Periksa kualitas data (missing values, outliers), pastikan target variable sesuai, dan coba gunakan preset parameter default
