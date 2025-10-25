@@ -9355,8 +9355,10 @@ with tab5:
                         
                         If using One-Hot Encoding, categorical features will be split into multiple binary columns.
                         """)
-            else:
-                st.error(f"Error dalam implementasi SHAP klasifikasi: {shap_result['error']}")
+                        
+                        # Handle case where shap_result indicates failure but wasn't caught by except block
+                        if not shap_result.get('success', False):
+                            st.error(f"Error dalam implementasi SHAP klasifikasi: {shap_result.get('error', 'Unknown error')}")
         else:
             st.warning("Model belum tersedia. Silakan latih model terlebih dahulu." if st.session_state.language == 'id' else "Model not available. Please train a model first.")
                         
