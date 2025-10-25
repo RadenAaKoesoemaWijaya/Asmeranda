@@ -9474,7 +9474,7 @@ with tab5:
             st.subheader("Pemilihan Fitur untuk Analisis SHAP" if st.session_state.language == 'id' else "Feature Selection for SHAP Analysis")
             
             # Pilih fitur untuk analisis SHAP
-            feature_names = list(st.session_state.X.columns)
+            feature_names = st.session_state.X_train.columns.tolist()
             selected_features = st.multiselect(
                 "Pilih fitur untuk analisis SHAP:" if st.session_state.language == 'id' else "Select features for SHAP analysis:",
                 options=feature_names,
@@ -9484,7 +9484,7 @@ with tab5:
             # Jumlah sampel untuk analisis SHAP
             sample_size = st.slider(
                 "Jumlah sampel untuk analisis SHAP:" if st.session_state.language == 'id' else "Number of samples for SHAP analysis:",
-                min_value=10, max_value=min(100, len(st.session_state.X)), value=50
+                min_value=10, max_value=min(100, len(st.session_state.X_train)), value=50
             )
             
             if st.button("Generate SHAP Values" if st.session_state.language == 'id' else "Generate SHAP Values"):
@@ -9494,7 +9494,7 @@ with tab5:
                     with st.spinner("Menghitung nilai SHAP..." if st.session_state.language == 'id' else "Calculating SHAP values..."):
                         try:
                             # Persiapkan data untuk SHAP
-                            X_sample = st.session_state.X[selected_features].sample(min(sample_size, len(st.session_state.X)), random_state=42)
+                            X_sample = st.session_state.X_train[selected_features].sample(min(sample_size, len(st.session_state.X_train)), random_state=42)
                             
                             # Handle categorical features with one-hot encoding
                             categorical_features = X_sample.select_dtypes(include=['object', 'category']).columns.tolist()
