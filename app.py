@@ -6826,9 +6826,9 @@ with tab4:
             
             if optimization_method in ["GridSearchCV", "RandomizedSearchCV"]:
                 use_custom_ranges = st.checkbox(
-                    "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
+                    "Gunakan rentang parameter kustom (Klasifikasi)" if st.session_state.language == 'id' else "Use custom parameter ranges (Classification)",
                     value=False,
-                    help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges",
+                    help="Aktifkan untuk menentukan rentang parameter sendiri untuk model klasifikasi" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges for classification models",
                     key="classification_custom_ranges"
                 )
                 
@@ -7518,9 +7518,9 @@ with tab4:
                 
                 if optimization_method in ["GridSearchCV", "RandomizedSearchCV"]:
                     use_custom_ranges = st.checkbox(
-                        "Gunakan rentang parameter kustom" if st.session_state.language == 'id' else "Use custom parameter ranges",
+                        "Gunakan rentang parameter kustom (Regresi)" if st.session_state.language == 'id' else "Use custom parameter ranges (Regression)",
                         value=False,
-                        help="Aktifkan untuk menentukan rentang parameter sendiri" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges",
+                        help="Aktifkan untuk menentukan rentang parameter sendiri untuk model regresi" if st.session_state.language == 'id' else "Enable to specify custom parameter ranges for regression models",
                         key="regression_custom_ranges"
                     )
                     
