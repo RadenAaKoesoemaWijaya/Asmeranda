@@ -42,7 +42,12 @@ from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_
                    implement_lime_classification, detect_model_type,
                    prepare_forecasting_data_for_interpretation,
                    interpret_forecasting_model, create_forecasting_interpretation_dashboard,
-                   check_model_compatibility)
+                   check_model_compatibility, create_shap_visualization)
+from priority2_functions import improved_data_preprocessing_for_interpretation, create_interpretation_report
+from priority3_functions import (InterpretationCache, optimized_shap_for_large_dataset, 
+                               optimized_lime_for_large_dataset, batch_interpretation,
+                               create_interactive_shap_plot, create_interactive_lime_plot,
+                               get_interpretation_performance_stats, interpretation_cache)
 from param_presets import get_available_presets, get_preset_params, get_all_presets, save_custom_preset, load_custom_presets, export_preset_to_json, import_preset_from_json, create_preset_summary
 
 try:
@@ -8985,15 +8990,57 @@ with tab5:
                 min_value=10, max_value=min(100, len(st.session_state.X_test)), value=50
             )
             
+            # Priority 3: Optimization Options
+            with st.expander("⚡ Opsi Optimasi (Priority 3)" if st.session_state.language == 'id' else "⚡ Optimization Options (Priority 3)"):
+                use_optimization = st.checkbox(
+                    "Gunakan optimasi untuk dataset besar" if st.session_state.language == 'id' else "Use optimization for large datasets",
+                    value=len(st.session_state.X_test) > 1000
+                )
+                
+                if use_optimization:
+                    max_samples_opt = st.slider(
+                        "Maksimal sampel (optimasi):" if st.session_state.language == 'id' else "Max samples (optimization):",
+                        min_value=100, max_value=min(2000, len(st.session_state.X_test)), 
+                        value=min(1000, len(st.session_state.X_test))
+                    )
+                    
+                    background_samples_opt = st.slider(
+                        "Background samples:" if st.session_state.language == 'id' else "Background samples:",
+                        min_value=50, max_value=500, value=100
+                    )
+                    
+                    use_cache = st.checkbox(
+                        "Gunakan cache untuk hasil" if st.session_state.language == 'id' else "Use cache for results",
+                        value=True
+                    )
+                    
+                    use_interactive = st.checkbox(
+                        "Visualisasi interaktif" if st.session_state.language == 'id' else "Interactive visualization",
+                        value=True
+                    )
+                else:
+                    max_samples_opt = sample_size
+                    background_samples_opt = None
+                    use_cache = False
+                    use_interactive = False
+            
             if st.button("Generate SHAP Values" if st.session_state.language == 'id' else "Generate SHAP Values"):
                 if not selected_features:
                     st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
                 else:
-                    with st.spinner("Menghitung nilai SHAP..." if st.session_state.language == 'id' else "Calculating SHAP values..."):
-                        # Cek kompatibilitas model terlebih dahulu
-                        compatibility_check = check_model_compatibility(
+                    # Cek kompatibilitas model terlebih dahulu
+                    compatibility_check = check_model_compatibility(
+                        st.session_state.model, 
+                        method='shap', 
+                        language=st.session_state.language
+                    )
+                    if not compatibility_check['compatible']:
+                        st.error(f"❌ {compatibility_check['message']}")
+                        st.warning(f"💡 {compatibility_check['suggestion']}")
+                        
+                        # Tampilkan rekomendasi alternatif
+                        recommendations = get_model_interpretation_recommendations(
                             st.session_state.model, 
-                            method='shap', 
                             language=st.session_state.language
                         )
                         
@@ -9052,176 +9099,147 @@ with tab5:
                                     st.error(f"Error saat mengkonversi kolom {col} ke numerik: {str(e)}")
                         
                         try:
-                            # Gunakan fungsi implementasi SHAP untuk klasifikasi
+                            # Gunakan fungsi implementasi SHAP yang diperbaiki
                             shap_result = implement_shap_classification(
-                                st.session_state.model, 
-                                X_sample, 
-                                st.session_state.X_train[selected_features],
-                                st.session_state.language
+                                model=st.session_state.model, 
+                                X_sample=X_sample, 
+                                X_train=st.session_state.X_train[selected_features],
+                                language=st.session_state.language
                             )
                         except Exception as e:
                             st.error(f"Error dalam implementasi SHAP klasifikasi: {str(e)}")
                             shap_result = {'success': False, 'error': str(e), 'shap_values': None, 'explainer': None}
                         
                         if shap_result['success'] and shap_result.get('shap_values') is not None:
-                            explainer = shap_result['explainer']
-                            shap_values = shap_result['shap_values']
-                            shap_values_selected = None  # Initialize variable
-                            
-                            # Pilih kelas untuk visualisasi
-                            if shap_values is not None:
-                                if isinstance(shap_values, list) and len(shap_values) > 1:
-                                    st.subheader("Pilih Kelas untuk Visualisasi SHAP" if st.session_state.language == 'id' else "Select Class for SHAP Visualization")
-                                    if hasattr(st.session_state.model, 'classes_'):
-                                        class_names = st.session_state.model.classes_
-                                        class_idx = st.selectbox(
-                                            "Pilih kelas:" if st.session_state.language == 'id' else "Select class:",
-                                            options=range(len(class_names)),
-                                            format_func=lambda i: f"{class_names[i]}"
-                                        )
-                                        shap_values_selected = shap_values[class_idx]
-                                        st.success(f"Menampilkan nilai SHAP untuk kelas: {class_names[class_idx]}" if st.session_state.language == 'id' else 
-                                                f"Displaying SHAP values for class: {class_names[class_idx]}")
-                                    else:
-                                        class_idx = st.selectbox(
-                                            "Pilih indeks kelas:" if st.session_state.language == 'id' else "Select class index:",
-                                            options=range(len(shap_values))
-                                        )
-                                        shap_values_selected = shap_values[class_idx]
-                                        st.success(f"Menampilkan nilai SHAP untuk indeks kelas: {class_idx}" if st.session_state.language == 'id' else 
-                                                f"Displaying SHAP values for class index: {class_idx}")
-                                else:
-                                    # Handle case where shap_values might be a DataFrame or numpy array
-                                    if isinstance(shap_values, list):
-                                        shap_values_selected = shap_values[0] if len(shap_values) > 0 else shap_values
-                                    else:
-                                        shap_values_selected = shap_values
-                            else:
-                                st.error("SHAP values tidak tersedia" if st.session_state.language == 'id' else "SHAP values not available")
-                            
-                            # Validasi bahwa shap_values_selected tersedia
-                            if shap_values_selected is None:
-                                st.error("SHAP values tidak tersedia untuk visualisasi" if st.session_state.language == 'id' else "SHAP values not available for visualization")
-                                # Gunakan continue untuk skip ke iterasi berikutnya atau break untuk keluar dari loop
-                                # Karena ini di luar fungsi, kita tidak bisa menggunakan return
-                                st.stop()  # Menghentikan eksekusi Streamlit
-                            
-                            # Visualisasi SHAP
-                            st.subheader("Visualisasi SHAP" if st.session_state.language == 'id' else "SHAP Visualizations")
-                            
-                            # 1. Summary Plot
-                            st.write("### Summary Plot")
-                            try:
-                                fig, ax = plt.subplots(figsize=(10, 8))
-                                shap.summary_plot(shap_values_selected, X_sample, show=False)
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                plt.clf()
-                            except Exception as e:
-                                st.warning(f"Gagal membuat Summary Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Summary Plot: {str(e)}")
-                            
-                            # 2. Feature Importance Plot
-                            st.write("### Feature Importance Plot")
-                            try:
-                                fig, ax = plt.subplots(figsize=(10, 6))
-                                shap.summary_plot(shap_values_selected, X_sample, plot_type="bar", show=False)
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                plt.clf()
-                            except Exception as e:
-                                st.warning(f"Gagal membuat Feature Importance Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Feature Importance Plot: {str(e)}")
-                            
-                            # 3. Dependence Plots untuk fitur teratas
-                            st.write("### Dependence Plots")
-                            
-                            # Hitung rata-rata nilai absolut SHAP untuk setiap fitur
-                            if isinstance(shap_values_selected, list):
-                                # Untuk multi-output, ambil output pertama
-                                shap_arr = np.array(shap_values_selected[0], dtype=float)
-                                feature_importance = np.abs(shap_arr).mean(0)
-                            else:
-                                shap_arr = np.array(shap_values_selected, dtype=float)
-                                feature_importance = np.abs(shap_arr).mean(0)
-                            
-                            # Dapatkan indeks fitur terurut berdasarkan kepentingan
-                            top_indices = feature_importance.argsort()[-5:][::-1]
-                            
-                            # Buat dependence plot untuk 5 fitur teratas
-                            for idx in top_indices:
-                                if idx < len(X_sample.columns):  # Pastikan indeks valid
-                                    try:
-                                        feature_name = X_sample.columns[idx]
-                                        fig, ax = plt.subplots(figsize=(10, 6))
-                                        shap.dependence_plot(idx, shap_values_selected, X_sample, show=False, ax=ax)
-                                        plt.title(f"Dependence Plot for {feature_name}")
-                                        plt.tight_layout()
-                                        st.pyplot(fig)
-                                        plt.clf()
-                                    except Exception as e:
-                                        st.warning(f"Gagal membuat Dependence Plot untuk {feature_name}: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Dependence Plot for {feature_name}: {str(e)}")
-                            
-                            # 4. Force Plot untuk sampel individual
-                            st.write("### Force Plot untuk Sampel Individual")
-                            sample_idx = st.slider(
-                                "Pilih indeks sampel:" if st.session_state.language == 'id' else "Select sample index:",
-                                0, len(X_sample) - 1, 0
+                            # Gunakan fungsi visualisasi yang diperbaiki
+                            viz_result = create_shap_visualization(
+                                shap_values=shap_result['shap_values'],
+                                X_sample=X_sample,
+                                feature_names=shap_result['feature_names'],
+                                class_names=shap_result['class_names'],
+                                problem_type=shap_result['problem_type'],
+                                max_display=15
                             )
                             
-                            # Tampilkan data sampel
-                            st.write("Data sampel:" if st.session_state.language == 'id' else "Sample data:")
-                            st.dataframe(X_sample.iloc[[sample_idx]])
-                            
-                            # Force plot
-                            try:
-                                if isinstance(shap_values_selected, list):
-                                    # Untuk multi-output, ambil output dan expected_value untuk kelas pertama
-                                    expected_val = explainer.expected_value[0] if isinstance(explainer.expected_value, list) else explainer.expected_value
-                                    force_plot = shap.force_plot(expected_val, 
-                                                            shap_values_selected[0][sample_idx, :], 
-                                                            X_sample.iloc[sample_idx, :], 
-                                                            matplotlib=True,
-                                                            show=False)
-                                else:
-                                    expected_val = explainer.expected_value if hasattr(explainer, 'expected_value') else 0
-                                    force_plot = shap.force_plot(expected_val, 
-                                                            shap_values_selected[sample_idx, :], 
-                                                            X_sample.iloc[sample_idx, :], 
-                                                            matplotlib=True,
-                                                            show=False)
-                                st.pyplot(force_plot)
-                            except Exception as e:
-                                st.warning(f"Gagal membuat Force Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Force Plot: {str(e)}")
-                            
-                            # 5. Waterfall Plot
-                            st.write("### Waterfall Plot")
-                            try:
-                                fig, ax = plt.subplots(figsize=(10, 8))
+                            if viz_result['success']:
+                                # Tampilkan feature importance
+                                st.subheader("Feature Importance (SHAP)" if st.session_state.language == 'id' else "Feature Importance (SHAP)")
 
-                                if isinstance(shap_values_selected, list):
-                                    # Untuk multi-output, ambil output dan expected_value untuk kelas pertama
-                                    expected_val = explainer.expected_value[0] if isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value
-                                    shap.plots._waterfall.waterfall_legacy(
-                                        expected_val,
-                                        shap_values_selected[0][sample_idx, :],
-                                        feature_names=X_sample.columns,
-                                        show=False,
-                                        max_display=10
+                                importance_df = pd.DataFrame(
+                                    viz_result['feature_importance'],
+                                    columns=['Feature', 'Mean |SHAP Value|']
+                                )
+                                st.dataframe(importance_df)
+                                
+                                # Tampilkan visualisasi
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.subheader("Summary Plot (Bar)" if st.session_state.language == 'id' else "Summary Plot (Bar)")
+                                    st.pyplot(viz_result['figures']['summary_bar'])
+                                
+                                with col2:
+                                    st.subheader("Summary Plot (Detailed)" if st.session_state.language == 'id' else "Summary Plot (Detailed)")
+                                    st.pyplot(viz_result['figures']['summary_detailed'])
+                                
+                                # Multi-class handling
+                                if shap_result['problem_type'] == 'multiclass' and isinstance(shap_result['shap_values'], list):
+                                    st.subheader("Multi-class Analysis" if st.session_state.language == 'id' else "Multi-class Analysis")
+                                    
+                                    # Pilihan metode analisis
+                                    analysis_method = st.selectbox(
+                                        "Pilih metode analisis:" if st.session_state.language == 'id' else "Select analysis method:",
+                                        options=['individual', 'average', 'max_importance'],
+                                        format_func=lambda x: {
+                                            'individual': 'Kelas Individual' if st.session_state.language == 'id' else 'Individual Class',
+                                            'average': 'Rata-rata Semua Kelas' if st.session_state.language == 'id' else 'Average All Classes',
+                                            'max_importance': 'Kelas Penting Terbesar' if st.session_state.language == 'id' else 'Highest Importance Class'
+                                        }[x]
                                     )
-                                else:
-                                    expected_val = explainer.expected_value if np.isscalar(explainer.expected_value) else explainer.expected_value[0]
-                                    shap.plots._waterfall.waterfall_legacy(
-                                        expected_val,
-                                        shap_values_selected[sample_idx, :],
-                                        feature_names=X_sample.columns,
-                                        show=False,
-                                        max_display=10
-                                    )
-
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                plt.clf()
-                            except Exception as e:
-                                st.warning(f"Gagal membuat Waterfall Plot: {str(e)}" if st.session_state.language == 'id' else f"Failed to create Waterfall Plot: {str(e)}")
+                                    
+                                    if analysis_method == 'individual':
+                                        if shap_result['class_names']:
+                                            selected_class = st.selectbox(
+                                                "Pilih kelas:" if st.session_state.language == 'id' else "Select class:",
+                                                options=range(len(shap_result['class_names'])),
+                                                format_func=lambda i: shap_result['class_names'][i]
+                                            )
+                                        else:
+                                            selected_class = st.selectbox(
+                                                "Pilih indeks kelas:" if st.session_state.language == 'id' else "Select class index:",
+                                                options=range(len(shap_result['shap_values']))
+                                            )
+                                        
+                                        # Buat visualisasi untuk kelas yang dipilih
+                                        class_viz = create_shap_visualization(
+                                            shap_values=shap_result['shap_values'],
+                                            X_sample=X_sample,
+                                            feature_names=shap_result['feature_names'],
+                                            class_names=shap_result['class_names'],
+                                            problem_type=shap_result['problem_type'],
+                                            selected_class=selected_class,
+                                            max_display=15
+                                        )
+                                        
+                                        if class_viz['success']:
+                                            st.success(f"Menampilkan analisis untuk: {class_viz['class_name']}" if st.session_state.language == 'id' else 
+                                                    f"Showing analysis for: {class_viz['class_name']}")
+                                            st.pyplot(class_viz['figures']['summary_bar'])
+                                    
+                                    elif analysis_method == 'max_importance':
+                                        # Gunakan handle_multiclass_shap untuk mencari kelas terpenting
+                                        max_importance_result = handle_multiclass_shap(
+                                            shap_result['shap_values'],
+                                            method='max_importance',
+                                            class_names=shap_result['class_names']
+                                        )
+                                        
+                                        if 'class_name' in max_importance_result:
+                                            st.success(f"Kelas dengan importance tertinggi: {max_importance_result['class_name']}" if st.session_state.language == 'id' else 
+                                                    f"Highest importance class: {max_importance_result['class_name']}")
+                                            
+                                            # Visualisasi untuk kelas terpenting
+                                            max_viz = create_shap_visualization(
+                                                shap_values=shap_result['shap_values'],
+                                                X_sample=X_sample,
+                                                feature_names=shap_result['feature_names'],
+                                                class_names=shap_result['class_names'],
+                                                problem_type=shap_result['problem_type'],
+                                                selected_class=max_importance_result['class_focused'],
+                                                max_display=15
+                                            )
+                                            
+                                            if max_viz['success']:
+                                                st.pyplot(max_viz['figures']['summary_bar'])
+                                    
+                                    elif analysis_method == 'average':
+                                        # Gunakan handle_multiclass_shap untuk rata-rata
+                                        avg_result = handle_multiclass_shap(
+                                            shap_result['shap_values'],
+                                            method='average',
+                                            class_names=shap_result['class_names']
+                                        )
+                                        
+                                        if 'shap_values_average' in avg_result:
+                                            st.success("Menampilkan rata-rata importance untuk semua kelas" if st.session_state.language == 'id' else 
+                                                    "Showing average importance for all classes")
+                                            
+                                            # Buat visualisasi untuk rata-rata
+                                            avg_viz = create_shap_visualization(
+                                                shap_values=avg_result['shap_values_average'],
+                                                X_sample=X_sample,
+                                                feature_names=shap_result['feature_names'],
+                                                class_names=shap_result['class_names'],
+                                                problem_type='binary',  # Treat as binary for visualization
+                                                max_display=15
+                                            )
+                                            
+                                            if avg_viz['success']:
+                                                st.pyplot(avg_viz['figures']['summary_bar'])
+                                
+                                st.success("Analisis SHAP berhasil diselesaikan!" if st.session_state.language == 'id' else "SHAP analysis completed successfully!")
+                            else:
+                                st.error(f"Error dalam visualisasi SHAP: {viz_result.get('error', 'Unknown error')}")
                         
                         # Tips untuk interpretasi
                         st.subheader("Tips untuk Interpretasi" if st.session_state.language == 'id' else "Tips for Interpretation")
@@ -9984,46 +10002,133 @@ with tab6:
                             lime_result = implement_lime_classification(
                                 st.session_state.model,
                                 X_train_selected,
-                                X_test_selected,
-                                selected_features,
-                                sample_idx,
-                                num_features_show,
-                                st.session_state.language
+                                st.session_state.y_train,
+                                problem_type='classification',
+                                class_names=st.session_state.model.classes_ if hasattr(st.session_state.model, 'classes_') else None,
+                                feature_names=selected_features,
+                                num_features=num_features_show
                             )
                             
                             if lime_result['success']:
-                                explanation = lime_result['explanation']
+                                # Gunakan preprocessing yang lebih baik
+                                preprocessing_result = improved_data_preprocessing_for_interpretation(
+                                    X_test_selected, 
+                                    model=st.session_state.model, 
+                                    method='lime'
+                                )
                                 
-                                st.subheader("Visualisasi Penjelasan LIME" if st.session_state.language == 'id' else "LIME Explanation Visualization")
-                                fig = plt.figure(figsize=(10, 6))
-                                
-                                class_names = st.session_state.model.classes_ if hasattr(st.session_state.model, 'classes_') else None
-                                if class_names is not None:
-                                    if predicted in class_names:
-                                        label_idx = list(class_names).index(predicted)
-                                    else:
-                                        label_idx = int(predicted)
-                                    lime_fig = explanation.as_pyplot_figure(label=label_idx)
+                                if preprocessing_result['success']:
+                                    X_processed = preprocessing_result['X_processed']
+                                    
+                                    # Tampilkan informasi preprocessing
+                                    if preprocessing_result['preprocessing_steps']:
+                                        st.subheader("Informasi Preprocessing" if st.session_state.language == 'id' else "Preprocessing Information")
+                                        for step in preprocessing_result['preprocessing_steps']:
+                                            st.write(f"• {step}")
+                                    
+                                    if preprocessing_result['warnings']:
+                                        st.warning("Peringatan Preprocessing:" if st.session_state.language == 'id' else "Preprocessing Warnings:")
+                                        for warning in preprocessing_result['warnings']:
+                                            st.write(f"⚠️ {warning}")
+                                    
+                                    # Generate LIME explanations dengan data yang sudah diproses
+                                    with st.spinner("Menghasilkan penjelasan LIME..." if st.session_state.language == 'id' else "Generating LIME explanations..."):
+                                        try:
+                                            # Gunakan data yang sudah diproses
+                                            lime_result_improved = implement_lime_classification(
+                                                st.session_state.model,
+                                                X_processed,
+                                                st.session_state.y_train,
+                                                problem_type='classification',
+                                                class_names=st.session_state.model.classes_ if hasattr(st.session_state.model, 'classes_') else None,
+                                                feature_names=X_processed.columns.tolist(),
+                                                num_features=num_features_show
+                                            )
+                                            
+                                            if lime_result_improved['success']:
+                                                explanations = lime_result_improved['explanations']
+                                                
+                                                # Tampilkan summary
+                                                st.subheader("Summary LIME" if st.session_state.language == 'id' else "LIME Summary")
+                                                col1, col2 = st.columns(2)
+                                                
+                                                with col1:
+                                                    st.metric(
+                                                        "Sampel Berhasil" if st.session_state.language == 'id' else "Successful Samples",
+                                                        lime_result_improved.get('n_successful', 0)
+                                                    )
+                                                    st.metric(
+                                                        "Sampel Gagal" if st.session_state.language == 'id' else "Failed Samples", 
+                                                        lime_result_improved.get('n_failed', 0)
+                                                    )
+                                                
+                                                with col2:
+                                                    if lime_result_improved.get('n_successful', 0) > 0:
+                                                        st.success(f"✅ {lime_result_improved.get('n_successful', 0)} penjelasan berhasil dihasilkan" if st.session_state.language == 'id' else f"✅ {lime_result_improved.get('n_successful', 0)} explanations generated successfully")
+                                                
+                                                # Buat laporan interpretasi
+                                                report = create_interpretation_report(lime_result_improved, 'lime', st.session_state.language)
+                                                
+                                                # Tampilkan laporan
+                                                st.subheader(report['summary'].get('status', ''))
+                                                st.write(report['summary'].get('method', ''))
+                                                
+                                                if 'details' in report and report['details']:
+                                                    for key, value in report['details'].items():
+                                                        if isinstance(value, pd.DataFrame):
+                                                            st.write(f"**{key}:**")
+                                                            st.dataframe(value)
+                                                        else:
+                                                            st.write(f"**{key}:** {value}")
+                                                
+                                                if report['recommendations']:
+                                                    st.subheader("Rekomendasi" if st.session_state.language == 'id' else "Recommendations")
+                                                    for rec in report['recommendations']:
+                                                        st.write(f"• {rec}")
+                                                
+                                                # Tampilkan penjelasan detail
+                                                if explanations:
+                                                    st.subheader("Penjelasan Detail" if st.session_state.language == 'id' else "Detailed Explanations")
+                                                    
+                                                    # Pilih sampel untuk ditampilkan
+                                                    sample_options = [f"Sample {i}" for i in range(len(explanations)) if explanations[i].get('explanation') is not None]
+                                                    if sample_options:
+                                                        selected_sample = st.selectbox(
+                                                            "Pilih sampel:" if st.session_state.language == 'id' else "Select sample:",
+                                                            options=range(len(sample_options)),
+                                                            format_func=lambda i: sample_options[i]
+                                                        )
+                                                        
+                                                        # Tampilkan penjelasan untuk sampel yang dipilih
+                                                        if explanations[selected_sample].get('explanation') is not None:
+                                                            explanation = explanations[selected_sample]['explanation']
+                                                            
+                                                            st.write(f"**Penjelasan untuk {sample_options[selected_sample]}:**")
+                                                            
+                                                            # Tampilkan dalam bentuk tabel
+                                                            exp_list = explanation.as_list()
+                                                            exp_df = pd.DataFrame(exp_list, columns=['Feature', 'Contribution', 'Value'])
+                                                            exp_df = exp_df.sort_values('Contribution', ascending=False, key=abs)
+                                                            st.dataframe(exp_df)
+                                                            
+                                                            # Visualisasi
+                                                            try:
+                                                                fig = explanation.as_pyplot_figure()
+                                                                st.pyplot(fig)
+                                                            except Exception as e:
+                                                                st.warning(f"Gagal membuat visualisasi: {str(e)}" if st.session_state.language == 'id' else f"Failed to create visualization: {str(e)}")
+                                                        else:
+                                                            st.error("Tidak ada penjelasan yang valid untuk sampel ini" if st.session_state.language == 'id' else "No valid explanation for this sample")
+                                            else:
+                                                st.error(f"Gagal menghasilkan penjelasan LIME yang diperbaiki: {lime_result_improved.get('error', 'Unknown error')}")
+                                        except Exception as e:
+                                            st.error(f"Error dalam proses LIME: {str(e)}")
                                 else:
-                                    lime_fig = explanation.as_pyplot_figure()
-                                
-                                plt.tight_layout()
-                                st.pyplot(lime_fig)
-                                
-                                st.subheader("Penjelasan dalam Bentuk Tabel" if st.session_state.language == 'id' else "Explanation in Table Format")
-                                explanation_df = pd.DataFrame(explanation.as_list(), columns=["Feature", "Kontribusi"])
-                                explanation_df = explanation_df.sort_values("Kontribusi", ascending=False)
-                                st.dataframe(explanation_df)
+                                    st.error(f"Error preprocessing data untuk LIME: {preprocessing_result.get('error', 'Unknown error')}")
                             else:
-                                st.error(f"❌ Error dalam implementasi LIME klasifikasi: {lime_result['error']}")
-                                st.warning(f"ℹ️ {'LIME gagal menghasilkan interpretasi. Ini bisa terjadi karena model terlalu kompleks atau data tidak sesuai.' if st.session_state.language == 'id' else 'LIME failed to generate interpretation. This may happen because the model is too complex or data is incompatible.'}")
-                                
-                                # Berikan saran spesifik berdasarkan jenis error
-                                if "explainer" in lime_result['error'].lower():
-                                    st.info(f"💡 {'Gagal membuat LIME explainer. Model ini mungkin memiliki struktur yang tidak umum. Silakan coba SHAP.' if st.session_state.language == 'id' else 'Failed to create LIME explainer. This model may have an unusual structure. Please try SHAP.'}")
-                                elif "explanation" in lime_result['error'].lower():
-                                    st.info(f"💡 {'Gagal menghasilkan penjelasan. Model ini mungkin terlalu kompleks untuk LIME. Silakan coba SHAP.' if st.session_state.language == 'id' else 'Failed to generate explanation. This model may be too complex for LIME. Please try SHAP.'}")
-                                
+                                st.error(f"❌ Error dalam implementasi LIME: {lime_result.get('error', 'Unknown error')}")
+                                st.warning("💡 Model ini mungkin tidak kompatibel dengan LIME. Coba SHAP sebagai alternatif." if st.session_state.language == 'id' else "This model may not be compatible with LIME. Try SHAP as an alternative.")
+
                                 # Tombol aksi alternatif
                                 col1, col2 = st.columns(2)
                                 with col1:

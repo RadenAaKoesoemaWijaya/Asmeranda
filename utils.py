@@ -859,13 +859,14 @@ def create_features_from_date(df, date_column):
     df_new['quarter'] = df_new[date_column].dt.quarter
     df_new['is_month_start'] = df_new[date_column].dt.is_month_start.astype(int)
     df_new['is_month_end'] = df_new[date_column].dt.is_month_end.astype(int)
-    
+
     return df_new
 
 def check_model_compatibility(model, method='shap', language='id'):
     """
     Mengecek kompatibilitas model dengan metode interpretasi SHAP atau LIME
-    
+    Versi simplified yang lebih permissive dan user-friendly
+
     Parameters:
     -----------
     model : object
@@ -874,7 +875,7 @@ def check_model_compatibility(model, method='shap', language='id'):
         Metode interpretasi ('shap' atau 'lime')
     language : str, optional
         Bahasa untuk pesan error ('id' atau 'en')
-        
+
     Returns:
     --------
     dict
@@ -883,153 +884,154 @@ def check_model_compatibility(model, method='shap', language='id'):
         - 'message': Pesan penjelasan
         - 'suggestion': Saran alternatif
         - 'error_type': Tipe error jika tidak kompatibel
+        - 'confidence': Tingkat kepercayaan compatibility (high/medium/low)
     """
-    
     # Pesan error dalam berbagai bahasa
     messages = {
         'id': {
-            'unsupported_model': "Model ini belum didukung untuk interpretasi {method}.",
-            'ensemble_not_supported': "Model ensemble kompleks belum didukung untuk interpretasi {method}.",
-            'neural_network': "Model neural network memerlukan pendekatan khusus untuk interpretasi.",
-            'deep_learning': "Model deep learning memerlukan library khusus seperti DeepSHAP atau Integrated Gradients.",
-            'clustering': "Model clustering bukan model prediktif dan tidak dapat diinterpretasi dengan {method}.",
-            'dimensionality_reduction': "Model reduksi dimensi bukan model prediktif dan tidak dapat diinterpretasi dengan {method}.",
-            'suggestion': "\n\nSaran:\n",
-            'alternatives': "- Gunakan model yang lebih sederhana (Random Forest, XGBoost, LightGBM)\n",
-            'lime_alternative': "- Cobalah metode LIME jika SHAP tidak didukung\n",
-            'shap_alternative': "- Cobalah metode SHAP jika LIME tidak didukung\n",
-            'library_suggestion': "- Install library tambahan: {library}\n",
-            'expert_help': "- Konsultasikan dengan tim data science untuk pendekatan interpretasi yang sesuai"
+            'no_predict': "Model tidak memiliki method 'predict'. Tidak dapat digunakan untuk interpretasi.",
+            'clustering': "Model clustering tidak cocok untuk interpretasi prediktif.",
+            'dimensionality_reduction': "Model reduksi dimensi tidak cocok untuk interpretasi prediktif.",
+            'neural_network_shap': "Model neural network memerlukan SHAP DeepExplainer. Coba LIME sebagai alternatif.",
+            'complex_ensemble': "Model ensemble kompleks mungkin tidak didukung. Coba model individual.",
+            'generally_supported': "Model kemungkinan besar didukung untuk interpretasi {method}.",
+            'try_alternative': "Jika gagal, coba metode {alternative} atau model yang lebih sederhana.",
+            'suggestion_prefix': "Saran: "
         },
         'en': {
-            'unsupported_model': "This model is not yet supported for {method} interpretation.",
-            'ensemble_not_supported': "Complex ensemble models are not yet supported for {method} interpretation.",
-            'neural_network': "Neural network models require special approaches for interpretation.",
-            'deep_learning': "Deep learning models require specialized libraries like DeepSHAP or Integrated Gradients.",
-            'clustering': "Clustering models are not predictive models and cannot be interpreted with {method}.",
-            'dimensionality_reduction': "Dimensionality reduction models are not predictive models and cannot be interpreted with {method}.",
-            'suggestion': "\n\nSuggestions:\n",
-            'alternatives': "- Use simpler models (Random Forest, XGBoost, LightGBM)\n",
-            'lime_alternative': "- Try LIME method if SHAP is not supported\n",
-            'shap_alternative': "- Try SHAP method if LIME is not supported\n",
-            'library_suggestion': "- Install additional library: {library}\n",
-            'expert_help': "- Consult with data science team for appropriate interpretation approach"
+            'no_predict': "Model does not have 'predict' method. Cannot be used for interpretation.",
+            'clustering': "Clustering models are not suitable for predictive interpretation.",
+            'dimensionality_reduction': "Dimensionality reduction models are not suitable for predictive interpretation.",
+            'neural_network_shap': "Neural network models require SHAP DeepExplainer. Try LIME as alternative.",
+            'complex_ensemble': "Complex ensemble models may not be supported. Try individual models.",
+            'generally_supported': "Model is likely supported for {method} interpretation.",
+            'try_alternative': "If it fails, try {alternative} method or simpler models.",
+            'suggestion_prefix': "Suggestion: "
         }
     }
-    
+
     lang = messages.get(language, messages['id'])
-    
+
     try:
-        # Cek apakah model memiliki method yang diperlukan
+        # Basic requirement check
         if not hasattr(model, 'predict'):
             return {
                 'compatible': False,
-                'message': f"{lang['unsupported_model'].format(method=method.upper())} Model tidak memiliki method 'predict'.",
-                'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
-                'error_type': 'missing_predict_method'
+                'message': lang['no_predict'],
+                'suggestion': lang['suggestion_prefix'] + "Gunakan model dengan method 'predict'.",
+                'error_type': 'missing_predict_method',
+                'confidence': 'low'
             }
-        
-        # Dapatkan tipe model
+
+        # Get model information
         model_type = type(model).__name__.lower()
         module_name = type(model).__module__.lower()
-        
-        # Model yang jelas tidak didukung
-        unsupported_models = [
+
+        # Clear non-predictive models (strict check)
+        clearly_unsupported = [
             'kmeans', 'dbscan', 'hierarchical', 'agglomerative',  # Clustering
-            'pca', 'tsne', 'umap', 'lda', 'nmf',  # Dimensionality reduction
-            'isolationforest', 'oneclasssvm', 'localoutlierfactor'  # Anomaly detection
+            'pca', 'tsne', 'umap', 'lda', 'nmf'  # Dimensionality reduction
         ]
-        
-        for unsupported in unsupported_models:
+
+        for unsupported in clearly_unsupported:
             if unsupported in model_type or unsupported in module_name:
                 if 'cluster' in unsupported:
                     error_msg = lang['clustering']
-                elif unsupported in ['pca', 'tsne', 'umap', 'lda', 'nmf']:
-                    error_msg = lang['dimensionality_reduction']
                 else:
-                    error_msg = lang['unsupported_model'].format(method=method.upper())
-                    
+                    error_msg = lang['dimensionality_reduction']
+
                 return {
                     'compatible': False,
                     'message': error_msg,
-                    'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
-                    'error_type': 'unsupported_model_type'
+                    'suggestion': lang['suggestion_prefix'] + "Gunakan model prediktif seperti Random Forest atau Logistic Regression.",
+                    'error_type': 'unsupported_model_type',
+                    'confidence': 'low'
                 }
-        
-        # Cek untuk neural networks dan deep learning
-        neural_networks = ['mlp', 'neural', 'dense', 'lstm', 'gru', 'cnn', 'rnn']
-        if any(nn in model_type for nn in neural_networks) or 'keras' in module_name or 'torch' in module_name:
+
+        # Neural networks (conditional support)
+        neural_indicators = ['mlp', 'neural', 'dense', 'lstm', 'gru', 'cnn', 'rnn']
+        is_neural = any(nn in model_type for nn in neural_indicators) or 'keras' in module_name or 'torch' in module_name
+
+        if is_neural:
             if method == 'shap':
                 return {
                     'compatible': False,
-                    'message': lang['deep_learning'] if 'deep' in model_type else lang['neural_network'],
-                    'suggestion': f"{lang['suggestion']}{lang['library_suggestion'].format(library='shap[deep] atau deepexplain')}{lang['expert_help']}",
-                    'error_type': 'neural_network'
+                    'message': lang['neural_network_shap'],
+                    'suggestion': lang['suggestion_prefix'] + lang['try_alternative'].format(alternative='LIME'),
+                    'error_type': 'neural_network',
+                    'confidence': 'medium'
                 }
             else:  # LIME
                 return {
                     'compatible': True,
-                    'message': f"Model neural network dapat diinterpretasi dengan LIME, namun hasil mungkin terbatas.",
-                    'suggestion': "- Pastikan data input dalam format yang tepat\n- Perhatikan interpretasi secara hati-hati",
-                    'error_type': None
+                    'message': lang['generally_supported'].format(method=method.upper()),
+                    'suggestion': lang['suggestion_prefix'] + "Pastikan data input dalam format numerik.",
+                    'error_type': None,
+                    'confidence': 'medium'
                 }
-        
-        # Cek untuk ensemble kompleks
+
+        # Complex ensembles (warning but allow)
         complex_ensembles = ['voting', 'stacking', 'blending']
-        if any(ensemble in model_type for ensemble in complex_ensembles):
+        is_complex_ensemble = any(ensemble in model_type for ensemble in complex_ensembles)
+
+        if is_complex_ensemble:
             return {
-                'compatible': False,
-                'message': lang['ensemble_not_supported'].format(method=method.upper()),
-                'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['expert_help']}",
-                'error_type': 'complex_ensemble'
+                'compatible': True,
+                'message': lang['generally_supported'].format(method=method.upper()),
+                'suggestion': lang['suggestion_prefix'] + lang['complex_ensemble'] + " " + lang['try_alternative'].format(alternative='LIME' if method == 'shap' else 'SHAP'),
+                'error_type': 'complex_ensemble',
+                'confidence': 'medium'
             }
-        
-        # Model yang umumnya didukung
-        supported_models = [
+
+        # Common supported models (high confidence)
+        well_supported = [
             'randomforest', 'xgb', 'lgbm', 'catboost',  # Tree-based
             'linear', 'logistic', 'ridge', 'lasso', 'elastic',  # Linear
             'svm', 'svc', 'svr',  # SVM
             'knn', 'nearest',  # KNN
-            'decisiontree', 'extratree'  # Tree models
+            'decisiontree', 'extratree',  # Tree models
+            'gaussiannb', 'multinomialnb', 'bernoullinb'  # Naive Bayes
         ]
-        
-        # Cek apakah model termasuk dalam kategori yang didukung
-        is_supported = any(supported in model_type for supported in supported_models)
-        
-        if is_supported:
-            # Berikan saran berdasarkan metode
+
+        is_well_supported = any(supported in model_type for supported in well_supported)
+
+        if is_well_supported:
             suggestions = []
-            if method == 'shap' and ('tree' in model_type or 'forest' in model_type or 'xgb' in model_type or 'lgbm' in model_type):
-                suggestions.append("- Gunakan TreeExplainer untuk hasil yang lebih cepat dan akurat")
+            if method == 'shap' and any(tree in model_type for tree in ['randomforest', 'xgb', 'lgbm', 'decisiontree']):
+                suggestions.append("Gunakan TreeExplainer untuk hasil optimal")
             elif method == 'lime':
-                suggestions.append("- Pastikan data dalam format yang dapat diinterpretasi oleh LIME")
-            
+                suggestions.append("Pastikan data tidak ada missing values")
+
             return {
                 'compatible': True,
-                'message': f"Model {model_type} didukung untuk interpretasi {method.upper()}.",
-                'suggestion': '\n'.join(suggestions) if suggestions else "",
-                'error_type': None
+                'message': lang['generally_supported'].format(method=method.upper()),
+                'suggestion': lang['suggestion_prefix'] + ' '.join(suggestions) if suggestions else "",
+                'error_type': None,
+                'confidence': 'high'
             }
-        
-        # Default: model tidak dikenali
+
+        # Unknown models (permissive approach)
         return {
-            'compatible': False,
-            'message': f"{lang['unsupported_model'].format(method=method.upper())} Tipe model: {model_type}",
-            'suggestion': f"{lang['suggestion']}{lang['alternatives']}{lang['shap_alternative'] if method == 'lime' else lang['lime_alternative']}{lang['expert_help']}",
-            'error_type': 'unknown_model_type'
+            'compatible': True,
+            'message': f"Model {model_type} akan dicoba dengan {method.upper()}.",
+            'suggestion': lang['suggestion_prefix'] + "Jika gagal, coba model yang lebih umum seperti Random Forest.",
+            'error_type': 'unknown_model_type',
+            'confidence': 'low'
         }
-        
+
     except Exception as e:
         return {
             'compatible': False,
-            'message': f"Error saat mengecek kompatibilitas model: {str(e)}",
-            'suggestion': f"{lang['suggestion']}{lang['expert_help']}",
-            'error_type': 'compatibility_check_error'
+            'message': f"Error saat mengecek kompatibilitas: {str(e)}",
+            'suggestion': lang['suggestion_prefix'] + "Periksa model dan coba lagi.",
+            'error_type': 'compatibility_check_error',
+            'confidence': 'low'
         }
 
 def get_model_interpretation_recommendations(model, language='id'):
     """
     Memberikan rekomendasi metode interpretasi yang sesuai untuk model
+
     
     Parameters:
     -----------
@@ -1121,7 +1123,7 @@ def get_model_interpretation_recommendations(model, language='id'):
                           f"Reason: {rec['reason']}"
         }
 
-def implement_shap_classification(model, X_sample, problem_type='binary', class_names=None, feature_names=None):
+def implement_shap_classification(model, X_sample, X_train=None, language='id', problem_type=None, class_names=None, feature_names=None):
     """
     Implementasi SHAP untuk model klasifikasi dengan penanganan multi-class
     
@@ -1131,8 +1133,12 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
         Model yang telah dilatih
     X_sample : pandas.DataFrame
         Sample data untuk interpretasi
+    X_train : pandas.DataFrame, optional
+        Data training untuk background SHAP
+    language : str, optional
+        Bahasa untuk pesan ('id' atau 'en')
     problem_type : str, optional
-        'binary' atau 'multiclass'
+        'binary' atau 'multiclass' (auto-detected jika None)
     class_names : list, optional
         Nama kelas untuk klasifikasi
     feature_names : list, optional
@@ -1144,6 +1150,21 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
         Dictionary berisi SHAP values dan informasi interpretasi
     """
     import shap
+    import numpy as np
+    
+    # Auto-detect problem type if not specified
+    if problem_type is None:
+        if hasattr(model, 'classes_'):
+            if len(model.classes_) == 2:
+                problem_type = 'binary'
+            else:
+                problem_type = 'multiclass'
+        else:
+            problem_type = 'binary'  # Default assumption
+    
+    # Use provided class_names or extract from model
+    if class_names is None and hasattr(model, 'classes_'):
+        class_names = list(model.classes_)
     
     result = {
         'shap_values': None,
@@ -1151,15 +1172,19 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
         'explainer': None,
         'problem_type': problem_type,
         'class_names': class_names,
-        'feature_names': feature_names or X_sample.columns.tolist()
+        'feature_names': feature_names or X_sample.columns.tolist(),
+        'success': False
     }
     
     try:
         # Tentukan jenis explainer berdasarkan model
         if hasattr(model, 'tree_'):  # Tree-based models
-            explainer = shap.TreeExplainer(model)
-        else:  # General models
-            explainer = shap.KernelExplainer(model.predict_proba, X_sample)
+            explainer = shap.TreeExplainer(model, data=X_train if X_train is not None else X_sample)
+        elif hasattr(model, 'coef_'):  # Linear models
+            explainer = shap.LinearExplainer(model, data=X_train if X_train is not None else X_sample)
+        else:  # General models - use KernelExplainer with better background
+            background_data = X_train if X_train is not None else shap.sample(X_sample, min(50, len(X_sample)))
+            explainer = shap.KernelExplainer(model.predict_proba, background_data)
         
         # Hitung SHAP values
         shap_values = explainer.shap_values(X_sample)
@@ -1169,7 +1194,7 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
             # Binary classification: SHAP values untuk kelas positif
             if isinstance(shap_values, list) and len(shap_values) == 2:
                 result['shap_values'] = shap_values[1]  # Kelas positif
-                result['expected_value'] = explainer.expected_value[1] if hasattr(explainer, 'expected_value') else None
+                result['expected_value'] = explainer.expected_value[1] if hasattr(explainer, 'expected_value') and isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value
             else:
                 result['shap_values'] = shap_values
                 result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
@@ -1179,9 +1204,11 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
             if isinstance(shap_values, list):
                 result['shap_values'] = shap_values  # List of SHAP values untuk setiap kelas
                 result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
+                result['n_classes'] = len(shap_values)
             else:
                 result['shap_values'] = shap_values
                 result['expected_value'] = explainer.expected_value if hasattr(explainer, 'expected_value') else None
+                result['n_classes'] = len(class_names) if class_names else 2
         
         result['explainer'] = explainer
         result['success'] = True
@@ -1192,7 +1219,7 @@ def implement_shap_classification(model, X_sample, problem_type='binary', class_
         
     return result
 
-def handle_multiclass_shap(shap_values, predicted_class=None, method='individual'):
+def handle_multiclass_shap(shap_values, predicted_class=None, method='individual', class_names=None):
     """
     Penanganan SHAP values untuk multi-class classification
     
@@ -1203,13 +1230,17 @@ def handle_multiclass_shap(shap_values, predicted_class=None, method='individual
     predicted_class : int, optional
         Kelas yang diprediksi untuk focus
     method : str, optional
-        'individual' (fokus pada kelas tertentu) atau 'average' (rata-rata semua kelas)
+        'individual' (fokus pada kelas tertentu), 'average' (rata-rata semua kelas), atau 'max_importance' (kelas dengan importance tertinggi)
+    class_names : list, optional
+        Nama kelas untuk display
         
     Returns:
     --------
     dict
         Dictionary berisi processed SHAP values
     """
+    import numpy as np
+    
     result = {}
     
     if isinstance(shap_values, list):
@@ -1217,9 +1248,14 @@ def handle_multiclass_shap(shap_values, predicted_class=None, method='individual
         
         if method == 'individual' and predicted_class is not None:
             # Fokus pada kelas yang diprediksi
-            result['shap_values_focused'] = shap_values[predicted_class]
-            result['class_focused'] = predicted_class
-            result['method'] = 'individual'
+            if 0 <= predicted_class < n_classes:
+                result['shap_values_focused'] = shap_values[predicted_class]
+                result['class_focused'] = predicted_class
+                result['method'] = 'individual'
+                result['class_name'] = class_names[predicted_class] if class_names and predicted_class < len(class_names) else f'Class {predicted_class}'
+            else:
+                result['error'] = f'Predicted class {predicted_class} out of range [0, {n_classes-1}]'
+                result['method'] = 'error'
             
         elif method == 'average':
             # Rata-rata absolute SHAP values untuk semua kelas
@@ -1227,6 +1263,20 @@ def handle_multiclass_shap(shap_values, predicted_class=None, method='individual
             result['shap_values_average'] = avg_shap
             result['method'] = 'average'
             result['n_classes'] = n_classes
+            
+        elif method == 'max_importance':
+            # Pilih kelas dengan total importance tertinggi
+            class_importance = []
+            for i, class_shap in enumerate(shap_values):
+                total_importance = np.sum(np.abs(class_shap))
+                class_importance.append((total_importance, i))
+            
+            max_importance_class = max(class_importance, key=lambda x: x[0])[1]
+            result['shap_values_focused'] = shap_values[max_importance_class]
+            result['class_focused'] = max_importance_class
+            result['method'] = 'max_importance'
+            result['class_name'] = class_names[max_importance_class] if class_names and max_importance_class < len(class_names) else f'Class {max_importance_class}'
+            result['importance_score'] = class_importance[max_importance_class][0]
             
         else:
             # Simpan semua SHAP values
@@ -1237,6 +1287,96 @@ def handle_multiclass_shap(shap_values, predicted_class=None, method='individual
     else:
         result['shap_values'] = shap_values
         result['method'] = 'single'
+        
+    return result
+
+def create_shap_visualization(shap_values, X_sample, feature_names=None, class_names=None, 
+                           problem_type='binary', selected_class=None, max_display=10):
+    """
+    Membuat visualisasi SHAP yang robust untuk berbagai jenis output
+    
+    Parameters:
+    -----------
+    shap_values : array or list
+        SHAP values
+    X_sample : pandas.DataFrame
+        Sample data
+    feature_names : list, optional
+        Nama fitur
+    class_names : list, optional
+        Nama kelas
+    problem_type : str
+        'binary' atau 'multiclass'
+    selected_class : int, optional
+        Kelas yang dipilih untuk multi-class
+    max_display : int
+        Maksimal fitur yang ditampilkan
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi figure dan informasi visualisasi
+    """
+    import shap
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    result = {
+        'figures': {},
+        'success': False,
+        'error': None
+    }
+    
+    try:
+        if feature_names is None:
+            feature_names = X_sample.columns.tolist()
+        
+        # Handle multi-class SHAP values
+        if problem_type == 'multiclass' and isinstance(shap_values, list):
+            if selected_class is not None and 0 <= selected_class < len(shap_values):
+                # Use selected class
+                shap_to_plot = shap_values[selected_class]
+                class_name = class_names[selected_class] if class_names and selected_class < len(class_names) else f'Class {selected_class}'
+            else:
+                # Use first class as default
+                shap_to_plot = shap_values[0]
+                class_name = class_names[0] if class_names else 'Class 0'
+        else:
+            # Binary classification or single array
+            shap_to_plot = shap_values
+            class_name = class_names[0] if class_names else 'Prediction'
+        
+        # Create summary plot
+        plt.figure(figsize=(10, 6))
+        shap.summary_plot(shap_to_plot, X_sample, feature_names=feature_names, 
+                         plot_type="bar", max_display=max_display, show=False)
+        result['figures']['summary_bar'] = plt.gcf()
+        plt.close()
+        
+        # Create detailed summary plot
+        plt.figure(figsize=(10, 8))
+        shap.summary_plot(shap_to_plot, X_sample, feature_names=feature_names, 
+                         max_display=max_display, show=False)
+        result['figures']['summary_detailed'] = plt.gcf()
+        plt.close()
+        
+        # Create feature importance ranking
+        if len(shap_to_plot.shape) == 2:
+            mean_abs_shap = np.mean(np.abs(shap_to_plot), axis=0)
+        else:
+            mean_abs_shap = np.abs(shap_to_plot)
+        
+        # Sort features by importance
+        feature_importance = list(zip(feature_names, mean_abs_shap))
+        feature_importance.sort(key=lambda x: x[1], reverse=True)
+        
+        result['feature_importance'] = feature_importance[:max_display]
+        result['class_name'] = class_name
+        result['success'] = True
+        
+    except Exception as e:
+        result['error'] = str(e)
+        result['success'] = False
         
     return result
 
