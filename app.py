@@ -36,8 +36,6 @@ import json
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
-from auth_db import auth_db
-from captcha_utils import captcha_gen, verify_captcha
 from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_analysis, 
                    analyze_trend_seasonality_cycle, plot_pattern_analysis,
                    implement_shap_classification, handle_multiclass_shap,
@@ -144,18 +142,6 @@ if 'forecasting_models' not in st.session_state:
     st.session_state.forecasting_models = []
 if 'forecast_results' not in st.session_state:
     st.session_state.forecast_results = None
-
-# Authentication state variables
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = None
-if 'session_token' not in st.session_state:
-    st.session_state.session_token = None
-if 'show_register' not in st.session_state:
-    st.session_state.show_register = False
-if 'captcha_text' not in st.session_state:
-    st.session_state.captcha_text = ""
 
 # Create tabs for different functionalities
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
@@ -979,23 +965,23 @@ def get_custom_param_inputs(model_name, use_custom_ranges, st_session):
             st.subheader("Ekspor Preset" if st_session.language == 'id' else "Export Preset")
             if custom_ranges:
                 preset_name_export = st.text_input(
-                    "Nama preset untuk diekspor:" if st_session.language == 'id' else "Preset name to export:",
+                    "Nama preset untuk diekspor:" if st_session_state.language == 'id' else "Preset name to export:",
                     value=f"custom_{model_name.lower()}",
                     key=f"preset_export_name_{model_name}"
                 )
-                if st.button("Ekspor ke JSON" if st_session.language == 'id' else "Export to JSON"):
+                if st.button("Ekspor ke JSON" if st_session_state.language == 'id' else "Export to JSON"):
                     filename = export_preset_to_json(model_name, preset_name_export, custom_ranges)
                     if filename:
                         with open(filename, 'rb') as f:
                             st.download_button(
-                                label="Unduh File JSON" if st_session.language == 'id' else "Download JSON File",
+                                label="Unduh File JSON" if st_session_state.language == 'id' else "Download JSON File",
                                 data=f.read(),
                                 file_name=filename,
                                 mime="application/json"
                             )
-                        st.success(f"Preset berhasil diekspor ke {filename}!" if st_session.language == 'id' else f"Preset successfully exported to {filename}!")
+                        st.success(f"Preset berhasil diekspor ke {filename}!" if st_session_state.language == 'id' else f"Preset successfully exported to {filename}!")
             else:
-                st.info("Tidak ada parameter kustom untuk diekspor" if st_session.language == 'id' else "No custom parameters to export")
+                st.info("Tidak ada parameter kustom untuk diekspor" if st_session_state.language == 'id' else "No custom parameters to export")
 
 def merge_custom_param_ranges(default_param_grid, custom_param_ranges):
     """
@@ -1985,186 +1971,6 @@ def verify_captcha(input_text, correct_text):
 def verify_captcha(input_text, correct_text):
     """Verify captcha input"""
     return input_text.upper().strip() == correct_text.upper().strip()
-
-def authenticate_user(username, password):
-    """Authenticate user with database"""
-    user = auth_db.authenticate_user(username, password)
-    if user:
-        st.session_state.authenticated = True
-        st.session_state.current_user = user['username']
-        st.session_state.session_token = auth_db.create_session(user['username'])
-        return True
-    return False
-
-def register_user(username, password, email):
-    """Register new user"""
-    if auth_db.create_user(username, password, email):
-        return True
-    return False
-
-def logout_user():
-    """Logout current user"""
-    if st.session_state.session_token:
-        auth_db.delete_session(st.session_state.session_token)
-    st.session_state.authenticated = False
-    st.session_state.current_user = None
-    st.session_state.session_token = None
-
-def show_login_page():
-    """Display login page"""
-    st.title("🔐 ASMERANDA" if st.session_state.language == 'id' else "🔐 Login - EDA & ML Application")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        # Captcha refresh button outside form
-        col_captcha1, col_captcha2 = st.columns([3, 1])
-        with col_captcha1:
-            if 'captcha_image' not in st.session_state:
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-            st.image(st.session_state.captcha_image, width=200)
-        with col_captcha2:
-            if st.button("🔄 Refresh", key="refresh_captcha_login"):
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-                st.rerun()
-        
-        with st.form("login_form"):
-            st.subheader("Login" if st.session_state.language == 'id' else "Login")
-            
-            username = st.text_input(
-                "Username" if st.session_state.language == 'id' else "Username",
-                placeholder="Enter your username"
-            )
-            password = st.text_input(
-                "Password" if st.session_state.language == 'id' else "Password",
-                type="password",
-                placeholder="Enter your password"
-            )
-            
-            captcha_input = st.text_input(
-                "Enter Captcha" if st.session_state.language == 'id' else "Enter Captcha",
-                placeholder="Enter the text above"
-            )
-            
-            col_login, col_register = st.columns(2)
-            with col_login:
-                login_submitted = st.form_submit_button("Login", type="primary")
-            with col_register:
-                register_btn = st.form_submit_button("Register")
-        
-        if register_btn:
-            st.session_state.show_register = True
-            st.rerun()
-        
-        if login_submitted:
-            if not username or not password:
-                st.error("Please enter both username and password" if st.session_state.language == 'en' else "Silakan masukkan username dan password")
-            elif not captcha_input:
-                st.error("Please enter the captcha" if st.session_state.language == 'en' else "Silakan masukkan captcha")
-            elif not verify_captcha(captcha_input, st.session_state.captcha_text):
-                st.error("Invalid captcha. Please try again" if st.session_state.language == 'en' else "Captcha tidak valid. Silakan coba lagi")
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-                st.rerun()
-            elif authenticate_user(username, password):
-                st.success(f"Welcome {username}!" if st.session_state.language == 'en' else f"Selamat datang {username}!")
-                st.rerun()
-            else:
-                st.error("Invalid username or password" if st.session_state.language == 'en' else "Username atau password tidak valid")
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-                st.rerun()
-
-def show_register_page():
-    """Display registration page"""
-    st.title("📝 Register - EDA & ML Application" if st.session_state.language == 'id' else "📝 Register - EDA & ML Application")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        # Captcha refresh button outside form
-        col_captcha1, col_captcha2 = st.columns([3, 1])
-        with col_captcha1:
-            if 'captcha_image' not in st.session_state:
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-            st.image(st.session_state.captcha_image, width=200)
-        with col_captcha2:
-            if st.button("🔄 Refresh", key="refresh_captcha_register"):
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-                st.rerun()
-        
-        with st.form("register_form"):
-            st.subheader("Create New Account" if st.session_state.language == 'id' else "Create New Account")
-            
-            new_username = st.text_input(
-                "Username" if st.session_state.language == 'id' else "Username",
-                placeholder="Choose a username",
-                help="Username must be at least 3 characters"
-            )
-            new_email = st.text_input(
-                "Email (Optional)" if st.session_state.language == 'id' else "Email (Optional)",
-                placeholder="your@email.com"
-            )
-            new_password = st.text_input(
-                "Password" if st.session_state.language == 'id' else "Password",
-                type="password",
-                placeholder="Choose a strong password"
-            )
-            confirm_password = st.text_input(
-                "Confirm Password" if st.session_state.language == 'id' else "Confirm Password",
-                type="password",
-                placeholder="Confirm your password"
-            )
-            
-            captcha_input = st.text_input(
-                "Enter Captcha" if st.session_state.language == 'id' else "Enter Captcha",
-                placeholder="Enter the text above"
-            )
-            
-            col_register, col_back = st.columns(2)
-            with col_register:
-                register_submitted = st.form_submit_button("Create Account", type="primary")
-            with col_back:
-                back_btn = st.form_submit_button("Back to Login")
-        
-        if back_btn:
-            st.session_state.show_register = False
-            st.rerun()
-        
-        if register_submitted:
-            if not new_username or not new_password:
-                st.error("Username and password are required" if st.session_state.language == 'en' else "Username dan password wajib diisi")
-            elif len(new_username) < 3:
-                st.error("Username must be at least 3 characters" if st.session_state.language == 'en' else "Username minimal 3 karakter")
-            elif len(new_password) < 6:
-                st.error("Password must be at least 6 characters" if st.session_state.language == 'en' else "Password minimal 6 karakter")
-            elif new_password != confirm_password:
-                st.error("Passwords do not match" if st.session_state.language == 'en' else "Password tidak cocok")
-            elif not captcha_input:
-                st.error("Please enter the captcha" if st.session_state.language == 'en' else "Silakan masukkan captcha")
-            elif not verify_captcha(captcha_input, st.session_state.captcha_text):
-                st.error("Invalid captcha. Please try again" if st.session_state.language == 'en' else "Captcha tidak valid. Silakan coba lagi")
-                st.session_state.captcha_image, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
-                st.rerun()
-            elif not auth_db.is_username_available(new_username):
-                st.error("Username already exists" if st.session_state.language == 'en' else "Username sudah digunakan")
-            elif register_user(new_username, new_password, new_email if new_email else None):
-                st.success("Account created successfully! Please login." if st.session_state.language == 'en' else "Akun berhasil dibuat! Silakan login.")
-                st.session_state.show_register = False
-                st.rerun()
-            else:
-                st.error("Failed to create account" if st.session_state.language == 'en' else "Gagal membuat akun")
-
-# Main authentication check
-if not st.session_state.authenticated:
-    if st.session_state.get('show_register', False):
-        show_register_page()
-    else:
-        show_login_page()
-    st.stop()
-
-# Main application content (after successful authentication)
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"**Logged in as:** {st.session_state.current_user}")
-if st.sidebar.button("Logout", key="logout_btn"):
-    logout_user()
-    st.rerun()
 
 # Tab 1: Data Upload
 with tab1:
