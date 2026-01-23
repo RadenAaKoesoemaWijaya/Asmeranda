@@ -3,14 +3,6 @@
 ## Deskripsi
 Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang dibangun dengan Streamlit. Aplikasi ini memungkinkan pengguna untuk menganalisis data, melakukan preprocessing, melatih model machine learning, dan menginterpretasikan hasil menggunakan nilai SHAP dan LIME (Local Interpretable Model-agnostic Explanations).
 
-### 🆕 Update Terbaru: LIME Integration
-Aplikasi kini mendukung **LIME (Local Interpretable Model-agnostic Explanations)** untuk interpretasi model:
-- ✅ **LIME untuk Klasifikasi**: Interpretasi lokal untuk semua model klasifikasi
-- ✅ **LIME untuk Regresi**: Visualisasi kontribusi fitur untuk model regresi  
-- ✅ **LIME untuk Forecasting**: Support untuk time series forecasting (ARIMA, LSTM, Prophet, dsb)
-- ✅ **Multi-Algorithm Support**: Bekerja dengan Random Forest, Gradient Boosting, Neural Networks, dan semua model ML
-- ✅ **Interactive Visualizations**: Plot kontribusi fitur interaktif dengan penjelasan detail
-
 ## Fitur Utama
 Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 
@@ -304,14 +296,6 @@ streamlit run app.py
 # - Multi-language support (ID/EN)
 # - Export system untuk multiple formats
 ```
-
-- `param_presets.py` - Modul manajemen preset parameter untuk optimasi model
-- `auth_db.py` - Modul autentikasi pengguna
-- `utils.py` - Fungsi utilitas untuk time series dan preprocessing
-- `anomaly_detection_utils.py` - Fungsi untuk deteksi anomali
-- `forecasting_utils.py` - Fungsi untuk forecasting time series
-- `users.db` - Database SQLite untuk autentikasi
-- `DFI/`, `KIMIA DARAH/`, `PROLANIS/` - Folder dataset contoh
 
 ## Fitur Baru & Update Terbaru
 
@@ -628,40 +612,6 @@ Asmeranda ML Research Platform - Advanced Machine Learning Analysis Tool
 Available at: [repository-url]
 ```
 
-## Roadmap & Future Development
-
-### Q1 2024:
-- [ ] Deep Learning Module dengan PyTorch integration
-- [ ] Natural Language Processing untuk text analysis
-- [ ] Real-time streaming data processing
-- [ ] Mobile-responsive PWA version
-
-### Q2 2024:
-- [ ] Cloud deployment templates (AWS, GCP, Azure)
-- [ ] Advanced AutoML dengan neural architecture search
-- [ ] Multi-user collaboration features
-- [ ] API documentation dan SDK development
-
-### Q3 2024:
-- [ ] Computer vision module untuk image analysis
-- [ ] Reinforcement learning untuk optimization problems
-- [ ] Federated learning untuk privacy-preserving analysis
-- [ ] Integration dengan popular data sources (BigQuery, Snowflake)
-
-### Q4 2024:
-- [ ] Advanced explainable AI (XAI) features
-- [ ] Quantum machine learning integration
-- [ ] Edge computing support untuk IoT devices
-- [ ] Enterprise-grade security dan compliance features
-
-## Support & Community
-
-### Getting Help:
-- 📧 Email: [support-email]
-- 💬 Discord: [discord-invite-link]
-- 📚 Documentation: [docs-url]
-- 🐛 Bug Reports: [issues-url]
-- 💡 Feature Requests: [discussions-url]
 
 ### Community:
 - 🌟 Star repository ini jika Anda merasa terbantu
