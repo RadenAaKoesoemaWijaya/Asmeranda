@@ -45,6 +45,13 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
   - **NEW**: Robust handling untuk missing data >30%
   - **NEW**: Smart detection dan handling untuk short time series
 - **Outlier Detection**: IQR, Z-score, Isolation Forest untuk deteksi outlier
+- **Data Normalization for Unsupervised ML**: 
+  - **NEW**: Opsi normalisasi data sebelum algoritma unsupervised ML (K-Means, Hierarchical, DBSCAN, Spectral, K-Prototypes)
+  - **NEW**: Multiple normalization methods: StandardScaler (Z-score), MinMaxScaler (0-1), RobustScaler (IQR), atau No Normalization
+  - **NEW**: Bilingual UI support (Bahasa Indonesia/English) untuk pemilihan normalisasi
+  - **NEW**: Data comparison visualization untuk membandingkan data asli vs normalized
+  - **NEW**: Automatic scaling info display untuk setiap metode clustering
+  - **NEW**: Consistent preprocessing pipeline untuk semua algoritma unsupervised
 
 ### 6. 🛠️ Feature Engineering & Pelatihan Model
 - **Advanced Feature Engineering**: Polynomial features, interaction terms, binning
@@ -268,7 +275,7 @@ streamlit run app.py
 ├── app.py                 # File utama aplikasi Streamlit (5000+ baris)
 ├── requirements.txt       # Daftar dependensi Python
 ├── README.md              # File dokumentasi ini
-├── test_missing_data_fixes_fixed.py  # **NEW**: Test script untuk missing data handling
+├── test_normalization.py  # **NEW**: Test script untuk validasi normalisasi data unsupervised ML
 ├── utils.py               # **UPDATED**: Fungsi utilitas dengan enhanced missing data handling
 ├── forecasting_utils.py   # **UPDATED**: Forecasting dengan robust missing data support
 ├── anomaly_detection_utils.py  # **UPDATED**: Anomaly detection dengan missing data handling
@@ -308,7 +315,17 @@ streamlit run app.py
 - **Smart Validation System**: `validate_data_for_ml()` untuk quality assurance data
 - **Enhanced Error Handling**: Validasi parameter dan error handling yang lebih robust
 
-### 🔍 LIME Model Interpretation (Update Terbaru)
+### � Data Normalization for Unsupervised Machine Learning (Update Terbaru)
+- **Pre-Clustering Normalization**: Opsi normalisasi data sebelum eksekusi algoritma unsupervised ML
+- **Multiple Normalization Methods**: StandardScaler (Z-score), MinMaxScaler (0-1), RobustScaler (IQR), atau tanpa normalisasi
+- **Bilingual Interface**: Support Bahasa Indonesia dan English untuk semua opsi normalisasi
+- **Algorithm Coverage**: K-Means, Hierarchical Clustering, DBSCAN, Spectral Clustering, K-Prototypes
+- **Data Comparison Feature**: Visualisasi perbandingan data asli vs data yang sudah dinormalisasi
+- **Consistent Pipeline**: Normalisasi yang konsisten di semua algoritma unsupervised ML
+- **Performance Validation**: Test script komprehensif untuk memvalidasi efektivitas normalisasi
+- **User-Friendly Display**: Informasi normalisasi yang jelas untuk setiap metode clustering
+
+### �� LIME Model Interpretation (Update Terbaru)
 - **LIME for Classification**: Local Interpretable Model-agnostic Explanations untuk model klasifikasi
 - **LIME for Regression**: Interpretasi lokal untuk model regresi dengan visualisasi kontribusi fitur
 - **LIME for Forecasting**: Support LIME untuk time series forecasting models (ARIMA, LSTM, Prophet, dsb)

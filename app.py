@@ -2813,9 +2813,25 @@ with tab2:
             clustering_data = clustering_data.dropna()
             
             if len(clustering_data) > 0:
-                # Standardize the data
-                scaler = StandardScaler()
-                scaled_data = scaler.fit_transform(clustering_data)
+                # Data normalization/scaling options
+                st.write("### Normalisasi Data" if st.session_state.language == 'id' else "### Data Normalization")
+                normalization_method = st.selectbox(
+                    "Pilih metode normalisasi:" if st.session_state.language == 'id' else "Select normalization method:",
+                    ["StandardScaler (Z-score)", "MinMaxScaler (0-1)", "RobustScaler (IQR)", "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization"]
+                )
+                
+                # Apply selected normalization
+                if normalization_method == "StandardScaler (Z-score)":
+                    scaler = StandardScaler()
+                    scaled_data = scaler.fit_transform(clustering_data)
+                elif normalization_method == "MinMaxScaler (0-1)":
+                    scaler = MinMaxScaler()
+                    scaled_data = scaler.fit_transform(clustering_data)
+                elif normalization_method == "RobustScaler (IQR)":
+                    scaler = RobustScaler()
+                    scaled_data = scaler.fit_transform(clustering_data)
+                else:  # No normalization
+                    scaled_data = clustering_data.values
                 
                 # Select clustering method
                 clustering_method = st.selectbox(
@@ -2846,8 +2862,31 @@ with tab2:
                     kmeans = KMeans(n_clusters=k_value, random_state=42, n_init=10)
                     clusters = kmeans.fit_predict(scaled_data)
                     
+                    # Store normalization info for reporting
+                    if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                        normalization_info = f"Menggunakan {normalization_method}"
+                    else:
+                        normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
+                    
                     # Calculate comprehensive metrics
                     clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "K-Means")
+                    
+                    # Display normalization info
+                    st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
+                    
+                    # Show data comparison before/after normalization
+                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                            st.dataframe(clustering_data.head(10))
+                            st.write(f"Rentang nilai: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]")
+                        with col2:
+                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                            normalized_df = pd.DataFrame(scaled_data, columns=clustering_data.columns, index=clustering_data.index)
+                            st.dataframe(normalized_df.head(10))
+                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
@@ -2899,6 +2938,20 @@ with tab2:
                     
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
+
+                    # Show data comparison before/after normalization
+                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization", key="dbscan_comparison"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                            st.dataframe(clustering_data[selected_features].head(10))
+                            st.write(f"Rentang nilai: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]")
+                        with col2:
+                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                            normalized_df = pd.DataFrame(scaled_data, columns=selected_features, index=clustering_data.index)
+                            st.dataframe(normalized_df.head(10))
+                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
 
                     # Add cluster characteristics analysis
                     if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="kmeans_characteristics"):
@@ -3067,8 +3120,20 @@ with tab2:
                     if len([col for col in selected_features if col in st.session_state.numerical_columns]) > 0:
                         num_features = [col for col in selected_features if col in st.session_state.numerical_columns]
                         num_data = clustering_data[num_features]
-                        num_scaled = StandardScaler().fit_transform(num_data)
-                        clustering_metrics = calculate_comprehensive_clustering_metrics(num_scaled, clusters, "K-Prototypes")
+                        # Use the same normalization as the main clustering data
+                        if normalization_method == "StandardScaler (Z-score)":
+                            num_scaler = StandardScaler()
+                        elif normalization_method == "MinMaxScaler (0-1)":
+                            num_scaler = MinMaxScaler()
+                        elif normalization_method == "RobustScaler (IQR)":
+                            num_scaler = RobustScaler()
+                        else:  # No normalization
+                            num_scaled = num_data.values
+                            clustering_metrics = calculate_comprehensive_clustering_metrics(num_scaled, clusters, "K-Prototypes")
+                        
+                        if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                            num_scaled = num_scaler.fit_transform(num_data)
+                            clustering_metrics = calculate_comprehensive_clustering_metrics(num_scaled, clusters, "K-Prototypes")
                     else:
                         # Fallback to basic metrics if no numerical features
                         clustering_metrics = {
@@ -3102,6 +3167,20 @@ with tab2:
                     
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
+                    
+                    # Show data comparison before/after normalization
+                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization", key="kprototypes_comparison"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                            st.dataframe(clustering_data[selected_features].head(10))
+                            st.write(f"Rentang nilai: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]")
+                        with col2:
+                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                            normalized_df = pd.DataFrame(scaled_data, columns=selected_features, index=clustering_data.index)
+                            st.dataframe(normalized_df.head(10))
+                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
                     
                     # Enhanced visualization
                     if len(selected_features) >= 2:
@@ -3248,8 +3327,17 @@ with tab2:
                     )
                     clusters = hierarchical.fit_predict(scaled_data)
                     
+                    # Store normalization info for reporting
+                    if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                        normalization_info = f"Menggunakan {normalization_method}"
+                    else:
+                        normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
+                    
                     # Calculate comprehensive metrics
                     clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "Hierarchical")
+                    
+                    # Display normalization info
+                    st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
@@ -3318,6 +3406,20 @@ with tab2:
                     st.write("Distribusi cluster:" if st.session_state.language == 'id' else "Cluster distribution:")
                     st.write(clustering_data['Cluster'].value_counts())
 
+                    # Show data comparison before/after normalization
+                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization", key="hierarchical_comparison"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                            st.dataframe(clustering_data[selected_features].head(10))
+                            st.write(f"Rentang nilai: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]")
+                        with col2:
+                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                            normalized_df = pd.DataFrame(scaled_data, columns=selected_features, index=clustering_data.index)
+                            st.dataframe(normalized_df.head(10))
+                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
+
                     # Add cluster characteristics analysis
                     if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="kprototypes_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
@@ -3373,8 +3475,17 @@ with tab2:
                     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
                     clusters = dbscan.fit_predict(scaled_data)
                     
+                    # Store normalization info for reporting
+                    if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                        normalization_info = f"Menggunakan {normalization_method}"
+                    else:
+                        normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
+                    
                     # Calculate comprehensive metrics
                     clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "DBSCAN")
+                    
+                    # Display normalization info
+                    st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
@@ -3456,6 +3567,20 @@ with tab2:
                     
                     clustering_data['Cluster'] = clusters
 
+                    # Show data comparison before/after normalization
+                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization", key="spectral_comparison"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                            st.dataframe(clustering_data[selected_features].head(10))
+                            st.write(f"Rentang nilai: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data[selected_features].min().min():.2f}, {clustering_data[selected_features].max().max():.2f}]")
+                        with col2:
+                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                            normalized_df = pd.DataFrame(scaled_data, columns=selected_features, index=clustering_data.index)
+                            st.dataframe(normalized_df.head(10))
+                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
+
                     # Add cluster characteristics analysis
                     if st.checkbox("Analisis Karakteristik Cluster" if st.session_state.language == 'id' else "Cluster Characteristics Analysis", key="hierarchical_characteristics"):
                         characteristics = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
@@ -3536,8 +3661,17 @@ with tab2:
                     )
                     clusters = spectral.fit_predict(scaled_data)
                     
+                    # Store normalization info for reporting
+                    if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                        normalization_info = f"Menggunakan {normalization_method}"
+                    else:
+                        normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
+                    
                     # Calculate comprehensive metrics
                     clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "Spectral")
+                    
+                    # Display normalization info
+                    st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
