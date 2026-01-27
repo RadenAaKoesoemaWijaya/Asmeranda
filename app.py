@@ -24,6 +24,7 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from kmodes.kprototypes import KPrototypes
 from sklearn.metrics.pairwise import euclidean_distances
 from scipy.spatial.distance import pdist, squareform
+from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 import shap
@@ -211,13 +212,20 @@ def calculate_comprehensive_clustering_metrics(X, labels, method_name=""):
     
     return metrics
 
-def find_optimal_clusters_kmeans(X, max_k=10):
+def find_optimal_clusters_kmeans(X, max_k=10, use_gap_statistic=False):
     """Mencari jumlah cluster optimal untuk K-Means""" if st.session_state.language == 'id' else """Find optimal number of clusters for K-Means"""
     if len(X) < 3:
         return 2, {}
     
     max_k = min(max_k, len(X) - 1)
     metrics = {'k': [], 'inertia': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': []}
+    
+    # Use Gap Statistic if requested
+    if use_gap_statistic:
+        optimal_k, gaps, sks = find_optimal_k_with_gap(X, max_k)
+        metrics['gaps'] = gaps
+        metrics['sks'] = sks
+        return optimal_k, metrics
     
     for k in range(2, max_k + 1):
         try:
@@ -258,6 +266,166 @@ def find_optimal_clusters_kmeans(X, max_k=10):
         optimal_k = metrics['k'][optimal_idx]
     
     return optimal_k, metrics
+
+def gap_statistic(X, max_k=10, n_refs=5):
+    """Menghitung Gap Statistic untuk optimal k""" if st.session_state.language == 'id' else """Calculate Gap Statistic for optimal k"""
+    gaps = np.zeros(max_k-1)
+    sks = np.zeros(max_k-1)
+    
+    for k in range(1, max_k+1):
+        # Generate reference datasets
+        ref_inertias = []
+        for _ in range(n_refs):
+            random_data = np.random.uniform(
+                low=X.min(axis=0), 
+                high=X.max(axis=0), 
+                size=X.shape
+            )
+            km = KMeans(n_clusters=k, random_state=42, n_init=10)
+            km.fit(random_data)
+            ref_inertias.append(km.inertia_)
+        
+        # Calculate for actual data
+        km = KMeans(n_clusters=k, random_state=42, n_init=10)
+        km.fit(X)
+        
+        # Gap statistic
+        gap = np.log(np.mean(ref_inertias)) - np.log(km.inertia_)
+        gaps[k-1] = gap
+        sks[k-1] = np.std(ref_inertias) * np.sqrt(1 + 1/n_refs)
+    
+    return gaps, sks
+
+def find_optimal_k_with_gap(X, max_k=10):
+    """Mencari k optimal menggunakan Gap Statistic""" if st.session_state.language == 'id' else """Find optimal k using Gap Statistic"""
+    gaps, sks = gap_statistic(X, max_k)
+    
+    # Find optimal k using gap statistic rule
+    optimal_k = 2
+    for i in range(len(gaps)-1):
+        if gaps[i] >= gaps[i+1] - sks[i+1]:
+            optimal_k = i + 2  # Convert from index to k value
+            break
+    
+    # If no clear optimal found, use maximum gap
+    if optimal_k == 2 and len(gaps) > 0:
+        optimal_k = np.argmax(gaps) + 2
+    
+    return optimal_k, gaps, sks
+
+def plot_gap_statistic(gaps, sks, k_range):
+    """Visualisasi Gap Statistic untuk pemilihan k optimal""" if st.session_state.language == 'id' else """Visualize Gap Statistic for optimal k selection"""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Plot Gap values
+    k_values = list(range(1, len(gaps) + 1))
+    ax1.plot(k_values, gaps, 'bo-', label='Gap Statistic')
+    ax1.errorbar(k_values, gaps, yerr=sks, fmt='bo', capsize=5, alpha=0.7)
+    ax1.set_xlabel('Jumlah Cluster (k)' if st.session_state.language == 'id' else 'Number of Clusters (k)')
+    ax1.set_ylabel('Gap Statistic')
+    ax1.set_title('Gap Statistic vs Jumlah Cluster' if st.session_state.language == 'id' else 'Gap Statistic vs Number of Clusters')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # Find and mark optimal k
+    optimal_k_idx = np.argmax(gaps)
+    optimal_k = optimal_k_idx + 1
+    ax1.axvline(x=optimal_k, color='red', linestyle='--', alpha=0.7, 
+                label=f'k optimal = {optimal_k}' if st.session_state.language == 'id' else f'optimal k = {optimal_k}')
+    ax1.legend()
+    
+    # Plot Gap differences
+    if len(gaps) > 1:
+        gap_diffs = np.diff(gaps)
+        ax2.plot(k_values[1:], gap_diffs, 'ro-', label='Gap Differences')
+        ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+        ax2.set_xlabel('Jumlah Cluster (k)' if st.session_state.language == 'id' else 'Number of Clusters (k)')
+        ax2.set_ylabel('Gap Difference')
+        ax2.set_title('Perbedaan Gap Statistic' if st.session_state.language == 'id' else 'Gap Statistic Differences')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+    
+    plt.tight_layout()
+    return fig
+
+def calculate_kprototypes_metrics(data, categorical_idx, clusters, kproto_model):
+    """Calculate K-Prototypes specific evaluation metrics"""
+    metrics = {}
+    
+    # Total cost (WCSS + categorical cost) from model
+    if hasattr(kproto_model, 'cost_'):
+        metrics['total_cost'] = kproto_model.cost_
+    
+    # Numerical WCSS (within-cluster sum of squares)
+    numerical_mask = ~np.isin(np.arange(data.shape[1]), categorical_idx)
+    numerical_data = data[:, numerical_mask]
+    
+    # Convert to float to ensure numerical operations work
+    numerical_data = numerical_data.astype(float)
+    
+    wcss = 0
+    unique_clusters = np.unique(clusters)
+    cluster_centroids = {}
+    
+    for cluster in unique_clusters:
+        if cluster != -1:  # Exclude noise points
+            cluster_mask = clusters == cluster
+            cluster_points = numerical_data[cluster_mask]
+            
+            if len(cluster_points) > 0:
+                centroid = np.mean(cluster_points, axis=0)
+                cluster_centroids[cluster] = centroid
+                wcss += np.sum((cluster_points - centroid) ** 2)
+    
+    metrics['numerical_wcss'] = wcss
+    metrics['n_clusters'] = len(unique_clusters) - (1 if -1 in unique_clusters else 0)
+    
+    # Categorical purity - measure how pure each cluster is for categorical attributes
+    if len(categorical_idx) > 0:
+        total_purity = 0
+        valid_clusters = 0
+        
+        for cluster in unique_clusters:
+            if cluster != -1:  # Exclude noise points
+                cluster_mask = clusters == cluster
+                cluster_data = data[cluster_mask]
+                
+                if len(cluster_data) > 0:
+                    cluster_purity = 0
+                    
+                    # Calculate purity for each categorical attribute
+                    for cat_idx in categorical_idx:
+                        if cat_idx < cluster_data.shape[1]:
+                            # Find mode (most frequent value)
+                            values = cluster_data[:, cat_idx]
+                            if len(values) > 0:
+                                unique, counts = np.unique(values, return_counts=True)
+                                mode_value = unique[np.argmax(counts)]
+                                purity = np.sum(values == mode_value) / len(values)
+                                cluster_purity += purity
+                    
+                    if len(categorical_idx) > 0:
+                        total_purity += cluster_purity / len(categorical_idx)
+                        valid_clusters += 1
+        
+        if valid_clusters > 0:
+            metrics['categorical_purity'] = total_purity / valid_clusters
+            metrics['categorical_purity_std'] = np.std([total_purity / valid_clusters]) if valid_clusters > 1 else 0
+        else:
+            metrics['categorical_purity'] = 0
+            metrics['categorical_purity_std'] = 0
+    else:
+        metrics['categorical_purity'] = 0
+        metrics['categorical_purity_std'] = 0
+    
+    # Combined score (lower cost + higher purity = better)
+    if 'total_cost' in metrics and metrics['total_cost'] > 0:
+        # Normalize and combine metrics (lower cost is better, higher purity is better)
+        cost_component = 1 / (1 + metrics['total_cost'] / len(clusters))  # Normalize cost
+        purity_component = metrics['categorical_purity']
+        metrics['combined_score'] = 0.7 * cost_component + 0.3 * purity_component
+    
+    return metrics
 
 def find_optimal_eps_dbscan(X, min_samples_range=range(3, 8)):
     """Mencari parameter eps optimal untuk DBSCAN""" if st.session_state.language == 'id' else """Find optimal eps parameter for DBSCAN"""
@@ -2848,10 +3016,22 @@ with tab2:
                 if clustering_method == "K-Means":
                     # K-Means Clustering
                     if auto_optimize:
+                        # Add Gap Statistic option
+                        use_gap = st.checkbox(
+                            "Gunakan Gap Statistic (lebih akurat tapi lebih lambat)" if st.session_state.language == 'id' else "Use Gap Statistic (more accurate but slower)",
+                            value=False
+                        )
                         with st.spinner("Mencari jumlah cluster optimal..." if st.session_state.language == 'id' else "Finding optimal number of clusters..."):
-                            optimal_k, kmeans_metrics = find_optimal_clusters_kmeans(scaled_data)
+                            optimal_k, kmeans_metrics = find_optimal_clusters_kmeans(scaled_data, use_gap_statistic=use_gap)
                         st.success(f"Jumlah cluster optimal: {optimal_k}")
                         k_value = optimal_k
+                        
+                        # Display Gap Statistic visualization if used
+                        if use_gap and 'gaps' in kmeans_metrics and 'sks' in kmeans_metrics:
+                            st.write("### Visualisasi Gap Statistic" if st.session_state.language == 'id' else "### Gap Statistic Visualization")
+                            fig_gap = plot_gap_statistic(kmeans_metrics['gaps'], kmeans_metrics['sks'], kmeans_metrics['k'])
+                            st.pyplot(fig_gap)
+                            plt.close(fig_gap)
                     else:
                         max_k = min(10, len(clustering_data) - 1)
                         k_value = st.slider(
@@ -2901,6 +3081,24 @@ with tab2:
                     with col3:
                         if 'davies_bouldin_score' in clustering_metrics:
                             st.metric("Davies-Bouldin", f"{clustering_metrics['davies_bouldin_score']:.3f}")
+                    
+                    # Display K-Prototypes specific metrics
+                    if 'total_cost' in clustering_metrics or 'categorical_purity' in clustering_metrics:
+                        st.write("#### Metrik Khusus K-Prototypes" if st.session_state.language == 'id' else "#### K-Prototypes Specific Metrics")
+                        kproto_col1, kproto_col2, kproto_col3 = st.columns(3)
+                        
+                        with kproto_col1:
+                            if 'total_cost' in clustering_metrics:
+                                st.metric("Total Cost", f"{clustering_metrics['total_cost']:.2f}")
+                        with kproto_col2:
+                            if 'numerical_wcss' in clustering_metrics:
+                                st.metric("Numerical WCSS", f"{clustering_metrics['numerical_wcss']:.2f}")
+                        with kproto_col3:
+                            if 'categorical_purity' in clustering_metrics:
+                                st.metric("Categorical Purity", f"{clustering_metrics['categorical_purity']:.3f}")
+                        
+                        if 'combined_score' in clustering_metrics:
+                            st.write(f"**Combined Score:** {clustering_metrics['combined_score']:.3f} (Lower cost + Higher purity = Better)")
                     
                     # Add cluster stability analysis
                     if st.checkbox("Analisis Stabilitas Cluster" if st.session_state.language == 'id' else "Cluster Stability Analysis"):
@@ -3116,6 +3314,9 @@ with tab2:
                     kproto = KPrototypes(n_clusters=k_value, init='Huang', random_state=42, gamma=gamma_value)
                     clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
                     
+                    # Calculate K-Prototypes specific metrics
+                    kproto_metrics = calculate_kprototypes_metrics(kproto_data.values, categorical_idx, clusters, kproto)
+                    
                     # Calculate comprehensive metrics (using numerical features only)
                     if len([col for col in selected_features if col in st.session_state.numerical_columns]) > 0:
                         num_features = [col for col in selected_features if col in st.session_state.numerical_columns]
@@ -3141,6 +3342,9 @@ with tab2:
                             'cluster_size_mean': np.mean(pd.Series(clusters).value_counts()),
                             'cluster_size_std': np.std(pd.Series(clusters).value_counts())
                         }
+                    
+                    # Merge K-Prototypes specific metrics with comprehensive metrics
+                    clustering_metrics.update(kproto_metrics)
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
