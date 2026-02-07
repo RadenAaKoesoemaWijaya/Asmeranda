@@ -26,12 +26,10 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Bivariate Analysis**: Analisis hubungan antar variabel
 - **Time Series Detection**: Deteksi otomatis data time series
 
-### 4. 🎯 Rekomendasi Metode Penelitian & AI Analysis
-- **Research Type Recommendations**: Rekomendasi jenis penelitian berbasis karakteristik dataset
-- **Methodology Suggestions**: Saran metodologi penelitian yang tepat
-- **Journal References**: Referensi jurnal ilmiah dengan impact factor dan DOI
+### 4. 🎯 AI-Powered Dataset Analysis
 - **AI-Powered Dataset Analysis**: Analisis potensi keberhasilan dataset untuk penelitian
 - **ML Approach Recommendations**: Saran pendekatan machine learning yang sesuai
+
 
 ### 5. 🔄 Preprocessing Data Canggih
 - **Automated Preprocessing**: Pipeline preprocessing otomatis
@@ -335,10 +333,8 @@ streamlit run app.py
 - **Model-Agnostic**: Bekerja dengan semua jenis model machine learning
 - **Integration with SHAP**: Kombinasi LIME dan SHAP untuk interpretasi komprehensif
 
-### 🔍 AI-Powered Research Recommendations
-- **Analisis Otomatis Dataset**: Sistem AI yang menganalisis karakteristik dataset dan memberikan rekomendasi jenis penelitian yang sesuai
-- **Rekomendasi Metodologi**: Saran metodologi penelitian berbasis tipe data dan domain penelitian
-- **Referensi Jurnal Ilmiah**: Database jurnal internasional dengan impact factor, indexing, dan DOI lengkap
+### 🔍 AI-Powered Dataset Analysis
+- **Analisis Otomatis Dataset**: Sistem AI yang menganalisis karakteristik dataset dan memberikan evaluasi potensi keberhasilan
 - **Potensi Keberhasilan Analisis**: Evaluasi keberhasilan dataset untuk penelitian dengan indikator khusus
 
 ### 🤖 Advanced Machine Learning Integration
@@ -408,12 +404,11 @@ streamlit run app.py
    - Lihat pratinjau data dan statistik deskriptif
    - Identifikasi missing values dan outliers otomatis
 
-### 3. **AI-Powered Research Recommendations**
-   - Gunakan tombol "Generate Rekomendasi Jenis Penelitian"
+### 3. **AI-Powered Dataset Analysis**
+   - Gunakan tombol "Generate Analisis Dataset"
    - Sistem AI akan menganalisis karakteristik dataset
-   - Dapatkan rekomendasi: jenis penelitian, metodologi, jurnal referensi
-   - Lihat impact factor dan DOI jurnal yang direkomendasikan
-   - Gunakan tombol "Generate Analisis Dataset" untuk evaluasi potensi keberhasilan
+   - Dapatkan evaluasi potensi keberhasilan dataset untuk penelitian
+   - Lihat rekomendasi pendekatan machine learning yang sesuai
 
 ### 4. **Analisis Eksploratori Data (EDA)**
    - Pindah ke tab "Analisis Data"
