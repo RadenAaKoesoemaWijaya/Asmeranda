@@ -7,9 +7,11 @@ Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang di
 Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 
 ### 1. 🔐 Sistem Autentikasi & Keamanan
-- **Registrasi & Login Pengguna**: Sistem autentikasi lengkap dengan database SQLite
+- **Loginizer (OTP Email)**: Registrasi & login dengan verifikasi OTP via email
+- **Konfigurasi SMTP di UI**: Expander khusus untuk menyimpan pengaturan SMTP runtime
 - **Captcha Security**: Perlindungan dari bot dengan captcha visual
 - **Session Management**: Pengelolaan sesi pengguna yang aman
+- **Super Admin Dashboard**: Tab khusus untuk super admin memantau traffic dan penggunaan fitur
 - **Multi-bahasa**: Dukungan Bahasa Indonesia dan English
 
 ### 2. 📤 Unggah Data
@@ -121,6 +123,48 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Comprehensive Reports**: Laporan lengkap dengan metrik dan visualisasi
 - **Dashboard Customization**: Panel kontrol yang dapat disesuaikan
 - **Real-time Updates**: Update visualisasi secara real-time selama analisis
+
+## Login & OTP (Loginizer)
+- **Alur**:
+  - Daftar pengguna baru dengan username, email, password, dan captcha
+  - Masuk menggunakan username dan password, sistem mengirim OTP ke email terdaftar
+  - Masukkan kode OTP pada tab Verifikasi untuk menyelesaikan login
+- **Fallback Aman**:
+  - Jika SMTP belum dikonfigurasi, OTP ditampilkan sementara di UI (mode demo/testing)
+
+## Konfigurasi SMTP
+- **Lewat Dashboard Super Admin**:
+  - Masuk sebagai super admin, buka tab “🛡️ Super Admin Dashboard”
+  - Isi Host, Port, User, Password, Sender, dan opsi TLS
+  - Klik “Simpan Konfigurasi SMTP”
+- **Lewat Environment Variables (fallback)**:
+  - SMTP_HOST, SMTP_PORT (default 587), SMTP_USER, SMTP_PASS
+  - SMTP_TLS=true/false (default true)
+  - SMTP_SENDER (opsional; default menggunakan SMTP_USER)
+
+## Super Admin Dashboard
+- **Fitur**:
+  - Metrik pengguna: total, aktif, non-aktif, jumlah super admin
+  - Tabel pengguna: username, email, status, waktu dibuat, terakhir login
+  - Ringkasan aktivitas: login, akses aplikasi (grafik bar + tabel)
+  - Statistik penggunaan fitur: fitur paling sering digunakan (grafik bar + tabel)
+  - Konfigurasi SMTP: pengaturan pengiriman OTP (hanya super admin)
+  - Ganti kata sandi super admin: ubah password akun super admin sendiri
+  - Manajemen pengguna: tambah/hapus pengguna, aktif/non-aktif, jadikan super admin
+- **Akses**:
+  - Tab “🛡️ Super Admin Dashboard” hanya muncul jika yang login adalah akun super admin
+  - Tidak dapat menghapus diri sendiri atau satu-satunya super admin
+
+## Akun Super Admin (Default)
+- **Default (dapat diubah via environment variables)**:
+  - Username: `superadmin`
+  - Password: `Admin@12345`
+  - Email: `admin@local`
+- **Override melalui environment**:
+  - SUPER_ADMIN_USER, SUPER_ADMIN_PASS, SUPER_ADMIN_EMAIL
+- **Catatan Keamanan**:
+  - Untuk produksi, ganti kredensial default dan aktifkan SMTP agar OTP terkirim ke email
+  - Gunakan password kuat dan rotasi berkala
 
 ## Model yang Didukung
 ### Klasifikasi

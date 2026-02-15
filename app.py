@@ -37,6 +37,21 @@ import json
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import het_breuschpagan
+from auth_db import auth_db
+from captcha_utils import captcha_gen, verify_captcha
+import smtplib
+import ssl
+from email.message import EmailMessage
+ 
+# Compatibility helper for rerun across Streamlit versions
+def safe_rerun():
+    try:
+        st.rerun()
+    except Exception:
+        try:
+            st.experimental_rerun()
+        except Exception:
+            pass
 from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_analysis, 
                    analyze_trend_seasonality_cycle, plot_pattern_analysis,
                    implement_shap_classification, handle_multiclass_shap,
@@ -98,6 +113,272 @@ if 'language' not in st.session_state:
     st.session_state.language = 'id'  # Default language is Indonesian
 
 col1, col2 = st.columns([0.9, 0.1])
+
+# ---------------------------
+# Loginizer with Email OTP
+# ---------------------------
+def send_otp_email(recipient_email: str, otp_code: str) -> bool:
+    """Send OTP code to recipient email using SMTP settings from environment. Returns True if sent."""
+    # Prefer database configuration via admin dashboard; fallback to environment variables
+    cfg_db = auth_db.get_smtp_config()
+    smtp_host = cfg_db.get('host') or os.getenv('SMTP_HOST')
+    smtp_port = int(cfg_db.get('port') or os.getenv('SMTP_PORT', '587'))
+    smtp_user = cfg_db.get('user') or os.getenv('SMTP_USER')
+    smtp_pass = cfg_db.get('password') or os.getenv('SMTP_PASS')
+    use_tls = bool(cfg_db.get('tls')) if 'tls' in cfg_db else (os.getenv('SMTP_TLS', 'true').lower() in ['1', 'true', 'yes'])
+    sender_email = cfg_db.get('sender') or os.getenv('SMTP_SENDER', smtp_user or 'no-reply@localhost')
+    if not smtp_host or not smtp_user or not smtp_pass:
+        return False
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = 'Your OTP Code'
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+        msg.set_content(f'Kode OTP Anda: {otp_code}\nKode berlaku selama 10 menit.')
+        if use_tls:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls(context=context)
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+def render_loginizer():
+    """Render login/register with email OTP verification. Returns True if authenticated."""
+    st.title("🔐 Loginizer")
+    st.caption("Masuk atau daftar sebagai pengguna baru dengan verifikasi OTP via email")
+    if 'auth_step' not in st.session_state:
+        st.session_state.auth_step = 'login'
+    if 'captcha_text' not in st.session_state:
+        # Initialize captcha
+        _, captcha_text = captcha_gen.get_captcha_base64()
+        st.session_state.captcha_text = captcha_text
+    tabs = st.tabs(["Masuk", "Daftar", "Verifikasi OTP"])
+    # Login Tab
+    with tabs[0]:
+        st.subheader("Masuk")
+        login_username = st.text_input("Username", key="login_username")
+        login_password = st.text_input("Password", type="password", key="login_password")
+        if st.button("Kirim OTP ke Email", type="primary", key="btn_login"):
+            user = auth_db.authenticate_user(login_username, login_password)
+            if user:
+                otp_info = auth_db.generate_otp(login_username)
+                if otp_info:
+                    sent = send_otp_email(otp_info['email'], otp_info['code'])
+                    st.session_state.auth_pending_user = login_username
+                    st.session_state.auth_step = 'verify'
+                    if sent:
+                        st.success("OTP telah dikirim ke email terdaftar. Silakan verifikasi di tab Verifikasi OTP.")
+                    else:
+                        st.warning("Mode demo: OTP ditampilkan di sini karena email belum terkonfigurasi.")
+                        st.info(f"Kode OTP: {otp_info['code']}")
+                else:
+                    st.error("Email pengguna tidak ditemukan. Silakan perbarui email Anda.")
+            else:
+                st.error("Username atau password salah.")
+    # Register Tab
+    with tabs[1]:
+        st.subheader("Daftar Pengguna Baru")
+        reg_username = st.text_input("Username Baru", key="reg_username")
+        reg_email = st.text_input("Email", key="reg_email")
+        reg_password = st.text_input("Password", type="password", key="reg_password")
+        reg_password2 = st.text_input("Konfirmasi Password", type="password", key="reg_password2")
+        img_b64, _ = captcha_gen.get_captcha_base64(st.session_state.captcha_text)
+        st.markdown(f"![captcha]({img_b64})")
+        captcha_input = st.text_input("Masukkan teks captcha", key="captcha_input")
+        if st.button("Daftar", type="primary", key="btn_register"):
+            if reg_password != reg_password2:
+                st.error("Password dan konfirmasi tidak cocok.")
+            elif not verify_captcha(captcha_input, st.session_state.captcha_text, case_sensitive=True):
+                st.error("Captcha salah. Silakan coba lagi.")
+                # regenerate captcha
+                _, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
+            elif not reg_email or '@' not in reg_email:
+                st.error("Email tidak valid.")
+            else:
+                # Check availability
+                if not auth_db.is_username_available(reg_username):
+                    st.error("Username sudah digunakan.")
+                elif auth_db.get_user_by_email(reg_email):
+                    st.error("Email sudah terdaftar.")
+                else:
+                    created = auth_db.create_user(reg_username, reg_password, reg_email)
+                    if created:
+                        st.success("Akun berhasil dibuat. Silakan masuk untuk menerima OTP.")
+                        st.session_state.auth_step = 'login'
+                    else:
+                        st.error("Pembuatan akun gagal. Periksa input Anda.")
+    # Verify Tab
+    with tabs[2]:
+        st.subheader("Verifikasi OTP")
+        pending_user = st.session_state.get('auth_pending_user')
+        if pending_user:
+            st.info(f"Verifikasi untuk pengguna: {pending_user}")
+        otp_input = st.text_input("Masukkan Kode OTP", key="otp_input")
+        if st.button("Verifikasi", type="primary", key="btn_verify"):
+            user = pending_user
+            if not user:
+                st.error("Tidak ada sesi OTP yang aktif. Silakan masuk terlebih dahulu.")
+            else:
+                ok = auth_db.verify_otp(user, otp_input)
+                if ok:
+                    token = auth_db.create_session(user)
+                    st.session_state.session_token = token
+                    st.session_state.authenticated = True
+                    st.session_state.current_username = user
+                    auth_db.record_activity(user, 'login')
+                    st.success("Verifikasi berhasil. Anda telah masuk.")
+                    safe_rerun()
+                else:
+                    st.error("Kode OTP salah atau kedaluwarsa.")
+    # If authenticated, return True
+    return st.session_state.get('authenticated', False)
+
+# Gate app content behind authentication
+if not st.session_state.get('authenticated', False):
+    auth_ok = render_loginizer()
+    if not auth_ok:
+        st.stop()
+else:
+    # Record app access
+    try:
+        auth_db.record_activity(st.session_state.get('current_username'), 'access_app')
+    except Exception:
+        pass
+    
+    # Helper: record feature usage
+    def log_feature(feature_name: str):
+        try:
+            user = st.session_state.get('current_username')
+            if user:
+                auth_db.record_feature_usage(user, feature_name)
+        except Exception:
+            pass
+
+# ---------------------------
+# Super Admin Dashboard Tab
+# ---------------------------
+current_user = st.session_state.get('current_username')
+if current_user and auth_db.is_super_admin(current_user):
+    admin_tabs = st.tabs(["🛡️ Super Admin Dashboard"])
+    with admin_tabs[0]:
+        st.subheader("🛡️ Super Admin Dashboard")
+        # Users metrics
+        import pandas as pd
+        users = pd.DataFrame(auth_db.get_users_dataframe())
+        total_users = len(users)
+        active_users = int(users['is_active'].sum()) if total_users > 0 else 0
+        inactive_users = total_users - active_users
+        super_admins = int(users['is_super_admin'].sum()) if total_users > 0 else 0
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Pengguna", total_users)
+        c2.metric("Aktif", active_users)
+        c3.metric("Non-aktif", inactive_users)
+        c4.metric("Super Admin", super_admins)
+        st.markdown("---")
+        st.markdown("### 👥 Data Pengguna Terdaftar")
+        st.dataframe(users[['id','username','email','is_active','is_super_admin','created_at','last_login']], use_container_width=True)
+        # Activity summary
+        st.markdown("### 📈 Ringkasan Aktivitas")
+        activity = pd.DataFrame(auth_db.get_activity_summary())
+        if len(activity) > 0:
+            st.bar_chart(activity.set_index('action')['total'])
+            st.table(activity)
+        else:
+            st.info("Belum ada aktivitas yang tercatat.")
+        # Feature usage
+        st.markdown("### ⭐ Fitur Paling Sering Digunakan")
+        feature_stats = pd.DataFrame(auth_db.get_feature_usage_stats())
+        if len(feature_stats) > 0:
+            st.bar_chart(feature_stats.set_index('feature_name')['total'])
+            st.table(feature_stats)
+        else:
+            st.info("Belum ada penggunaan fitur yang tercatat.")
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ Konfigurasi SMTP (Super Admin)")
+        cfg = auth_db.get_smtp_config()
+        host = st.text_input("SMTP Host", value=cfg.get('host', ''))
+        port = st.number_input("SMTP Port", min_value=1, max_value=65535, value=int(cfg.get('port', 587)))
+        user = st.text_input("SMTP User", value=cfg.get('user', ''))
+        password = st.text_input("SMTP Password", type="password", value=cfg.get('password', ''))
+        sender = st.text_input("Sender Email", value=cfg.get('sender', user or ''))
+        tls = st.checkbox("Gunakan TLS", value=bool(cfg.get('tls', True)))
+        if st.button("Simpan Konfigurasi SMTP", key="admin_save_smtp"):
+            cfg_save = {
+                'host': host.strip(),
+                'port': int(port),
+                'user': user.strip(),
+                'password': password,
+                'sender': sender.strip() or user.strip(),
+                'tls': tls
+            }
+            auth_db.set_smtp_config(cfg_save)
+            auth_db.record_activity(current_user, 'update_smtp')
+            st.success("Konfigurasi SMTP disimpan.")
+        
+        st.markdown("### 🔒 Ganti Kata Sandi Super Admin")
+        old_pw = st.text_input("Kata sandi saat ini", type="password")
+        new_pw = st.text_input("Kata sandi baru", type="password")
+        new_pw2 = st.text_input("Konfirmasi kata sandi baru", type="password")
+        if st.button("Ganti Kata Sandi", key="admin_change_pw"):
+            if new_pw != new_pw2:
+                st.error("Konfirmasi kata sandi tidak cocok.")
+            elif len(new_pw) < 8:
+                st.error("Kata sandi baru minimal 8 karakter.")
+            else:
+                if auth_db.change_password(current_user, old_pw, new_pw):
+                    auth_db.record_activity(current_user, 'change_password')
+                    st.success("Kata sandi berhasil diubah.")
+                else:
+                    st.error("Kata sandi saat ini salah atau pengguna tidak ditemukan.")
+        
+        st.markdown("### 👤 Manajemen Pengguna")
+        st.markdown("#### Tambah Pengguna")
+        add_user_username = st.text_input("Username pengguna baru", key="add_user_username")
+        add_user_email = st.text_input("Email pengguna baru", key="add_user_email")
+        add_user_password = st.text_input("Kata sandi pengguna baru", type="password", key="add_user_password")
+        add_user_is_active = st.checkbox("Aktif", value=True, key="add_user_active")
+        add_user_is_admin = st.checkbox("Jadikan Super Admin", value=False, key="add_user_is_admin")
+        if st.button("Tambah Pengguna", key="btn_add_user"):
+            if not add_user_username or not add_user_email or not add_user_password:
+                st.error("Mohon isi username, email, dan kata sandi.")
+            else:
+                created = auth_db.create_user(add_user_username, add_user_password, add_user_email)
+                if created:
+                    auth_db.set_user_active(add_user_username, add_user_is_active)
+                    if add_user_is_admin:
+                        auth_db.set_user_super_admin(add_user_username, True)
+                    auth_db.record_activity(current_user, 'add_user', metadata=add_user_username)
+                    st.success("Pengguna berhasil ditambahkan.")
+                else:
+                    st.error("Gagal menambahkan pengguna (username atau email mungkin sudah digunakan).")
+        
+        st.markdown("#### Hapus Pengguna")
+        user_list = users['username'].tolist() if total_users > 0 else []
+        del_user = st.selectbox("Pilih pengguna untuk dihapus", options=user_list, key="del_user_select")
+        if st.button("Hapus Pengguna", key="btn_delete_user"):
+            if del_user == current_user:
+                st.error("Tidak dapat menghapus diri sendiri.")
+            else:
+                # Prevent deleting last super admin
+                if auth_db.is_super_admin(del_user):
+                    if int(users['is_super_admin'].sum()) <= 1:
+                        st.error("Tidak dapat menghapus satu-satunya super admin.")
+                    else:
+                        auth_db.delete_user(del_user)
+                        auth_db.record_activity(current_user, 'delete_user', metadata=del_user)
+                        st.success(f"Pengguna {del_user} telah dihapus.")
+                else:
+                    auth_db.delete_user(del_user)
+                    auth_db.record_activity(current_user, 'delete_user', metadata=del_user)
+                    st.success(f"Pengguna {del_user} telah dihapus.")
 with col2:
     if st.button('ID' if st.session_state.language == 'en' else 'EN'):
         st.session_state.language = 'id' if st.session_state.language == 'en' else 'en'
@@ -2360,6 +2641,10 @@ with tab1:
             if st.button("🧠 Generate Analisis Dataset" if st.session_state.language == 'id' else "🧠 Generate Dataset Analysis", 
                        type="primary", key="generate_ai_analysis"):
                 st.session_state.show_ai_analysis = True
+                try:
+                    log_feature('ai_analysis_generate')
+                except Exception:
+                    pass
                 st.rerun()
             
             # Display AI Analysis - Fokus pada Potensi Keberhasilan
@@ -6081,6 +6366,10 @@ with tab4:
                 # Prepare time series data
                 if st.button("Proses Data Time Series" if st.session_state.language == 'id' else "Process Time Series Data"):
                     with st.spinner("Memproses data time series..." if st.session_state.language == 'id' else "Processing time series data..."):
+                        try:
+                            log_feature('timeseries_process')
+                        except Exception:
+                            pass
                         # Prepare data
                         ts_data = prepare_timeseries_data(
                             st.session_state.data, 
@@ -6427,6 +6716,10 @@ with tab4:
                         # Button for detailed visualization
                         if hasattr(st.session_state, 'forecast_data') and st.session_state.forecast_data is not None:
                             if st.button("Tampilkan Visualisasi Forecasting Lengkap" if st.session_state.language == 'id' else "Show Complete Forecasting Visualization"):
+                                try:
+                                    log_feature('forecasting_visualization_full')
+                                except Exception:
+                                    pass
                                 display_forecast_summary(
                                     st.session_state.train_data,
                                     st.session_state.test_data,
@@ -7963,6 +8256,10 @@ with tab4:
 
             # Train model button
             if model is not None and st.button("Train Model"):
+                try:
+                    log_feature('train_model')
+                except Exception:
+                    pass
                 with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
                     try:
                         # Preprocessing: Remove NaN values from training data
@@ -8977,6 +9274,10 @@ with tab5:
                 )
                 
                 if st.button("Generate SHAP Values untuk Forecasting" if st.session_state.language == 'id' else "Generate SHAP Values for Forecasting"):
+                    try:
+                        log_feature('shap_forecasting_generate')
+                    except Exception:
+                        pass
                     if not selected_features:
                         st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
                     else:
@@ -9080,6 +9381,10 @@ with tab5:
                     use_interactive = False
             
             if st.button("Generate SHAP Values" if st.session_state.language == 'id' else "Generate SHAP Values"):
+                try:
+                    log_feature('generate_shap_values')
+                except Exception:
+                    pass
                 if not selected_features:
                     st.error("Silakan pilih setidaknya satu fitur untuk analisis SHAP." if st.session_state.language == 'id' else "Please select at least one feature for SHAP analysis.")
                 else:
@@ -9998,6 +10303,10 @@ with tab6:
             )
 
             if st.button("Generate LIME Explanations" if st.session_state.language == 'id' else "Generate LIME Explanations"):
+                try:
+                    log_feature('generate_lime_explanations')
+                except Exception:
+                    pass
                 if not selected_features:
                     st.error("Silakan pilih setidaknya satu fitur untuk analisis LIME." if st.session_state.language == 'id' else "Please select at least one feature for LIME analysis.")
                 else:
@@ -10493,6 +10802,10 @@ with tab7:
                     if st.button("🚀 Jalankan Deteksi Anomali" if st.session_state.language == 'id' else "Run Anomaly Detection", type="primary"):
                         with st.spinner("Menjalankan deteksi anomali..." if st.session_state.language == 'id' else "Running anomaly detection..."):
                             try:
+                                log_feature('anomaly_detection_run')
+                            except Exception:
+                                pass
+                            try:
                                 # Validasi data
                                 if len(ts_data) < 10:
                                     st.error("Dataset terlalu pendek. Minimal 10 data points diperlukan." if st.session_state.language == 'id' else "Dataset too short. Minimum 10 data points required.")
@@ -10933,7 +11246,7 @@ st.markdown(
     }
     </style>
     <div class="footer">
-        Copyright © 2025 Puskesmas Kepulauan Seribu Utara. All rights reserved.
+        Copyright@2025 PT. ASMER SAHABAT SUKSES. All rights reserved.
     </div>
     """,
     unsafe_allow_html=True

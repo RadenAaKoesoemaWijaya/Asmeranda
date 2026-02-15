@@ -857,7 +857,7 @@ class StrokeDatasetGenerator:
         return dataset
 
 
-def generate_stroke_dataset(n_samples=10000, save_to_csv=True):
+def generate_stroke_dataset(n_samples=1000, save_to_csv=True):
     """
     Main function to generate stroke prediction dataset
     
@@ -882,7 +882,7 @@ if __name__ == "__main__":
     print("Based on medical literature and epidemiological studies")
     print("=" * 50)
     
-    dataset = generate_stroke_dataset(10000)
+    dataset = generate_stroke_dataset(1000)
     
     print("\n🎉 Dataset generation and validation completed!")
     print("The dataset is ready for machine learning analysis!")

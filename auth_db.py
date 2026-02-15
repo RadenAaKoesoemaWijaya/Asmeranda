@@ -26,9 +26,25 @@ class AuthDatabase:
                 last_login TIMESTAMP,
                 failed_attempts INTEGER DEFAULT 0,
                 locked_until TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1
+                is_active BOOLEAN DEFAULT 1,
+                is_super_admin BOOLEAN DEFAULT 0
             )
         ''')
+        # Ensure email is unique (create index) - handle existing duplicates gracefully
+        try:
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL
+            ''')
+        except sqlite3.IntegrityError:
+            conn.commit()
+            conn.close()
+            # Normalize duplicates then retry
+            self.normalize_duplicate_emails()
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL
+            ''')
         
         # Create sessions table for tracking active sessions
         cursor.execute('''
@@ -42,8 +58,67 @@ class AuthDatabase:
             )
         ''')
         
+        # Activity logs
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                action TEXT NOT NULL,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Feature usage aggregate
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feature_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                feature_name TEXT NOT NULL,
+                username TEXT,
+                use_count INTEGER DEFAULT 0,
+                last_used TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_feature_usage ON feature_usage(feature_name, username)
+        ''')
+        
+        # App settings (SMTP configuration)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS app_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                smtp_host TEXT,
+                smtp_port INTEGER,
+                smtp_user TEXT,
+                smtp_pass TEXT,
+                smtp_sender TEXT,
+                smtp_tls INTEGER DEFAULT 1
+            )
+        ''')
+        
+        # Create OTP table for email verification
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS otp_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email TEXT NOT NULL,
+                otp_code TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (username) REFERENCES users (username)
+            )
+        ''')
+        
         conn.commit()
+        # Migrate schema to ensure required columns exist on existing databases
+        try:
+            self.migrate_schema()
+        except Exception:
+            pass
         conn.close()
+        
+        # Create default super admin if missing
+        self.ensure_super_admin_exists()
     
     def hash_password(self, password):
         """Hash password using SHA-256"""
@@ -54,6 +129,13 @@ class AuthDatabase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            
+            # Prevent duplicate email proactively
+            if email:
+                cursor.execute('SELECT COUNT(*) FROM users WHERE email = ?', (email,))
+                if cursor.fetchone()[0] > 0:
+                    conn.close()
+                    return False
             
             password_hash = self.hash_password(password)
             cursor.execute('''
@@ -66,6 +148,105 @@ class AuthDatabase:
             return True
         except sqlite3.IntegrityError:
             return False
+    
+    def get_user_by_username(self, username):
+        """Fetch user record by username"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, is_active, is_super_admin FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {'id': row[0], 'username': row[1], 'email': row[2], 'is_active': row[3], 'is_super_admin': row[4]}
+        return None
+    
+    def normalize_duplicate_emails(self):
+        """Find duplicate emails and set to NULL for non-primary records to satisfy unique index"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        # Find duplicate emails
+        cursor.execute('''
+            SELECT email FROM users 
+            WHERE email IS NOT NULL
+            GROUP BY email
+            HAVING COUNT(*) > 1
+        ''')
+        duplicates = [row[0] for row in cursor.fetchall()]
+        for email in duplicates:
+            # Keep the earliest created (lowest id) and nullify others
+            cursor.execute('SELECT id FROM users WHERE email = ? ORDER BY id ASC', (email,))
+            ids = [r[0] for r in cursor.fetchall()]
+            # Nullify all except first
+            for user_id in ids[1:]:
+                cursor.execute('UPDATE users SET email = NULL WHERE id = ?', (user_id,))
+        conn.commit()
+        conn.close()
+    
+    def migrate_schema(self):
+        """Ensure required columns exist in legacy databases."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        # Check users table columns
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [row[1] for row in cursor.fetchall()]
+        # Add is_super_admin if missing
+        if 'is_super_admin' not in cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN is_super_admin INTEGER DEFAULT 0")
+            cursor.execute("UPDATE users SET is_super_admin = 0 WHERE is_super_admin IS NULL")
+        # Ensure indexes (partial unique for non-NULL emails)
+        try:
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL
+            ''')
+        except sqlite3.OperationalError:
+            # Fallback: attempt normal unique index after normalization
+            self.normalize_duplicate_emails()
+            try:
+                cursor.execute('''
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)
+                ''')
+            except Exception:
+                pass
+        conn.commit()
+        conn.close()
+    
+    def get_user_by_email(self, email):
+        """Fetch user record by email"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, is_active, is_super_admin FROM users WHERE email = ?', (email,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {'id': row[0], 'username': row[1], 'email': row[2], 'is_active': row[3], 'is_super_admin': row[4]}
+        return None
+    
+    def is_super_admin(self, username) -> bool:
+        """Check if user is super admin"""
+        u = self.get_user_by_username(username)
+        return bool(u and u.get('is_super_admin'))
+    
+    def ensure_super_admin_exists(self):
+        """Ensure there is at least one super admin account, create default if none"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM users WHERE is_super_admin = 1')
+            count = cursor.fetchone()[0]
+            if count == 0:
+                # Get from environment or defaults
+                username = os.getenv('SUPER_ADMIN_USER', 'superadmin')
+                password = os.getenv('SUPER_ADMIN_PASS', 'Admin@12345')
+                email = os.getenv('SUPER_ADMIN_EMAIL', 'admin@local')
+                pw_hash = self.hash_password(password)
+                cursor.execute('''
+                    INSERT OR IGNORE INTO users (username, password_hash, email, is_active, is_super_admin)
+                    VALUES (?, ?, ?, 1, 1)
+                ''', (username, pw_hash, email))
+                conn.commit()
+            conn.close()
+        except Exception:
+            pass
     
     def authenticate_user(self, username, password):
         """Authenticate user and return user info"""
@@ -136,6 +317,211 @@ class AuthDatabase:
         
         conn.commit()
         conn.close()
+    
+    def generate_otp(self, username, length: int = 6, ttl_minutes: int = 10):
+        """Generate and store OTP code for the given user, returns (code, expires_at)"""
+        user = self.get_user_by_username(username)
+        if not user or not user.get('email'):
+            return None
+        
+        # Create OTP code (digits only)
+        digits = string.digits
+        otp_code = ''.join(secrets.choice(digits) for _ in range(length))
+        expires_at = datetime.now() + timedelta(minutes=ttl_minutes)
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        # Remove previous OTPs for this user
+        cursor.execute('DELETE FROM otp_codes WHERE username = ?', (username,))
+        # Insert new OTP
+        cursor.execute('''
+            INSERT INTO otp_codes (username, email, otp_code, expires_at)
+            VALUES (?, ?, ?, ?)
+        ''', (username, user['email'], otp_code, expires_at))
+        conn.commit()
+        conn.close()
+        
+        return {'code': otp_code, 'email': user['email'], 'expires_at': expires_at}
+    
+    def verify_otp(self, username, code):
+        """Verify OTP code for user; returns True on success, False otherwise"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT otp_code, expires_at FROM otp_codes
+            WHERE username = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        ''', (username,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return False
+        otp_code, expires_at = row
+        # Check expiration
+        try:
+            exp_dt = datetime.fromisoformat(expires_at)
+        except Exception:
+            # SQLite may return already datetime
+            exp_dt = expires_at if isinstance(expires_at, datetime) else datetime.now() - timedelta(days=1)
+        is_valid = (str(code).strip() == str(otp_code).strip()) and (exp_dt > datetime.now())
+        if is_valid:
+            # consume OTP
+            cursor.execute('DELETE FROM otp_codes WHERE username = ?', (username,))
+            conn.commit()
+        conn.close()
+        return is_valid
+    
+    def record_activity(self, username, action: str, metadata: str = None):
+        """Record an activity event"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO activity_logs (username, action, metadata)
+            VALUES (?, ?, ?)
+        ''', (username, action, metadata))
+        conn.commit()
+        conn.close()
+    
+    def record_feature_usage(self, username, feature_name: str):
+        """Increment feature usage count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        # Upsert-like behavior
+        cursor.execute('''
+            SELECT id, use_count FROM feature_usage WHERE feature_name = ? AND username = ?
+        ''', (feature_name, username))
+        row = cursor.fetchone()
+        if row:
+            new_count = (row[1] or 0) + 1
+            cursor.execute('''
+                UPDATE feature_usage SET use_count = ?, last_used = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_count, row[0]))
+        else:
+            cursor.execute('''
+                INSERT INTO feature_usage (feature_name, username, use_count, last_used)
+                VALUES (?, ?, 1, CURRENT_TIMESTAMP)
+            ''', (feature_name, username))
+        conn.commit()
+        conn.close()
+    
+    def get_users_dataframe(self):
+        """Return users as list of dicts"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, is_active, is_super_admin, created_at, last_login FROM users')
+        rows = cursor.fetchall()
+        conn.close()
+        cols = ['id','username','email','is_active','is_super_admin','created_at','last_login']
+        return [dict(zip(cols, r)) for r in rows]
+    
+    def get_feature_usage_stats(self):
+        """Return feature usage stats"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT feature_name, SUM(use_count) as total, MAX(last_used) FROM feature_usage GROUP BY feature_name ORDER BY total DESC')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'feature_name': r[0], 'total': r[1], 'last_used': r[2]} for r in rows]
+    
+    def get_activity_summary(self):
+        """Return recent activity summary"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT action, COUNT(*) as total FROM activity_logs GROUP BY action ORDER BY total DESC')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'action': r[0], 'total': r[1]} for r in rows]
+    
+    # Admin operations
+    def change_password(self, username, old_password, new_password):
+        """Change user's password after verifying old password"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT password_hash FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return False
+        current_hash = row[0]
+        if self.hash_password(old_password) != current_hash:
+            conn.close()
+            return False
+        new_hash = self.hash_password(new_password)
+        cursor.execute('UPDATE users SET password_hash = ? WHERE username = ?', (new_hash, username))
+        conn.commit()
+        conn.close()
+        return True
+    
+    def delete_user(self, username):
+        """Delete user and related sessions/OTP"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM sessions WHERE username = ?', (username,))
+        cursor.execute('DELETE FROM otp_codes WHERE username = ?', (username,))
+        cursor.execute('DELETE FROM users WHERE username = ?', (username,))
+        conn.commit()
+        conn.close()
+        return True
+    
+    def set_user_active(self, username, is_active: bool):
+        """Activate or deactivate user"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET is_active = ? WHERE username = ?', (1 if is_active else 0, username))
+        conn.commit()
+        conn.close()
+        return True
+    
+    def set_user_super_admin(self, username, is_super_admin: bool):
+        """Grant or revoke super admin role"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET is_super_admin = ? WHERE username = ?', (1 if is_super_admin else 0, username))
+        conn.commit()
+        conn.close()
+        return True
+    
+    # SMTP settings
+    def get_smtp_config(self):
+        """Get SMTP configuration from app settings"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sender, smtp_tls FROM app_settings WHERE id = 1')
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return {}
+        return {
+            'host': row[0],
+            'port': row[1],
+            'user': row[2],
+            'password': row[3],
+            'sender': row[4],
+            'tls': bool(row[5]) if row[5] is not None else True
+        }
+    
+    def set_smtp_config(self, cfg: dict):
+        """Upsert SMTP configuration into app settings"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM app_settings WHERE id = 1')
+        exists = cursor.fetchone()[0] > 0
+        if exists:
+            cursor.execute('''
+                UPDATE app_settings 
+                SET smtp_host = ?, smtp_port = ?, smtp_user = ?, smtp_pass = ?, smtp_sender = ?, smtp_tls = ?
+                WHERE id = 1
+            ''', (cfg.get('host'), cfg.get('port'), cfg.get('user'), cfg.get('password'), cfg.get('sender'), 1 if cfg.get('tls', True) else 0))
+        else:
+            cursor.execute('''
+                INSERT INTO app_settings (id, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sender, smtp_tls)
+                VALUES (1, ?, ?, ?, ?, ?, ?)
+            ''', (cfg.get('host'), cfg.get('port'), cfg.get('user'), cfg.get('password'), cfg.get('sender'), 1 if cfg.get('tls', True) else 0))
+        conn.commit()
+        conn.close()
+        return True
     
     def create_session(self, username):
         """Create a new session token"""
