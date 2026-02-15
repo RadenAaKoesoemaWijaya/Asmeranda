@@ -27,7 +27,8 @@ class AuthDatabase:
                 failed_attempts INTEGER DEFAULT 0,
                 locked_until TIMESTAMP,
                 is_active BOOLEAN DEFAULT 1,
-                is_super_admin BOOLEAN DEFAULT 0
+                is_super_admin BOOLEAN DEFAULT 0,
+                trial_ends_at TIMESTAMP
             )
         ''')
         # Ensure email is unique (create index) - handle existing duplicates gracefully
@@ -138,10 +139,11 @@ class AuthDatabase:
                     return False
             
             password_hash = self.hash_password(password)
+            trial_ends_at = (datetime.now() + timedelta(days=30)).isoformat()
             cursor.execute('''
-                INSERT INTO users (username, password_hash, email)
-                VALUES (?, ?, ?)
-            ''', (username, password_hash, email))
+                INSERT INTO users (username, password_hash, email, trial_ends_at)
+                VALUES (?, ?, ?, ?)
+            ''', (username, password_hash, email, trial_ends_at))
             
             conn.commit()
             conn.close()
@@ -153,11 +155,18 @@ class AuthDatabase:
         """Fetch user record by username"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute('SELECT id, username, email, is_active, is_super_admin FROM users WHERE username = ?', (username,))
+        cursor.execute('SELECT id, username, email, is_active, is_super_admin, trial_ends_at FROM users WHERE username = ?', (username,))
         row = cursor.fetchone()
         conn.close()
         if row:
-            return {'id': row[0], 'username': row[1], 'email': row[2], 'is_active': row[3], 'is_super_admin': row[4]}
+            return {
+                'id': row[0], 
+                'username': row[1], 
+                'email': row[2], 
+                'is_active': row[3], 
+                'is_super_admin': row[4],
+                'trial_ends_at': row[5]
+            }
         return None
     
     def normalize_duplicate_emails(self):
@@ -193,6 +202,13 @@ class AuthDatabase:
         if 'is_super_admin' not in cols:
             cursor.execute("ALTER TABLE users ADD COLUMN is_super_admin INTEGER DEFAULT 0")
             cursor.execute("UPDATE users SET is_super_admin = 0 WHERE is_super_admin IS NULL")
+        
+        # Add trial_ends_at if missing
+        if 'trial_ends_at' not in cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN trial_ends_at TIMESTAMP")
+            # Set default trial for existing users (30 days from now, as a courtesy)
+            trial_end = (datetime.now() + timedelta(days=30)).isoformat()
+            cursor.execute("UPDATE users SET trial_ends_at = ? WHERE trial_ends_at IS NULL", (trial_end,))
         # Ensure indexes (partial unique for non-NULL emails)
         try:
             cursor.execute('''
@@ -254,7 +270,7 @@ class AuthDatabase:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, username, password_hash, failed_attempts, locked_until, is_active
+            SELECT id, username, password_hash, failed_attempts, locked_until, is_active, trial_ends_at
             FROM users WHERE username = ?
         ''', (username,))
         
@@ -264,11 +280,11 @@ class AuthDatabase:
         if not user:
             return None
         
-        user_id, username, stored_hash, failed_attempts, locked_until, is_active = user
+        user_id, username, stored_hash, failed_attempts, locked_until, is_active, trial_ends_at = user
         
         # Check if account is locked
         if locked_until and datetime.fromisoformat(locked_until) > datetime.now():
-            return None
+            return {'error': 'locked', 'locked_until': locked_until}
         
         # Check if account is active
         if not is_active:
@@ -278,7 +294,11 @@ class AuthDatabase:
         if self.hash_password(password) == stored_hash:
             # Reset failed attempts on successful login
             self.reset_failed_attempts(username)
-            return {'id': user_id, 'username': username}
+            return {
+                'id': user_id, 
+                'username': username,
+                'trial_ends_at': trial_ends_at
+            }
         else:
             # Increment failed attempts
             self.increment_failed_attempts(username)
@@ -293,7 +313,7 @@ class AuthDatabase:
             UPDATE users 
             SET failed_attempts = failed_attempts + 1,
                 locked_until = CASE 
-                    WHEN failed_attempts >= 4 THEN datetime('now', '+30 minutes')
+                    WHEN failed_attempts >= 5 THEN datetime('now', '+15 minutes')
                     ELSE locked_until
                 END
             WHERE username = ?

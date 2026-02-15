@@ -165,23 +165,43 @@ def render_loginizer():
         st.subheader("Masuk")
         login_username = st.text_input("Username", key="login_username")
         login_password = st.text_input("Password", type="password", key="login_password")
+        
+        # Add Captcha for Login
+        img_b64_login, _ = captcha_gen.get_captcha_base64(st.session_state.captcha_text)
+        st.markdown(f"![captcha]({img_b64_login})")
+        login_captcha = st.text_input("Masukkan teks captcha", key="login_captcha")
+        
         if st.button("Kirim OTP ke Email", type="primary", key="btn_login"):
-            user = auth_db.authenticate_user(login_username, login_password)
-            if user:
-                otp_info = auth_db.generate_otp(login_username)
-                if otp_info:
-                    sent = send_otp_email(otp_info['email'], otp_info['code'])
-                    st.session_state.auth_pending_user = login_username
-                    st.session_state.auth_step = 'verify'
-                    if sent:
-                        st.success("OTP telah dikirim ke email terdaftar. Silakan verifikasi di tab Verifikasi OTP.")
-                    else:
-                        st.warning("Mode demo: OTP ditampilkan di sini karena email belum terkonfigurasi.")
-                        st.info(f"Kode OTP: {otp_info['code']}")
-                else:
-                    st.error("Email pengguna tidak ditemukan. Silakan perbarui email Anda.")
+            if not verify_captcha(login_captcha, st.session_state.captcha_text, case_sensitive=True):
+                st.error("Captcha salah. Silakan coba lagi.")
+                # regenerate captcha
+                _, st.session_state.captcha_text = captcha_gen.get_captcha_base64()
             else:
-                st.error("Username atau password salah.")
+                user_data = auth_db.authenticate_user(login_username, login_password)
+                
+                if user_data and 'error' in user_data:
+                    if user_data['error'] == 'locked':
+                        # Calculate wait time
+                        wait_time = user_data['locked_until']
+                        st.error(f"Akun terkunci karena terlalu banyak percobaan gagal. Silakan coba lagi setelah {wait_time.strftime('%H:%M:%S')}")
+                elif user_data:
+                    # Check trial status here or store for later
+                    st.session_state.temp_user_data = user_data
+                    
+                    otp_info = auth_db.generate_otp(login_username)
+                    if otp_info:
+                        sent = send_otp_email(otp_info['email'], otp_info['code'])
+                        st.session_state.auth_pending_user = login_username
+                        st.session_state.auth_step = 'verify'
+                        if sent:
+                            st.success("OTP telah dikirim ke email terdaftar. Silakan verifikasi di tab Verifikasi OTP.")
+                        else:
+                            st.warning("Mode demo: OTP ditampilkan di sini karena email belum terkonfigurasi.")
+                            st.info(f"Kode OTP: {otp_info['code']}")
+                    else:
+                        st.error("Email pengguna tidak ditemukan. Silakan perbarui email Anda.")
+                else:
+                    st.error("Username atau password salah.")
     # Register Tab
     with tabs[1]:
         st.subheader("Daftar Pengguna Baru")
@@ -232,6 +252,12 @@ def render_loginizer():
                     st.session_state.session_token = token
                     st.session_state.authenticated = True
                     st.session_state.current_username = user
+                    
+                    # Fetch user details for trial info
+                    user_details = auth_db.get_user_by_username(user)
+                    if user_details and user_details.get('trial_ends_at'):
+                        st.session_state.trial_ends_at = user_details['trial_ends_at']
+                    
                     auth_db.record_activity(user, 'login')
                     st.success("Verifikasi berhasil. Anda telah masuk.")
                     safe_rerun()
@@ -248,7 +274,32 @@ if not st.session_state.get('authenticated', False):
 else:
     # Record app access
     try:
-        auth_db.record_activity(st.session_state.get('current_username'), 'access_app')
+        current_user = st.session_state.get('current_username')
+        auth_db.record_activity(current_user, 'access_app')
+        
+        # Trial period check
+        if current_user and not auth_db.is_super_admin(current_user):
+            # Get trial info if not in session
+            if 'trial_ends_at' not in st.session_state:
+                user_info = auth_db.get_user_by_username(current_user)
+                if user_info and user_info.get('trial_ends_at'):
+                    st.session_state.trial_ends_at = user_info['trial_ends_at']
+            
+            trial_end_str = st.session_state.get('trial_ends_at')
+            if trial_end_str:
+                trial_end = datetime.fromisoformat(trial_end_str)
+                now = datetime.now()
+                
+                if now > trial_end:
+                    st.error("⚠️ Masa percobaan gratis 30 hari Anda telah berakhir.")
+                    st.info("Silakan hubungi administrator untuk memperpanjang akses atau berlangganan.")
+                    if st.button("Keluar"):
+                        st.session_state.clear()
+                        safe_rerun()
+                    st.stop()
+                else:
+                    days_left = (trial_end - now).days
+                    st.sidebar.info(f"⏳ Masa Trial: {days_left} hari tersisa")
     except Exception:
         pass
     
