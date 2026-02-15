@@ -159,9 +159,45 @@ def render_loginizer():
         # Initialize captcha
         _, captcha_text = captcha_gen.get_captcha_base64()
         st.session_state.captcha_text = captcha_text
-    tabs = st.tabs(["Masuk", "Daftar", "Verifikasi OTP"])
-    # Login Tab
+    tabs = st.tabs(["ℹ️ Info & Premium", "Masuk", "Daftar", "Verifikasi OTP"])
+    
+    # Info & Premium Tab
     with tabs[0]:
+        st.subheader("Tentang Aplikasi & Penawaran Premium")
+        
+        st.markdown("""
+        ### Selamat Datang di Asmeranda
+        Aplikasi ini dirancang untuk membantu peneliti dalam menganalisis data, khususnya terkait dataset medis dan prediksi penyakit. 
+        Dengan fitur-fitur canggih seperti:
+        - **Exploratory Data Analysis (EDA)**: Analisis mendalam tentang distribusi dan korelasi data.
+        - **Machine Learning**: Pelatihan model supervised dan unsupervised.
+        - **Explainable AI (SHAP & LIME)**: Interpretasi model yang transparan.
+        - **Time Series Analysis**: Deteksi anomali dan pola tren.
+        
+        ---
+        ### 🌟 Penawaran Membership Premium
+        
+        Tingkatkan kualitas penelitian Anda dengan bergabung sebagai **Member Premium**!
+        
+        **Biaya Langganan: Rp 1.085.000**
+        
+        **Keunggulan Eksklusif:**
+        1.  ✅ **Akses Penuh** ke seluruh fitur aplikasi selama satu tahun penuh.
+        2.  🤝 **Pendampingan Tim Ahli** selama **3 bulan**.
+        3.  📊 **Konsultasi Desain Penelitian** untuk memastikan metodologi yang tepat.
+        4.  🛠️ **Bantuan Teknis** prioritas dalam penggunaan aplikasi.
+        
+        > *Investasi terbaik untuk hasil penelitian yang valid dan reliabel.*
+        
+        **Cara Bergabung:**
+        Silakan hubungi admin kami untuk pendaftaran member premium dan informasi pembayaran.
+        """)
+        
+        if st.button("Hubungi Admin via WhatsApp", type="primary"):
+            st.markdown("[Klik di sini untuk chat dengan Admin](https://wa.me/6281234567890)") # Ganti dengan nomor yang sesuai
+    
+    # Login Tab
+    with tabs[1]:
         st.subheader("Masuk")
         login_username = st.text_input("Username", key="login_username")
         login_password = st.text_input("Password", type="password", key="login_password")
@@ -203,7 +239,7 @@ def render_loginizer():
                 else:
                     st.error("Username atau password salah.")
     # Register Tab
-    with tabs[1]:
+    with tabs[2]:
         st.subheader("Daftar Pengguna Baru")
         reg_username = st.text_input("Username Baru", key="reg_username")
         reg_email = st.text_input("Email", key="reg_email")
@@ -235,7 +271,7 @@ def render_loginizer():
                     else:
                         st.error("Pembuatan akun gagal. Periksa input Anda.")
     # Verify Tab
-    with tabs[2]:
+    with tabs[3]:
         st.subheader("Verifikasi OTP")
         pending_user = st.session_state.get('auth_pending_user')
         if pending_user:
