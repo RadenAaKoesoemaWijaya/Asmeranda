@@ -185,7 +185,7 @@ def render_loginizer():
         1.  ✅ **Akses Penuh** ke seluruh fitur aplikasi selama satu tahun penuh.
         2.  🤝 **Pendampingan Tim Ahli** selama **3 bulan**.
         3.  📊 **Konsultasi Desain Penelitian** untuk memastikan metodologi yang tepat.
-        4.  🛠️ **Bantuan Teknis** prioritas dalam penggunaan aplikasi.
+        4.  🛠️ **Kesempatan mengikuti program affiliasi.
         
         > *Investasi terbaik untuk hasil penelitian yang valid dan reliabel.*
         
