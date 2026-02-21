@@ -174,6 +174,8 @@ def render_loginizer():
         - **Explainable AI (SHAP & LIME)**: Interpretasi model yang transparan.
         - **Time Series Analysis**: Deteksi anomali dan pola tren.
         
+        DILARANG MENDISTRIBUSIKAN TANPA IJIN DARI PT. ASMER SAHABAT SUKES
+        
         ---
         ### 🌟 Penawaran Membership Premium
         
@@ -3097,21 +3099,41 @@ with tab2:
                 # Add automatic parameter optimization option
                 auto_optimize = st.checkbox(
                     "Optimalkan parameter otomatis" if st.session_state.language == 'id' else "Auto-optimize parameters",
-                    value=True
+                    value=True,
+                    key="auto_optimize_clustering"
                 )
                 
                 if clustering_method == "K-Means":
                     # K-Means Clustering
+                    
+                    # Get recommendations
+                    recommendations = get_clustering_recommendations(scaled_data, method='kmeans', language=st.session_state.language)
+                    if recommendations:
+                        with st.expander("ℹ️ Rekomendasi Parameter" if st.session_state.language == 'id' else "ℹ️ Parameter Recommendations"):
+                            st.write(recommendations.get('data_info', ''))
+                            st.write(recommendations.get('k_recommendation', ''))
+                    
                     if auto_optimize:
                         # Add Gap Statistic option
                         use_gap = st.checkbox(
                             "Gunakan Gap Statistic (lebih akurat tapi lebih lambat)" if st.session_state.language == 'id' else "Use Gap Statistic (more accurate but slower)",
-                            value=False
+                            value=False,
+                            key="kmeans_gap_statistic"
                         )
                         with st.spinner("Mencari jumlah cluster optimal..." if st.session_state.language == 'id' else "Finding optimal number of clusters..."):
-                            optimal_k, kmeans_metrics = find_optimal_clusters_kmeans(scaled_data, use_gap_statistic=use_gap)
-                        st.success(f"Jumlah cluster optimal: {optimal_k}")
-                        k_value = optimal_k
+                            try:
+                                optimal_k, kmeans_metrics = find_optimal_clusters_kmeans(scaled_data, use_gap_statistic=use_gap)
+                                st.success(f"Jumlah cluster optimal: {optimal_k}")
+                                k_value = optimal_k
+                            except Exception as e:
+                                st.error(f"Error dalam optimasi K-Means: {str(e)}" if st.session_state.language == 'id' else f"Error in K-Means optimization: {str(e)}")
+                                k_value = 3  # Default fallback
+                    else:
+                        k_value = st.slider(
+                            "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
+                            2, min(10, len(clustering_data) - 1), 3,
+                            key="kmeans_manual_clusters"
+                        )
                         
                         # Display Gap Statistic visualization if used
                         if use_gap and 'gaps' in kmeans_metrics and 'sks' in kmeans_metrics:
@@ -3119,41 +3141,53 @@ with tab2:
                             fig_gap = plot_gap_statistic(kmeans_metrics['gaps'], kmeans_metrics['sks'], kmeans_metrics['k'])
                             st.pyplot(fig_gap)
                             plt.close(fig_gap)
-                    else:
-                        max_k = min(10, len(clustering_data) - 1)
-                        k_value = st.slider(
-                            "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
-                            2, max_k, 3
-                        )
-                    
-                    kmeans = KMeans(n_clusters=k_value, random_state=42, n_init=10)
-                    clusters = kmeans.fit_predict(scaled_data)
-                    
-                    # Store normalization info for reporting
-                    if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
-                        normalization_info = f"Menggunakan {normalization_method}"
-                    else:
-                        normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
-                    
-                    # Calculate comprehensive metrics
-                    clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "K-Means")
-                    
-                    # Display normalization info
-                    st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
-                    
-                    # Show data comparison before/after normalization
-                    if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
-                            st.dataframe(clustering_data.head(10))
-                            st.write(f"Rentang nilai: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]")
-                        with col2:
-                            st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
-                            normalized_df = pd.DataFrame(scaled_data, columns=clustering_data.columns, index=clustering_data.index)
-                            st.dataframe(normalized_df.head(10))
-                            if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
-                                st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
+                else:
+                    max_k = min(10, len(clustering_data) - 1)
+                    k_value = st.slider(
+                        "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
+                        2, max_k, 3
+                    )
+                
+                # Validate parameters
+                validation = validate_clustering_parameters(scaled_data, n_clusters=k_value, method='kmeans')
+                if not validation['valid']:
+                    st.error("Error validasi parameter: " + ", ".join(validation['errors']))
+                    st.stop()
+                
+                if validation['warnings']:
+                    for warning in validation['warnings']:
+                        st.warning(warning)
+                
+                k_value = validation['parameters'].get('n_clusters', k_value)
+                
+                kmeans = KMeans(n_clusters=k_value, random_state=42, n_init=10)
+                clusters = kmeans.fit_predict(scaled_data)
+                
+                # Store normalization info for reporting
+                if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                    normalization_info = f"Menggunakan {normalization_method}"
+                else:
+                    normalization_info = "Tanpa normalisasi" if st.session_state.language == 'id' else "No normalization"
+                
+                # Calculate comprehensive metrics
+                clustering_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters, "K-Means")
+                
+                # Display normalization info
+                st.info(f"**Metode Normalisasi:** {normalization_info}" if st.session_state.language == 'id' else f"**Normalization Method:** {normalization_info}")
+                
+                # Show data comparison before/after normalization
+                if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Data Asli**" if st.session_state.language == 'id' else "**Original Data**")
+                        st.dataframe(clustering_data.head(10))
+                        st.write(f"Rentang nilai: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{clustering_data.min().min():.2f}, {clustering_data.max().max():.2f}]")
+                    with col2:
+                        st.write("**Data Setelah Normalisasi**" if st.session_state.language == 'id' else "**Normalized Data**")
+                        normalized_df = pd.DataFrame(scaled_data, columns=clustering_data.columns, index=clustering_data.index)
+                        st.dataframe(normalized_df.head(10))
+                        if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
+                            st.write(f"Rentang nilai: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]" if st.session_state.language == 'id' else f"Value range: [{normalized_df.min().min():.2f}, {normalized_df.max().max():.2f}]")
                     
                     # Display comprehensive evaluation
                     st.write("### Hasil Evaluasi Clustering" if st.session_state.language == 'id' else "### Clustering Evaluation Results")
@@ -3339,53 +3373,60 @@ with tab2:
                             best_score = -1
                             best_gamma = 0.5
                             
-                            # Grid search for optimal k and gamma
-                            for k in range(2, min(8, len(clustering_data) - 1)):
-                                for gamma in [0.1, 0.3, 0.5, 0.7, 0.9]:
-                                    try:
-                                        # Prepare data for K-Prototypes
-                                        categorical_idx = [i for i, col in enumerate(selected_features) 
-                                                         if col in st.session_state.categorical_columns]
-                                        
-                                        # Convert categorical columns to appropriate types
-                                        kproto_data = clustering_data.copy()
-                                        for col in categorical_in_selected:
-                                            kproto_data[col] = kproto_data[col].astype('category').cat.codes
-                                        
-                                        # Initialize and fit K-Prototypes
-                                        kproto = KPrototypes(n_clusters=k, init='Huang', random_state=42, gamma=gamma)
-                                        clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
-                                        
-                                        # Calculate silhouette score (only for numerical features)
-                                        if len(set(clusters)) > 1 and len([col for col in selected_features 
-                                                                              if col in st.session_state.numerical_columns]) > 0:
-                                            # Use only numerical features for silhouette score
-                                            num_features = [col for col in selected_features 
-                                                          if col in st.session_state.numerical_columns]
-                                            if num_features:
-                                                num_data = clustering_data[num_features]
-                                                num_scaled = StandardScaler().fit_transform(num_data)
-                                                score = silhouette_score(num_scaled, clusters)
-                                                if score > best_score:
-                                                    best_score = score
-                                                    optimal_k = k
-                                                    best_gamma = gamma
-                                    except:
-                                        continue
-                        
-                        st.success(f"Jumlah cluster optimal: {optimal_k}, Gamma optimal: {best_gamma}")
-                        k_value = optimal_k
-                        gamma_value = best_gamma
+                            try:
+                                # Grid search for optimal k and gamma
+                                for k in range(2, min(8, len(clustering_data) - 1)):
+                                    for gamma in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                                        try:
+                                            # Prepare data for K-Prototypes
+                                            categorical_idx = [i for i, col in enumerate(selected_features) 
+                                                             if col in st.session_state.categorical_columns]
+                                            
+                                            # Convert categorical columns to appropriate types
+                                            kproto_data = clustering_data.copy()
+                                            for col in categorical_in_selected:
+                                                kproto_data[col] = kproto_data[col].astype('category').cat.codes
+                                            
+                                            # Initialize and fit K-Prototypes
+                                            kproto = KPrototypes(n_clusters=k, init='Huang', random_state=42, gamma=gamma)
+                                            clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
+                                            
+                                            # Calculate silhouette score (only for numerical features)
+                                            if len(set(clusters)) > 1 and len([col for col in selected_features 
+                                                                                  if col in st.session_state.numerical_columns]) > 0:
+                                                # Use only numerical features for silhouette score
+                                                num_features = [col for col in selected_features 
+                                                              if col in st.session_state.numerical_columns]
+                                                if num_features:
+                                                    num_data = clustering_data[num_features]
+                                                    num_scaled = StandardScaler().fit_transform(num_data)
+                                                    score = silhouette_score(num_scaled, clusters)
+                                                    if score > best_score:
+                                                        best_score = score
+                                                        optimal_k = k
+                                                        best_gamma = gamma
+                                        except Exception:
+                                            continue
+                                
+                                st.success(f"Jumlah cluster optimal: {optimal_k}, Gamma optimal: {best_gamma}")
+                                k_value = optimal_k
+                                gamma_value = best_gamma
+                            except Exception as e:
+                                st.error(f"Error dalam optimasi K-Prototypes: {str(e)}" if st.session_state.language == 'id' else f"Error in K-Prototypes optimization: {str(e)}")
+                                k_value = 3
+                                gamma_value = 0.5
                     else:
                         max_k = min(10, len(clustering_data) - 1)
                         k_value = st.slider(
                             "Jumlah cluster (k):" if st.session_state.language == 'id' else "Number of clusters (k):",
-                            2, max_k, 3
+                            2, max_k, 3,
+                            key="kprototypes_manual_clusters"
                         )
                         
                         gamma_value = st.slider(
                             "Gamma (bobot kategorikal):" if st.session_state.language == 'id' else "Gamma (categorical weight):",
-                            0.0, 1.0, 0.5, 0.1
+                            0.0, 1.0, 0.5, 0.1,
+                            key="kprototypes_manual_gamma"
                         )
                     
                     # Prepare data for K-Prototypes
@@ -3557,7 +3598,7 @@ with tab2:
                             st.write("Analisis karakteristik memerlukan fitur numerikal.")
                     
                     # Generate comprehensive cluster report
-                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report"):
+                    if st.checkbox("Hasilkan Laporan Cluster" if st.session_state.language == 'id' else "Generate Cluster Report", key="kprototypes_report"):
                         cluster_profiles = analyze_cluster_characteristics(clustering_data, clusters, selected_features)
                         report = generate_cluster_report(clustering_data, clusters, "K-Prototypes", clustering_metrics, None, cluster_profiles)
                         st.text_area(
@@ -3579,7 +3620,8 @@ with tab2:
                     # Hierarchical Clustering
                     linkage_method = st.selectbox(
                         "Metode linkage:" if st.session_state.language == 'id' else "Linkage method:",
-                        ["ward", "complete", "average", "single"]
+                        ["ward", "complete", "average", "single"],
+                        key="hierarchical_linkage_method"
                     )
                     
                     if auto_optimize:
@@ -3587,29 +3629,34 @@ with tab2:
                             optimal_n_clusters = 3  # Default fallback
                             best_score = -1
                             
-                            # Try different numbers of clusters
-                            for n_clusters in range(2, min(8, len(clustering_data) - 1)):
-                                try:
-                                    hierarchical = AgglomerativeClustering(
-                                        n_clusters=n_clusters, 
-                                        linkage=linkage_method
-                                    )
-                                    clusters = hierarchical.fit_predict(scaled_data)
-                                    
-                                    if len(set(clusters)) > 1:
-                                        score = silhouette_score(scaled_data, clusters)
-                                        if score > best_score:
-                                            best_score = score
-                                            optimal_n_clusters = n_clusters
-                                except:
-                                    continue
-                            
-                            st.success(f"Jumlah cluster optimal: {optimal_n_clusters}")
-                            n_clusters = optimal_n_clusters
+                            try:
+                                # Try different numbers of clusters
+                                for n_clusters in range(2, min(8, len(clustering_data) - 1)):
+                                    try:
+                                        hierarchical = AgglomerativeClustering(
+                                            n_clusters=n_clusters, 
+                                            linkage=linkage_method
+                                        )
+                                        clusters = hierarchical.fit_predict(scaled_data)
+                                        
+                                        if len(set(clusters)) > 1:
+                                            score = silhouette_score(scaled_data, clusters)
+                                            if score > best_score:
+                                                best_score = score
+                                                optimal_n_clusters = n_clusters
+                                    except Exception:
+                                        continue
+                                
+                                st.success(f"Jumlah cluster optimal: {optimal_n_clusters}")
+                                n_clusters = optimal_n_clusters
+                            except Exception as e:
+                                st.error(f"Error dalam optimasi Hierarchical: {str(e)}" if st.session_state.language == 'id' else f"Error in Hierarchical optimization: {str(e)}")
+                                n_clusters = 3  # Default fallback
                     else:
                         n_clusters = st.slider(
                             "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
-                            2, min(10, len(clustering_data) - 1), 3
+                            2, min(10, len(clustering_data) - 1), 3,
+                            key="hierarchical_manual_clusters"
                         )
                     
                     hierarchical = AgglomerativeClustering(
@@ -3755,13 +3802,18 @@ with tab2:
                     # DBSCAN Clustering
                     if auto_optimize:
                         with st.spinner("Mencari parameter DBSCAN optimal..." if st.session_state.language == 'id' else "Finding optimal DBSCAN parameters..."):
-                            optimal_eps, optimal_min_samples, dbscan_metrics = find_optimal_eps_dbscan(scaled_data)
-                        st.success(f"Parameter optimal: eps={optimal_eps:.2f}, min_samples={optimal_min_samples}")
-                        eps = optimal_eps
-                        min_samples = optimal_min_samples
+                            try:
+                                optimal_eps, optimal_min_samples, dbscan_metrics = find_optimal_eps_dbscan(scaled_data)
+                                st.success(f"Parameter optimal: eps={optimal_eps:.2f}, min_samples={optimal_min_samples}")
+                                eps = optimal_eps
+                                min_samples = optimal_min_samples
+                            except Exception as e:
+                                st.error(f"Error dalam optimasi DBSCAN: {str(e)}" if st.session_state.language == 'id' else f"Error in DBSCAN optimization: {str(e)}")
+                                eps = 0.5
+                                min_samples = 5
                     else:
-                        eps = st.slider("Eps (radius neighborhood):", 0.1, 5.0, 0.5, 0.1)
-                        min_samples = st.slider("Min samples:", 1, 20, 5)
+                        eps = st.slider("Eps (radius neighborhood):", 0.1, 5.0, 0.5, 0.1, key="dbscan_manual_eps")
+                        min_samples = st.slider("Min samples:", 1, 20, 5, key="dbscan_manual_min_samples")
                     
                     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
                     clusters = dbscan.fit_predict(scaled_data)
@@ -3916,32 +3968,37 @@ with tab2:
                     # Spectral Clustering
                     if auto_optimize:
                         with st.spinner("Mencari parameter Spectral optimal..." if st.session_state.language == 'id' else "Finding optimal Spectral parameters..."):
-                            # Find optimal number of clusters
-                            best_k = None
-                            best_score = -1
-                            spectral_metrics = {}
-                            
-                            for k in range(2, 11):
-                                try:
-                                    spectral_temp = SpectralClustering(n_clusters=k, random_state=42, n_init=10, affinity='nearest_neighbors')
-                                    clusters_temp = spectral_temp.fit_predict(scaled_data)
-                                    
-                                    # Calculate silhouette score
-                                    if len(set(clusters_temp)) > 1:
-                                        score = silhouette_score(scaled_data, clusters_temp)
-                                        if score > best_score:
-                                            best_score = score
-                                            best_k = k
-                                            spectral_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters_temp, "Spectral")
-                                except:
-                                    continue
-                            
-                            n_clusters = best_k if best_k else 3
-                        st.success(f"Jumlah cluster optimal: {n_clusters}")
+                            try:
+                                # Find optimal number of clusters
+                                best_k = None
+                                best_score = -1
+                                spectral_metrics = {}
+                                
+                                for k in range(2, 11):
+                                    try:
+                                        spectral_temp = SpectralClustering(n_clusters=k, random_state=42, n_init=10, affinity='nearest_neighbors')
+                                        clusters_temp = spectral_temp.fit_predict(scaled_data)
+                                        
+                                        # Calculate silhouette score
+                                        if len(set(clusters_temp)) > 1:
+                                            score = silhouette_score(scaled_data, clusters_temp)
+                                            if score > best_score:
+                                                best_score = score
+                                                best_k = k
+                                                spectral_metrics = calculate_comprehensive_clustering_metrics(scaled_data, clusters_temp, "Spectral")
+                                    except Exception:
+                                        continue
+                                
+                                n_clusters = best_k if best_k else 3
+                                st.success(f"Jumlah cluster optimal: {n_clusters}")
+                            except Exception as e:
+                                st.error(f"Error dalam optimasi Spectral: {str(e)}" if st.session_state.language == 'id' else f"Error in Spectral optimization: {str(e)}")
+                                n_clusters = 3
                     else:
                         n_clusters = st.slider(
                             "Jumlah cluster:" if st.session_state.language == 'id' else "Number of clusters:",
-                            2, min(10, len(clustering_data) - 1), 3
+                            2, min(10, len(clustering_data) - 1), 3,
+                            key="spectral_manual_clusters"
                         )
                     
                     spectral = SpectralClustering(
@@ -4147,10 +4204,66 @@ with tab3:
         if missing_cols:
             st.write("Kolom yang memiliki nilai hilang:" if st.session_state.language == 'id' else "Columns with missing values:", ", ".join(missing_cols))
             
-            # Advanced missing value handling options
-            st.markdown("### 🔧 Metode Penanganan Nilai Hilang" if st.session_state.language == 'id' else "### 🔧 Missing Value Handling Methods")
+            # Advanced missing value analysis
+            st.markdown("### 🔍 Analisis Nilai Hilang Canggih" if st.session_state.language == 'id' else "### 🔍 Advanced Missing Value Analysis")
             
-            # Individual column handling only - removed group handling option
+            if st.button("Jalankan Analisis Nilai Hilang" if st.session_state.language == 'id' else "Run Missing Value Analysis", key="advanced_missing_analysis"):
+                try:
+                    from utils import advanced_missing_value_analysis
+                    analysis_result = advanced_missing_value_analysis(data, target_column, st.session_state.language)
+                    
+                    if analysis_result.get('success', True):
+                        st.success("Analisis nilai hilang selesai" if st.session_state.language == 'id' else "Missing value analysis completed")
+                        
+                        # Display analysis results
+                        st.write(f"**Total missing values:** {analysis_result['missing_summary']['total_missing']}")
+                        st.write(f"**Columns affected:** {analysis_result['missing_summary']['columns_with_missing']}")
+                        st.write(f"**Total percentage:** {analysis_result['missing_summary']['total_percentage']:.2f}%")
+                        st.write(f"**Missing pattern:** {analysis_result.get('missing_pattern', 'Unknown')}")
+                        
+                        # Display recommendations
+                        if 'recommendations' in analysis_result:
+                            st.write("**Rekomendasi:**" if st.session_state.language == 'id' else "**Recommendations:**")
+                            for rec in analysis_result['recommendations']:
+                                st.write(f"- **{rec['column']}** ({rec['missing_percentage']:.1f}%): {', '.join(rec['strategies'])}")
+                    else:
+                        st.error(f"Error dalam analisis: {analysis_result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Error menjalankan analisis: {str(e)}")
+            
+            # Auto imputation option
+            st.markdown("### ⚙️ Imputasi Otomatis" if st.session_state.language == 'id' else "### ⚙️ Automatic Imputation")
+            auto_impute = st.checkbox("Gunakan imputasi otomatis canggih" if st.session_state.language == 'id' else "Use advanced automatic imputation", key="auto_impute_advanced")
+            
+            if auto_impute:
+                imputation_strategy = st.selectbox(
+                    "Strategi imputasi:" if st.session_state.language == 'id' else "Imputation strategy:",
+                    ["auto", "simple", "knn", "iterative", "model"],
+                    key="imputation_strategy"
+                )
+                
+                if st.button("Terapkan Imputasi Otomatis" if st.session_state.language == 'id' else "Apply Automatic Imputation", key="apply_auto_impute"):
+                    try:
+                        from utils import advanced_missing_value_imputation
+                        impute_result = advanced_missing_value_imputation(data, imputation_strategy, target_column, st.session_state.language)
+                        
+                        if impute_result['success']:
+                            st.success(f"Imputasi berhasil menggunakan strategi: {impute_result['strategy_used']}")
+                            st.write("**Informasi imputasi:**")
+                            for col, info in impute_result['imputation_info'].items():
+                                st.write(f"- {col}: {info['method']}")
+                            
+                            # Update data
+                            data = impute_result['data'].copy()
+                            st.session_state.data = data.copy()
+                            st.rerun()
+                        else:
+                            st.error(f"Error dalam imputasi: {impute_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error dalam imputasi otomatis: {str(e)}")
+            
+            # Manual handling section
+            st.markdown("### 🔧 Metode Penanganan Nilai Hilang Manual" if st.session_state.language == 'id' else "### 🔧 Manual Missing Value Handling Methods")
             st.info("Penanganan nilai hilang dilakukan manual satu per satu kolom untuk hasil yang lebih akurat" if st.session_state.language == 'id' else "Missing value handling is done manually one column at a time for more accurate results")
             
             # Individual column handling
@@ -4383,9 +4496,41 @@ with tab3:
             handle_outliers = st.checkbox("Deteksi dan tangani outlier" if st.session_state.language == 'id' else "Detect and handle outliers")
             
             if handle_outliers:
+                # Advanced outlier detection
+                st.markdown("### 🔍 Deteksi Outlier Canggih" if st.session_state.language == 'id' else "### 🔍 Advanced Outlier Detection")
+                
+                if st.button("Jalankan Analisis Outlier" if st.session_state.language == 'id' else "Run Outlier Analysis", key="advanced_outlier_analysis"):
+                    try:
+                        from utils import advanced_outlier_detection
+                        outlier_result = advanced_outlier_detection(data[numerical_cols], method='auto', language=st.session_state.language)
+                        
+                        if outlier_result['success']:
+                            st.success("Analisis outlier selesai" if st.session_state.language == 'id' else "Outlier analysis completed")
+                            
+                            # Display analysis results
+                            st.write(f"**Metode yang digunakan:** {outlier_result['analysis']['method_used']}")
+                            st.write(f"**Total outlier terdeteksi:** {outlier_result['analysis']['total_outliers']}")
+                            st.write(f"**Persentase outlier:** {outlier_result['analysis']['total_percentage']:.2f}%")
+                            st.write(f"**Kolom yang terdampak:** {', '.join(outlier_result['analysis']['affected_columns'])}")
+                            
+                            # Display recommendations
+                            if 'recommendations' in outlier_result:
+                                st.write("**Rekomendasi:**" if st.session_state.language == 'id' else "**Recommendations:**")
+                                for rec in outlier_result['recommendations']:
+                                    st.write(f"- {rec}")
+                            
+                            # Store outlier information in session state
+                            st.session_state.outlier_analysis = outlier_result
+                        else:
+                            st.error(f"Error dalam analisis: {outlier_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error menjalankan analisis outlier: {str(e)}")
+                
+                # Manual outlier handling methods
+                st.markdown("### ⚙️ Metode Penanganan Outlier Manual" if st.session_state.language == 'id' else "### ⚙️ Manual Outlier Handling Methods")
                 outlier_method = st.radio(
                     "Metode penanganan outlier:" if st.session_state.language == 'id' else "Outlier handling method:",
-                    ["IQR (Interquartile Range)", "Z-Score", "Winsorization"]
+                    ["IQR (Interquartile Range)", "Z-Score", "Winsorization", "Isolation Forest", "Local Outlier Factor", "DBSCAN"]
                 )
                 
                 if outlier_method == "IQR (Interquartile Range)":
@@ -4474,6 +4619,149 @@ with tab3:
                             data[col] = data[col].clip(lower=lower_bound, upper=upper_bound)
                             st.success(f"Outlier di-winsorize pada kolom '{col}'" if st.session_state.language == 'id' else f"Outliers winsorized in column '{col}'")
                 
+                elif outlier_method == "Isolation Forest":
+                    contamination = st.slider(
+                        "Tingkat kontaminasi:" if st.session_state.language == 'id' else "Contamination level:",
+                        0.01, 0.5, 0.1, 0.01
+                    )
+                    
+                    try:
+                        from sklearn.ensemble import IsolationForest
+                        
+                        for col in numerical_cols:
+                            # Reshape data for Isolation Forest
+                            X = data[[col]].values
+                            
+                            # Fit Isolation Forest
+                            iso_forest = IsolationForest(contamination=contamination, random_state=42)
+                            outliers = iso_forest.fit_predict(X)
+                            
+                            # Count outliers (-1 indicates outlier)
+                            outlier_count = np.sum(outliers == -1)
+                            
+                            if outlier_count > 0:
+                                st.write(f"Ditemukan {outlier_count} outlier pada kolom '{col}'" if st.session_state.language == 'id' else f"Found {outlier_count} outliers in column '{col}'")
+                                
+                                outlier_action = st.radio(
+                                    f"Tindakan untuk outlier di '{col}':" if st.session_state.language == 'id' else f"Action for outliers in '{col}':",
+                                    ["Remove", "Cap", "Keep"],
+                                    key=f"outlier_iso_{col}"
+                                )
+                                
+                                if outlier_action == "Remove":
+                                    data = data[outliers == 1]
+                                    st.success(f"Outlier dihapus dari kolom '{col}'" if st.session_state.language == 'id' else f"Outliers removed from column '{col}'")
+                                elif outlier_action == "Cap":
+                                    # Get non-outlier bounds
+                                    non_outlier_data = data[outliers == 1][col]
+                                    lower_bound = non_outlier_data.min()
+                                    upper_bound = non_outlier_data.max()
+                                    
+                                    data[col] = data[col].clip(lower=lower_bound, upper=upper_bound)
+                                    st.success(f"Outlier di-cap pada kolom '{col}'" if st.session_state.language == 'id' else f"Outliers capped in column '{col}'")
+                    except ImportError:
+                        st.error("Isolation Forest membutuhkan scikit-learn. Silakan install terlebih dahulu." if st.session_state.language == 'id' else "Isolation Forest requires scikit-learn. Please install it first.")
+                    except Exception as e:
+                        st.error(f"Error menggunakan Isolation Forest: {str(e)}")
+                
+                elif outlier_method == "Local Outlier Factor":
+                    n_neighbors = st.slider(
+                        "Jumlah tetangga:" if st.session_state.language == 'id' else "Number of neighbors:",
+                        5, 50, 20, 1
+                    )
+                    contamination = st.slider(
+                        "Tingkat kontaminasi:" if st.session_state.language == 'id' else "Contamination level:",
+                        0.01, 0.5, 0.1, 0.01
+                    )
+                    
+                    try:
+                        from sklearn.neighbors import LocalOutlierFactor
+                        
+                        for col in numerical_cols:
+                            # Reshape data for LOF
+                            X = data[[col]].values
+                            
+                            # Fit Local Outlier Factor
+                            lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
+                            outliers = lof.fit_predict(X)
+                            
+                            # Count outliers (-1 indicates outlier)
+                            outlier_count = np.sum(outliers == -1)
+                            
+                            if outlier_count > 0:
+                                st.write(f"Ditemukan {outlier_count} outlier pada kolom '{col}'" if st.session_state.language == 'id' else f"Found {outlier_count} outliers in column '{col}'")
+                                
+                                outlier_action = st.radio(
+                                    f"Tindakan untuk outlier di '{col}':" if st.session_state.language == 'id' else f"Action for outliers in '{col}':",
+                                    ["Remove", "Cap", "Keep"],
+                                    key=f"outlier_lof_{col}"
+                                )
+                                
+                                if outlier_action == "Remove":
+                                    data = data[outliers == 1]
+                                    st.success(f"Outlier dihapus dari kolom '{col}'" if st.session_state.language == 'id' else f"Outliers removed from column '{col}'")
+                                elif outlier_action == "Cap":
+                                    # Get non-outlier bounds
+                                    non_outlier_data = data[outliers == 1][col]
+                                    lower_bound = non_outlier_data.min()
+                                    upper_bound = non_outlier_data.max()
+                                    
+                                    data[col] = data[col].clip(lower=lower_bound, upper=upper_bound)
+                                    st.success(f"Outlier di-cap pada kolom '{col}'" if st.session_state.language == 'id' else f"Outliers capped in column '{col}'")
+                    except ImportError:
+                        st.error("Local Outlier Factor membutuhkan scikit-learn. Silakan install terlebih dahulu." if st.session_state.language == 'id' else "Local Outlier Factor requires scikit-learn. Please install it first.")
+                    except Exception as e:
+                        st.error(f"Error menggunakan Local Outlier Factor: {str(e)}")
+                
+                elif outlier_method == "DBSCAN":
+                    eps = st.slider(
+                        "Parameter eps (jarak minimum):" if st.session_state.language == 'id' else "eps parameter (minimum distance):",
+                        0.1, 5.0, 0.5, 0.1
+                    )
+                    min_samples = st.slider(
+                        "Jumlah minimum sample:" if st.session_state.language == 'id' else "Minimum number of samples:",
+                        3, 20, 5, 1
+                    )
+                    
+                    try:
+                        from sklearn.cluster import DBSCAN
+                        
+                        for col in numerical_cols:
+                            # Reshape data for DBSCAN
+                            X = data[[col]].values
+                            
+                            # Fit DBSCAN
+                            dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                            labels = dbscan.fit_predict(X)
+                            
+                            # Count outliers (-1 indicates noise/outlier)
+                            outlier_count = np.sum(labels == -1)
+                            
+                            if outlier_count > 0:
+                                st.write(f"Ditemukan {outlier_count} outlier pada kolom '{col}'" if st.session_state.language == 'id' else f"Found {outlier_count} outliers in column '{col}'")
+                                
+                                outlier_action = st.radio(
+                                    f"Tindakan untuk outlier di '{col}':" if st.session_state.language == 'id' else f"Action for outliers in '{col}':",
+                                    ["Remove", "Cap", "Keep"],
+                                    key=f"outlier_dbscan_{col}"
+                                )
+                                
+                                if outlier_action == "Remove":
+                                    data = data[labels != -1]
+                                    st.success(f"Outlier dihapus dari kolom '{col}'" if st.session_state.language == 'id' else f"Outliers removed from column '{col}'")
+                                elif outlier_action == "Cap":
+                                    # Get non-outlier bounds
+                                    non_outlier_data = data[labels != -1][col]
+                                    lower_bound = non_outlier_data.min()
+                                    upper_bound = non_outlier_data.max()
+                                    
+                                    data[col] = data[col].clip(lower=lower_bound, upper=upper_bound)
+                                    st.success(f"Outlier di-cap pada kolom '{col}'" if st.session_state.language == 'id' else f"Outliers capped in column '{col}'")
+                    except ImportError:
+                        st.error("DBSCAN membutuhkan scikit-learn. Silakan install terlebih dahulu." if st.session_state.language == 'id' else "DBSCAN requires scikit-learn. Please install it first.")
+                    except Exception as e:
+                        st.error(f"Error menggunakan DBSCAN: {str(e)}")
+                
                 st.success("Penanganan outlier selesai" if st.session_state.language == 'id' else "Outlier handling completed")
         
         # Handle Duplicate Data
@@ -4531,6 +4819,79 @@ with tab3:
             if len(class_counts) > 1:
                 imbalance_ratio = class_counts.max() / class_counts.min()
                 st.info(f"Rasio imbalance: {imbalance_ratio:.2f}" if st.session_state.language == 'id' else f"Imbalance ratio: {imbalance_ratio:.2f}")
+                
+                # Advanced imbalanced dataset analysis
+                st.markdown("### 🔍 Analisis Dataset Imbalanced Canggih" if st.session_state.language == 'id' else "### 🔍 Advanced Imbalanced Dataset Analysis")
+                
+                if st.button("Jalankan Analisis Imbalanced" if st.session_state.language == 'id' else "Run Imbalanced Analysis", key="advanced_imbalanced_analysis"):
+                    try:
+                        from utils import advanced_imbalanced_data_handling
+                        
+                        # Prepare data for analysis
+                        X_for_analysis = data.drop(columns=[target_column])
+                        y_for_analysis = data[target_column]
+                        
+                        analysis_result = advanced_imbalanced_data_handling(X_for_analysis, y_for_analysis, strategy='analyze', language=st.session_state.language)
+                        
+                        if analysis_result['success']:
+                            st.success("Analisis dataset imbalanced selesai" if st.session_state.language == 'id' else "Imbalanced dataset analysis completed")
+                            
+                            # Display analysis results
+                            st.write(f"**Tingkat ketidakseimbangan:** {analysis_result['analysis']['imbalance_level']}")
+                            st.write(f"**Jumlah kelas minor:** {analysis_result['analysis']['minority_classes']}")
+                            st.write(f"**Jumlah kelas mayor:** {analysis_result['analysis']['majority_classes']}")
+                            st.write(f"**Skor Gini:** {analysis_result['analysis']['gini_coefficient']:.3f}")
+                            
+                            # Display recommendations
+                            if 'recommendations' in analysis_result:
+                                st.write("**Rekomendasi metode penyeimbangan:**" if st.session_state.language == 'id' else "**Recommended balancing methods:**")
+                                for rec in analysis_result['recommendations']:
+                                    st.write(f"- {rec}")
+                        else:
+                            st.error(f"Error dalam analisis: {analysis_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error menjalankan analisis imbalanced: {str(e)}")
+                
+                # Auto balancing option
+                st.markdown("### ⚙️ Penyeimbangan Otomatis" if st.session_state.language == 'id' else "### ⚙️ Automatic Balancing")
+                auto_balance = st.checkbox("Gunakan penyeimbangan otomatis canggih" if st.session_state.language == 'id' else "Use advanced automatic balancing", key="auto_balance_advanced")
+                
+                if auto_balance:
+                    balance_strategy = st.selectbox(
+                        "Strategi penyeimbangan:" if st.session_state.language == 'id' else "Balancing strategy:",
+                        ["auto", "over", "under", "combine", "hybrid"],
+                        key="balance_strategy"
+                    )
+                    
+                    if st.button("Terapkan Penyeimbangan Otomatis" if st.session_state.language == 'id' else "Apply Automatic Balancing", key="apply_auto_balance"):
+                        try:
+                            from utils import advanced_imbalanced_data_handling
+                            
+                            # Prepare data for balancing
+                            X_for_balance = data.drop(columns=[target_column])
+                            y_for_balance = data[target_column]
+                            
+                            balance_result = advanced_imbalanced_data_handling(X_for_balance, y_for_balance, strategy=balance_strategy, language=st.session_state.language)
+                            
+                            if balance_result['success']:
+                                st.success(f"Penyeimbangan berhasil menggunakan strategi: {balance_result['strategy_used']}")
+                                st.write("**Informasi penyeimbangan:**")
+                                st.write(f"- Metode yang digunakan: {balance_result['method_used']}")
+                                st.write(f"- Rasio sebelum: {balance_result['before_ratio']}")
+                                st.write(f"- Rasio sesudah: {balance_result['after_ratio']}")
+                                
+                                # Update data
+                                data = balance_result['data'].copy()
+                                data[target_column] = balance_result['target']
+                                st.session_state.data = data.copy()
+                                st.rerun()
+                            else:
+                                st.error(f"Error dalam penyeimbangan: {balance_result.get('error', 'Unknown error')}")
+                        except Exception as e:
+                            st.error(f"Error dalam penyeimbangan otomatis: {str(e)}")
+                
+                # Manual balancing section
+                st.markdown("### 🔧 Penanganan Manual Imbalanced Dataset" if st.session_state.language == 'id' else "### 🔧 Manual Imbalanced Dataset Handling")
                 
                 # Opsi untuk menghilangkan kelas minoritas
                 remove_minority = st.checkbox("Hapus kelas minoritas" if st.session_state.language == 'id' else "Remove minority classes", value=False, key="remove_minority_v1")
@@ -10328,23 +10689,99 @@ with tab5:
                                 "Could not find features for the forecasting model. Make sure the model has been trained correctly.")
                 else:
                     # Untuk model statistik seperti ARIMA, SARIMA, dll.
-                    st.info("""
-                    Model statistik seperti ARIMA, SARIMA, atau Exponential Smoothing tidak mendukung interpretasi SHAP secara langsung.
-                    Model-model ini didasarkan pada komponen seperti tren, musiman, dan residual, bukan pada fitur individual.
+                    try:
+                        # Gunakan fungsi interpretasi statistik baru
+                        from utils import interpret_statistical_model
+                        
+                        # Deteksi tipe model statistik
+                        model_type = type(model).__name__.lower()
+                        if 'arima' in model_type:
+                            stat_type = 'arima'
+                        elif 'sarima' in model_type:
+                            stat_type = 'sarima'
+                        elif 'exponential' in model_type or 'ets' in model_type:
+                            stat_type = 'exponential_smoothing'
+                        else:
+                            stat_type = 'arima'  # Default
+                        
+                        # Dapatkan interpretasi statistik
+                        interpretation = interpret_statistical_model(model, stat_type, st.session_state.language)
+                        
+                        if interpretation['success']:
+                            st.success("Interpretasi Model Statistik Berhasil!" if st.session_state.language == 'id' else "Statistical Model Interpretation Successful!")
+                            
+                            # Tampilkan informasi model
+                            st.write(f"**{interpretation['interpretation']['model']}**")
+                            st.write(interpretation['interpretation']['description'])
+                            
+                            # Tampilkan koefisien
+                            if 'coefficients' in interpretation and interpretation['coefficients']:
+                                st.subheader("Koefisien Model" if st.session_state.language == 'id' else "Model Coefficients")
+                                
+                                if 'ar_terms' in interpretation['coefficients'] and len(interpretation['coefficients']['ar_terms']) > 0:
+                                    st.write("**Komponen AutoRegresif (AR):**")
+                                    st.write(interpretation['interpretation']['ar_component'])
+                                    st.json(interpretation['coefficients']['params'])
+                                
+                                if 'ma_terms' in interpretation['coefficients'] and len(interpretation['coefficients']['ma_terms']) > 0:
+                                    st.write("**Komponen Moving Average (MA):**")
+                                    st.write(interpretation['interpretation']['ma_component'])
+                            
+                            # Tampilkan goodness of fit
+                            if 'goodness_of_fit' in interpretation:
+                                st.subheader("Kesesuaian Model" if st.session_state.language == 'id' else "Model Fit")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("AIC", f"{interpretation['goodness_of_fit']['aic']:.2f}")
+                                with col2:
+                                    st.metric("BIC", f"{interpretation['goodness_of_fit']['bic']:.2f}")
+                                
+                                st.write(interpretation['interpretation']['aic_interpretation'])
+                                st.write(interpretation['interpretation']['bic_interpretation'])
+                            
+                            # Tampilkan saran interpretasi tambahan
+                            if 'interpretation_tips' in interpretation:
+                                st.info(interpretation['interpretation_tips'])
+                        
+                        else:
+                            # Fallback ke pesan lama jika interpretasi gagal
+                            st.info("""
+                            Model statistik seperti ARIMA, SARIMA, atau Exponential Smoothing tidak mendukung interpretasi SHAP secara langsung.
+                            Model-model ini didasarkan pada komponen seperti tren, musiman, dan residual, bukan pada fitur individual.
+                            
+                            Untuk interpretasi model statistik, pertimbangkan untuk melihat:
+                            - Koefisien model (AR, MA, dll.)
+                            - Dekomposisi deret waktu (tren, musiman, residual)
+                            - Analisis residual
+                            """ if st.session_state.language == 'id' else """
+                            Statistical models like ARIMA, SARIMA, or Exponential Smoothing do not support SHAP interpretation directly.
+                            These models are based on components like trend, seasonality, and residuals, not on individual features.
+                            
+                            For statistical model interpretation, consider looking at:
+                            - Model coefficients (AR, MA, etc.)
+                            - Time series decomposition (trend, seasonality, residuals)
+                            - Residual analysis
+                            """)
                     
-                    Untuk interpretasi model statistik, pertimbangkan untuk melihat:
-                    - Koefisien model (AR, MA, dll.)
-                    - Dekomposisi deret waktu (tren, musiman, residual)
-                    - Analisis residual
-                    """ if st.session_state.language == 'id' else """
-                    Statistical models like ARIMA, SARIMA, or Exponential Smoothing do not support SHAP interpretation directly.
-                    These models are based on components like trend, seasonality, and residuals, not on individual features.
-                    
-                    For statistical model interpretation, consider looking at:
-                    - Model coefficients (AR, MA, etc.)
-                    - Time series decomposition (trend, seasonality, residuals)
-                    - Residual analysis
-                    """)
+                    except Exception as e:
+                        # Fallback ke pesan lama jika ada error
+                        st.info("""
+                        Model statistik seperti ARIMA, SARIMA, atau Exponential Smoothing tidak mendukung interpretasi SHAP secara langsung.
+                        Model-model ini didasarkan pada komponen seperti tren, musiman, dan residual, bukan pada fitur individual.
+                        
+                        Untuk interpretasi model statistik, pertimbangkan untuk melihat:
+                        - Koefisien model (AR, MA, dll.)
+                        - Dekomposisi deret waktu (tren, musiman, residual)
+                        - Analisis residual
+                        """ if st.session_state.language == 'id' else """
+                        Statistical models like ARIMA, SARIMA, or Exponential Smoothing do not support SHAP interpretation directly.
+                        These models are based on components like trend, seasonality, and residuals, not on individual features.
+                        
+                        For statistical model interpretation, consider looking at:
+                        - Model coefficients (AR, MA, etc.)
+                        - Time series decomposition (trend, seasonality, residuals)
+                        - Residual analysis
+                        """)
             else:
                 st.warning("Informasi model forecasting tidak lengkap. Pastikan model telah dilatih dengan benar." if st.session_state.language == 'id' else 
                         "Forecasting model information is incomplete. Make sure the model has been trained correctly.")

@@ -3,6 +3,8 @@
 ## Deskripsi
 Aplikasi ini adalah alat analisis data dan machine learning berbasis web yang dibangun dengan Streamlit. Aplikasi ini memungkinkan pengguna untuk menganalisis data, melakukan preprocessing, melatih model machine learning, dan menginterpretasikan hasil menggunakan nilai SHAP dan LIME (Local Interpretable Model-agnostic Explanations).
 
+DILARANG MENDISTRIBUSIKAN TANPA IJIN DARI PT. ASMER SAHABAT SUKES
+
 ## Fitur Utama
 Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 

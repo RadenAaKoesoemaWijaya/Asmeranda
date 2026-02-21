@@ -353,7 +353,178 @@ def interpret_forecasting_model(model, X_train, y_train, X_test, feature_names=N
         except Exception as e:
             raise Exception(f"Error dalam menghitung LIME explanations: {str(e)}")
     
-    return results
+    return result
+
+def validate_clustering_parameters(data, n_clusters=None, eps=None, min_samples=None, method='kmeans'):
+    """
+    Validasi parameter clustering untuk memastikan nilai yang masuk akal
+    
+    Parameters:
+    -----------
+    data : array-like
+        Data yang akan diclustering
+    n_clusters : int, optional
+        Jumlah cluster yang diinginkan
+    eps : float, optional
+        Parameter eps untuk DBSCAN
+    min_samples : int, optional
+        Parameter min_samples untuk DBSCAN
+    method : str
+        Metode clustering yang digunakan ('kmeans', 'dbscan', 'hierarchical', 'spectral')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi parameter yang telah divalidasi dan pesan peringatan jika ada
+    """
+    import numpy as np
+    
+    result = {'valid': True, 'warnings': [], 'errors': [], 'parameters': {}}
+    
+    if data is None or len(data) == 0:
+        result['valid'] = False
+        result['errors'].append("Data tidak boleh kosong")
+        return result
+    
+    n_samples = len(data)
+    
+    # Validasi berdasarkan metode
+    if method in ['kmeans', 'hierarchical', 'spectral'] and n_clusters is not None:
+        # Validasi n_clusters
+        if n_clusters < 2:
+            result['warnings'].append("Jumlah cluster minimal adalah 2, menggunakan nilai default 2")
+            result['parameters']['n_clusters'] = 2
+        elif n_clusters > n_samples // 2:
+            result['warnings'].append(f"Jumlah cluster terlalu besar ({n_clusters} > {n_samples // 2}), menggunakan nilai default 3")
+            result['parameters']['n_clusters'] = 3
+        else:
+            result['parameters']['n_clusters'] = n_clusters
+            
+    elif method == 'dbscan':
+        # Validasi eps
+        if eps is not None:
+            if eps <= 0:
+                result['errors'].append("Parameter eps harus lebih besar dari 0")
+                result['valid'] = False
+            else:
+                result['parameters']['eps'] = eps
+        
+        # Validasi min_samples
+        if min_samples is not None:
+            if min_samples < 1:
+                result['warnings'].append("min_samples minimal adalah 1, menggunakan nilai default 5")
+                result['parameters']['min_samples'] = 5
+            elif min_samples > n_samples // 2:
+                result['warnings'].append(f"min_samples terlalu besar ({min_samples} > {n_samples // 2}), menggunakan nilai default 5")
+                result['parameters']['min_samples'] = 5
+            else:
+                result['parameters']['min_samples'] = min_samples
+    
+    # Validasi umum untuk semua metode
+    if n_samples < 10:
+        result['warnings'].append("Jumlah sampel sangat sedikit, hasil clustering mungkin tidak optimal")
+    
+    if n_samples < 50 and method == 'spectral':
+        result['warnings'].append("Spectral clustering membutuhkan minimal 50 sampel untuk hasil yang optimal")
+    
+    return result
+
+def get_clustering_recommendations(data, method='kmeans', language='id'):
+    """
+    Memberikan rekomendasi parameter clustering berdasarkan karakteristik data
+    
+    Parameters:
+    -----------
+    data : array-like
+        Data yang akan diclustering
+    method : str
+        Metode clustering yang digunakan
+    language : str
+        Bahasa untuk pesan ('id' atau 'en')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi rekomendasi parameter
+    """
+    import numpy as np
+    from sklearn.neighbors import NearestNeighbors
+    
+    messages = {
+        'id': {
+            'data_size': "Ukuran data: {n_samples} sampel, {n_features} fitur",
+            'recommended_k': "Rekomendasi jumlah cluster: {k}",
+            'recommended_eps': "Rekomendasi eps: {eps:.2f}",
+            'recommended_min_samples': "Rekomendasi min_samples: {min_samples}",
+            'data_sparsity': "Data tampak {density} (rata-rata jarak: {avg_distance:.2f})",
+            'dense': "padat",
+            'sparse': "jarang",
+            'moderate': "sedang"
+        },
+        'en': {
+            'data_size': "Data size: {n_samples} samples, {n_features} features",
+            'recommended_k': "Recommended number of clusters: {k}",
+            'recommended_eps': "Recommended eps: {eps:.2f}",
+            'recommended_min_samples': "Recommended min_samples: {min_samples}",
+            'data_sparsity': "Data appears {density} (average distance: {avg_distance:.2f})",
+            'dense': "dense",
+            'sparse': "sparse",
+            'moderate': "moderate"
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    result = {}
+    
+    if data is None or len(data) == 0:
+        return result
+    
+    n_samples, n_features = data.shape if hasattr(data, 'shape') else (len(data), len(data[0]) if data else 0)
+    result['data_info'] = msg['data_size'].format(n_samples=n_samples, n_features=n_features)
+    
+    # Rekomendasi untuk K-Means, Hierarchical, Spectral
+    if method in ['kmeans', 'hierarchical', 'spectral']:
+        # Gunakan elbow method sebagai dasar rekomendasi
+        recommended_k = min(int(np.sqrt(n_samples / 2)), 10, n_samples // 5)
+        result['recommended_k'] = recommended_k
+        result['k_recommendation'] = msg['recommended_k'].format(k=recommended_k)
+    
+    # Rekomendasi untuk DBSCAN
+    if method == 'dbscan':
+        # Gunakan k-nearest neighbors untuk estimasi eps
+        try:
+            if n_samples > 10:
+                nbrs = NearestNeighbors(n_neighbors=min(5, n_samples-1))
+                nbrs.fit(data)
+                distances, _ = nbrs.kneighbors(data)
+                
+                # Sort distances and find elbow
+                k_distances = np.sort(distances[:, -1])
+                
+                # Estimasi eps (ambil persentil ke-90)
+                recommended_eps = np.percentile(k_distances, 90)
+                result['recommended_eps'] = recommended_eps
+                result['eps_recommendation'] = msg['recommended_eps'].format(eps=recommended_eps)
+                
+                # Rekomendasi min_samples
+                recommended_min_samples = min(5, n_samples // 10)
+                result['recommended_min_samples'] = recommended_min_samples
+                result['min_samples_recommendation'] = msg['recommended_min_samples'].format(min_samples=recommended_min_samples)
+                
+                # Analisis kepadatan data
+                avg_distance = np.mean(k_distances)
+                if avg_distance < 0.5:
+                    density = msg['dense']
+                elif avg_distance > 2.0:
+                    density = msg['sparse']
+                else:
+                    density = msg['moderate']
+                
+                result['data_density'] = msg['data_sparsity'].format(density=density, avg_distance=avg_distance)
+        except Exception as e:
+            result['error'] = f"Error dalam estimasi parameter: {str(e)}"
+    
+    return result
 
 def create_forecasting_interpretation_dashboard(interpretation_results, method='shap'):
     """
@@ -376,8 +547,728 @@ def create_forecasting_interpretation_dashboard(interpretation_results, method='
         return create_shap_forecasting_dashboard(interpretation_results)
     elif method == 'lime':
         return create_lime_forecasting_dashboard(interpretation_results)
+
+def advanced_missing_value_analysis(data, target_column=None, language='id'):
+    """
+    Analisis mendalam untuk missing values dengan rekomendasi strategi penanganan
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Dataset yang akan dianalisis
+    target_column : str, optional
+        Nama kolom target untuk analisis khusus
+    language : str
+        Bahasa untuk output ('id' atau 'en')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi analisis dan rekomendasi
+    """
+    messages = {
+        'id': {
+            'analysis_title': 'Analisis Missing Values',
+            'missing_by_column': 'Missing Values per Kolom',
+            'missing_pattern': 'Pola Missing Values',
+            'missing_correlation': 'Korelasi Missing Values',
+            'recommendations': 'Rekomendasi Strategi',
+            'complete_case': 'Complete Case Analysis',
+            'simple_imputation': 'Simple Imputation',
+            'advanced_imputation': 'Advanced Imputation',
+            'model_based': 'Model-based Imputation',
+            'delete_rows': 'Hapus Baris',
+            'delete_columns': 'Hapus Kolom',
+            'missing_indicator': 'Fitur Indikator Missing',
+            'low_missing': 'Rendah (<5%)',
+            'moderate_missing': 'Sedang (5-20%)',
+            'high_missing': 'Tinggi (20-40%)',
+            'very_high_missing': 'Sangat Tinggi (>40%)',
+            'random_pattern': 'Pola Acak (MCAR)',
+            'systematic_pattern': 'Pola Sistematis (MAR)',
+            'nonignorable_pattern': 'Pola Tidak Dapat Diabaikan (MNAR)'
+        },
+        'en': {
+            'analysis_title': 'Missing Values Analysis',
+            'missing_by_column': 'Missing Values per Column',
+            'missing_pattern': 'Missing Values Pattern',
+            'missing_correlation': 'Missing Values Correlation',
+            'recommendations': 'Strategy Recommendations',
+            'complete_case': 'Complete Case Analysis',
+            'simple_imputation': 'Simple Imputation',
+            'advanced_imputation': 'Advanced Imputation',
+            'model_based': 'Model-based Imputation',
+            'delete_rows': 'Delete Rows',
+            'delete_columns': 'Delete Columns',
+            'missing_indicator': 'Missing Indicator Features',
+            'low_missing': 'Low (<5%)',
+            'moderate_missing': 'Moderate (5-20%)',
+            'high_missing': 'High (20-40%)',
+            'very_high_missing': 'Very High (>40%)',
+            'random_pattern': 'Random Pattern (MCAR)',
+            'systematic_pattern': 'Systematic Pattern (MAR)',
+            'nonignorable_pattern': 'Non-ignorable Pattern (MNAR)'
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    result = {}
+    
+    if data is None or data.empty:
+        result['error'] = 'Dataset kosong atau tidak valid' if language == 'id' else 'Dataset is empty or invalid'
+        return result
+    
+    # Basic missing value statistics
+    missing_stats = data.isnull().sum()
+    missing_percentages = (missing_stats / len(data)) * 100
+    
+    result['missing_summary'] = {
+        'total_missing': missing_stats.sum(),
+        'columns_with_missing': (missing_stats > 0).sum(),
+        'total_percentage': (missing_stats.sum() / (len(data) * len(data.columns))) * 100,
+        'by_column': missing_percentages[missing_percentages > 0].to_dict()
+    }
+    
+    # Categorize missing value levels
+    missing_categories = {}
+    for col, pct in missing_percentages.items():
+        if pct > 0:
+            if pct < 5:
+                missing_categories[col] = msg['low_missing']
+            elif pct < 20:
+                missing_categories[col] = msg['moderate_missing']
+            elif pct < 40:
+                missing_categories[col] = msg['high_missing']
+            else:
+                missing_categories[col] = msg['very_high_missing']
+    
+    result['missing_categories'] = missing_categories
+    
+    # Analyze missing patterns
+    missing_matrix = data.isnull()
+    
+    # Check for patterns in missing values
+    if len(data) > 10:
+        # MCAR test (Little's test simplified)
+        missing_corr = missing_matrix.corr()
+        high_corr_pairs = []
+        
+        for i in range(len(missing_corr.columns)):
+            for j in range(i+1, len(missing_corr.columns)):
+                corr_val = missing_corr.iloc[i, j]
+                if abs(corr_val) > 0.5:  # High correlation threshold
+                    high_corr_pairs.append({
+                        'columns': (missing_corr.columns[i], missing_corr.columns[j]),
+                        'correlation': corr_val
+                    })
+        
+        result['missing_correlations'] = high_corr_pairs
+        
+        # Pattern classification
+        if len(high_corr_pairs) == 0:
+            result['missing_pattern'] = msg['random_pattern']
+        elif any(abs(pair['correlation']) > 0.7 for pair in high_corr_pairs):
+            result['missing_pattern'] = msg['nonignorable_pattern']
+        else:
+            result['missing_pattern'] = msg['systematic_pattern']
+    
+    # Generate recommendations
+    recommendations = []
+    
+    for col, pct in missing_percentages.items():
+        if pct > 0:
+            col_recommendations = []
+            
+            if pct < 5:
+                col_recommendations.append(msg['simple_imputation'])
+                if target_column != col:
+                    col_recommendations.append(msg['missing_indicator'])
+            elif pct < 20:
+                col_recommendations.append(msg['advanced_imputation'])
+                col_recommendations.append(msg['missing_indicator'])
+            elif pct < 40:
+                col_recommendations.append(msg['model_based'])
+                col_recommendations.append(msg['advanced_imputation'])
+            else:
+                col_recommendations.append(msg['delete_columns'])
+                col_recommendations.append(msg['model_based'])
+            
+            recommendations.append({
+                'column': col,
+                'missing_percentage': pct,
+                'category': missing_categories[col],
+                'strategies': col_recommendations
+            })
+    
+    result['recommendations'] = recommendations
+    
+    return result
+
+def advanced_missing_value_imputation(data, strategy='auto', target_column=None, language='id'):
+    """
+    Imputasi missing values dengan strategi yang canggih dan otomatis
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Dataset yang akan diimputasi
+    strategy : str
+        Strategi imputasi ('auto', 'simple', 'knn', 'iterative', 'mice', 'model')
+    target_column : str, optional
+        Nama kolom target untuk imputasi yang mempertimbangkan target
+    language : str
+        Bahasa untuk output
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi data yang telah diimputasi dan informasi proses
+    """
+    try:
+        from sklearn.experimental import enable_iterative_imputer
+        from sklearn.impute import KNNImputer, IterativeImputer
+        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        from sklearn.preprocessing import LabelEncoder
+    except ImportError:
+        # Fallback to simple imputation if advanced methods not available
+        strategy = 'simple'
+    
+    result = {'success': False, 'data': None, 'strategy_used': strategy, 'imputation_info': {}}
+    
+    if data is None or data.empty:
+        result['error'] = 'Dataset kosong' if language == 'id' else 'Dataset is empty'
+        return result
+    
+    # Auto strategy selection
+    if strategy == 'auto':
+        missing_analysis = advanced_missing_value_analysis(data, target_column, language)
+        
+        # Determine best strategy based on missing patterns
+        total_missing_pct = missing_analysis['missing_summary']['total_percentage']
+        
+        if total_missing_pct < 5:
+            strategy = 'simple'
+        elif total_missing_pct < 20:
+            strategy = 'knn'
+        elif total_missing_pct < 40:
+            strategy = 'iterative'
+        else:
+            strategy = 'model'
+    
+    data_imputed = data.copy()
+    imputation_info = {}
+    
+    # Separate numerical and categorical columns
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_cols = data.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    
+    # Imputation strategies
+    if strategy == 'simple':
+        # Simple imputation with mean/median/mode
+        for col in numerical_cols:
+            if data[col].isnull().sum() > 0:
+                # Use median for skewed data, mean for normal data
+                if abs(data[col].skew()) > 1:
+                    imputed_value = data[col].median()
+                else:
+                    imputed_value = data[col].mean()
+                
+                data_imputed[col].fillna(imputed_value, inplace=True)
+                imputation_info[col] = {'method': 'mean/median', 'value': imputed_value}
+        
+        for col in categorical_cols:
+            if data[col].isnull().sum() > 0:
+                imputed_value = data[col].mode()[0] if not data[col].mode().empty else 'Unknown'
+                data_imputed[col].fillna(imputed_value, inplace=True)
+                imputation_info[col] = {'method': 'mode', 'value': imputed_value}
+    
+    elif strategy == 'knn':
+        # KNN Imputation for numerical columns
+        if numerical_cols:
+            knn_imputer = KNNImputer(n_neighbors=5, weights='distance')
+            data_imputed[numerical_cols] = knn_imputer.fit_transform(data[numerical_cols])
+            
+            for col in numerical_cols:
+                if data[col].isnull().sum() > 0:
+                    imputation_info[col] = {'method': 'knn', 'n_neighbors': 5}
+        
+        # Simple imputation for categorical columns
+        for col in categorical_cols:
+            if data[col].isnull().sum() > 0:
+                imputed_value = data[col].mode()[0] if not data[col].mode().empty else 'Unknown'
+                data_imputed[col].fillna(imputed_value, inplace=True)
+                imputation_info[col] = {'method': 'mode', 'value': imputed_value}
+    
+    elif strategy == 'iterative' or strategy == 'mice':
+        # Iterative imputation (MICE-like)
+        if numerical_cols:
+            iterative_imputer = IterativeImputer(random_state=42, max_iter=10)
+            data_imputed[numerical_cols] = iterative_imputer.fit_transform(data[numerical_cols])
+            
+            for col in numerical_cols:
+                if data[col].isnull().sum() > 0:
+                    imputation_info[col] = {'method': 'iterative', 'max_iter': 10}
+        
+        # Simple imputation for categorical columns
+        for col in categorical_cols:
+            if data[col].isnull().sum() > 0:
+                imputed_value = data[col].mode()[0] if not data[col].mode().empty else 'Unknown'
+                data_imputed[col].fillna(imputed_value, inplace=True)
+                imputation_info[col] = {'method': 'mode', 'value': imputed_value}
+    
+    elif strategy == 'model':
+        # Model-based imputation using Random Forest
+        for col in numerical_cols:
+            if data[col].isnull().sum() > 0:
+                # Prepare data for model training
+                train_data = data.dropna(subset=[col])
+                missing_mask = data[col].isnull()
+                
+                if len(train_data) > 10:  # Minimum samples for training
+                    # Prepare features (exclude target column if it's the current column)
+                    feature_cols = [c for c in numerical_cols + categorical_cols if c != col and data[c].isnull().sum() < len(data) * 0.5]
+                    
+                    if len(feature_cols) > 0:
+                        # Handle categorical features
+                        train_features = train_data[feature_cols].copy()
+                        test_features = data.loc[missing_mask, feature_cols].copy()
+                        
+                        # Simple imputation for features
+                        for feat_col in feature_cols:
+                            if feat_col in numerical_cols and train_features[feat_col].isnull().sum() > 0:
+                                train_features[feat_col].fillna(train_data[feat_col].median(), inplace=True)
+                                test_features[feat_col].fillna(data[feat_col].median(), inplace=True)
+                            elif feat_col in categorical_cols and train_features[feat_col].isnull().sum() > 0:
+                                train_features[feat_col].fillna(train_data[feat_col].mode()[0], inplace=True)
+                                test_features[feat_col].fillna(data[feat_col].mode()[0], inplace=True)
+                        
+                        # Train Random Forest model
+                        rf_model = RandomForestRegressor(n_estimators=50, random_state=42)
+                        rf_model.fit(train_features, train_data[col])
+                        
+                        # Predict missing values
+                        predicted_values = rf_model.predict(test_features)
+                        data_imputed.loc[missing_mask, col] = predicted_values
+                        
+                        imputation_info[col] = {'method': 'random_forest', 'n_estimators': 50}
+                    else:
+                        # Fallback to simple imputation
+                        imputed_value = data[col].median()
+                        data_imputed[col].fillna(imputed_value, inplace=True)
+                        imputation_info[col] = {'method': 'median', 'value': imputed_value}
+        
+        # Simple imputation for categorical columns
+        for col in categorical_cols:
+            if data[col].isnull().sum() > 0:
+                imputed_value = data[col].mode()[0] if not data[col].mode().empty else 'Unknown'
+                data_imputed[col].fillna(imputed_value, inplace=True)
+                imputation_info[col] = {'method': 'mode', 'value': imputed_value}
+    
+    result['success'] = True
+    result['data'] = data_imputed
+    result['imputation_info'] = imputation_info
+    result['strategy_used'] = strategy
+    
+    return result
+
+def advanced_outlier_detection(data, method='auto', contamination=0.1, language='id'):
+    """
+    Deteksi outlier yang canggih dengan multiple methods dan analisis
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Dataset yang akan dianalisis
+    method : str
+        Metode deteksi ('auto', 'iqr', 'zscore', 'isolation_forest', 'lof', 'dbscan')
+    contamination : float
+        Proporsi outlier yang diharapkan (0.0 - 0.5)
+    language : str
+        Bahasa untuk output
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi hasil deteksi outlier dan analisis
+    """
+    try:
+        from sklearn.ensemble import IsolationForest
+        from sklearn.neighbors import LocalOutlierFactor
+        from sklearn.cluster import DBSCAN
+        from sklearn.preprocessing import StandardScaler
+    except ImportError:
+        # Fallback to basic methods
+        method = 'iqr'
+    
+    messages = {
+        'id': {
+            'outlier_analysis': 'Analisis Outlier',
+            'method_used': 'Metode yang digunakan',
+            'outlier_count': 'Jumlah outlier yang terdeteksi',
+            'outlier_percentage': 'Persentase outlier',
+            'affected_columns': 'Kolom yang terdampak',
+            'recommendations': 'Rekomendasi',
+            'remove_outliers': 'Hapus outlier',
+            'cap_outliers': 'Batasi outlier',
+            'keep_outliers': 'Pertahankan outlier',
+            'investigate_outliers': 'Investigasi lebih lanjut',
+            'extreme_outliers': 'Outlier ekstrem terdeteksi',
+            'moderate_outliers': 'Outlier moderat terdeteksi',
+            'few_outliers': 'Sedikit outlier terdeteksi'
+        },
+        'en': {
+            'outlier_analysis': 'Outlier Analysis',
+            'method_used': 'Method used',
+            'outlier_count': 'Number of outliers detected',
+            'outlier_percentage': 'Outlier percentage',
+            'affected_columns': 'Affected columns',
+            'recommendations': 'Recommendations',
+            'remove_outliers': 'Remove outliers',
+            'cap_outliers': 'Cap outliers',
+            'keep_outliers': 'Keep outliers',
+            'investigate_outliers': 'Further investigation',
+            'extreme_outliers': 'Extreme outliers detected',
+            'moderate_outliers': 'Moderate outliers detected',
+            'few_outliers': 'Few outliers detected'
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    result = {'success': False, 'outliers': {}, 'analysis': {}, 'recommendations': []}
+    
+    if data is None or data.empty:
+        result['error'] = 'Dataset kosong' if language == 'id' else 'Dataset is empty'
+        return result
+    
+    # Select numerical columns
+    numerical_cols = data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    
+    if not numerical_cols:
+        result['error'] = 'Tidak ada kolom numerik untuk analisis outlier' if language == 'id' else 'No numerical columns for outlier analysis'
+        return result
+    
+    outliers_dict = {}
+    method_used = method
+    
+    # Auto method selection based on data characteristics
+    if method == 'auto':
+        n_samples = len(data)
+        n_features = len(numerical_cols)
+        
+        if n_samples < 50:
+            method = 'iqr'
+        elif n_samples < 1000 and n_features < 10:
+            method = 'isolation_forest'
+        elif n_features >= 10:
+            method = 'lof'
+        else:
+            method = 'isolation_forest'
+    
+    # Apply outlier detection methods
+    for col in numerical_cols:
+        col_data = data[col].dropna()
+        
+        if len(col_data) < 10:  # Skip columns with too few values
+            continue
+        
+        outliers_mask = None
+        
+        if method == 'iqr':
+            # Interquartile Range method
+            Q1 = col_data.quantile(0.25)
+            Q3 = col_data.quantile(0.75)
+            IQR = Q3 - Q1
+            
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            outliers_mask = (data[col] < lower_bound) | (data[col] > upper_bound)
+            
+        elif method == 'zscore':
+            # Z-Score method
+            mean = col_data.mean()
+            std = col_data.std()
+            
+            if std > 0:
+                z_scores = np.abs((data[col] - mean) / std)
+                outliers_mask = z_scores > 3.0  # 3 standard deviations
+            
+        elif method == 'isolation_forest':
+            # Isolation Forest
+            try:
+                iso_forest = IsolationForest(contamination=contamination, random_state=42)
+                outliers_mask = iso_forest.fit_predict(data[[col]].fillna(data[col].median())) == -1
+            except:
+                # Fallback to IQR
+                Q1 = col_data.quantile(0.25)
+                Q3 = col_data.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                outliers_mask = (data[col] < lower_bound) | (data[col] > upper_bound)
+        
+        elif method == 'lof':
+            # Local Outlier Factor
+            try:
+                # Need at least n_neighbors + 1 samples
+                n_neighbors = min(20, len(col_data) - 1)
+                if n_neighbors >= 5:
+                    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
+                    outliers_mask = lof.fit_predict(data[[col]].fillna(data[col].median())) == -1
+                else:
+                    # Fallback to IQR
+                    Q1 = col_data.quantile(0.25)
+                    Q3 = col_data.quantile(0.75)
+                    IQR = Q3 - Q1
+                    lower_bound = Q1 - 1.5 * IQR
+                    upper_bound = Q3 + 1.5 * IQR
+                    outliers_mask = (data[col] < lower_bound) | (data[col] > upper_bound)
+            except:
+                # Fallback to IQR
+                Q1 = col_data.quantile(0.25)
+                Q3 = col_data.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                outliers_mask = (data[col] < lower_bound) | (data[col] > upper_bound)
+        
+        elif method == 'dbscan':
+            # DBSCAN for outlier detection
+            try:
+                # Standardize the data
+                scaler = StandardScaler()
+                col_scaled = scaler.fit_transform(data[[col]].fillna(data[col].median()))
+                
+                # Apply DBSCAN
+                dbscan = DBSCAN(eps=0.5, min_samples=5)
+                labels = dbscan.fit_predict(col_scaled)
+                outliers_mask = labels == -1  # -1 indicates outliers
+            except:
+                # Fallback to IQR
+                Q1 = col_data.quantile(0.25)
+                Q3 = col_data.quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                outliers_mask = (data[col] < lower_bound) | (data[col] > upper_bound)
+        
+        if outliers_mask is not None:
+            outliers_dict[col] = {
+                'indices': data[outliers_mask].index.tolist(),
+                'count': outliers_mask.sum(),
+                'percentage': (outliers_mask.sum() / len(data)) * 100,
+                'method': method
+            }
+    
+    # Generate analysis and recommendations
+    total_outliers = sum(info['count'] for info in outliers_dict.values())
+    total_percentage = (total_outliers / (len(data) * len(outliers_dict))) * 100 if outliers_dict else 0
+    
+    result['success'] = True
+    result['outliers'] = outliers_dict
+    result['analysis'] = {
+        'method_used': method_used,
+        'total_outliers': total_outliers,
+        'total_percentage': total_percentage,
+        'affected_columns': list(outliers_dict.keys())
+    }
+    
+    # Generate recommendations
+    if total_percentage > 10:
+        recommendations = [msg['extreme_outliers'], msg['investigate_outliers']]
+    elif total_percentage > 5:
+        recommendations = [msg['moderate_outliers'], msg['cap_outliers']]
     else:
-        raise ValueError("Method harus 'shap' atau 'lime'")
+        recommendations = [msg['few_outliers'], msg['keep_outliers']]
+    
+    result['recommendations'] = recommendations
+    
+    return result
+
+def advanced_imbalanced_data_handling(X, y, method='auto', sampling_strategy='auto', random_state=42, language='id'):
+    """
+    Penanganan dataset yang tidak seimbang dengan metode yang canggih
+    
+    Parameters:
+    -----------
+    X : array-like
+        Fitur dataset
+    y : array-like
+        Target dataset
+    method : str
+        Metode penyeimbangan ('auto', 'ros', 'rus', 'smote', 'adasyn', 'borderline_smote', 'smoteenn', 'smotetomek')
+    sampling_strategy : str or float
+        Strategi sampling ('auto', 'minority', 'not_minority', 'all', or float)
+    random_state : int
+        Random state untuk reproducibility
+    language : str
+        Bahasa untuk output
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi data yang telah diseimbangkan dan informasi proses
+    """
+    try:
+        from imblearn.over_sampling import RandomOverSampler, SMOTE, ADASYN, BorderlineSMOTE
+        from imblearn.under_sampling import RandomUnderSampler, EditedNearestNeighbours, TomekLinks
+        from imblearn.combine import SMOTEENN, SMOTETomek
+        from imblearn.metrics import classification_report_imbalanced
+        import pandas as pd
+    except ImportError:
+        result = {'success': False, 'error': 'imblearn tidak tersedia' if language == 'id' else 'imblearn not available'}
+        return result
+    
+    messages = {
+        'id': {
+            'imbalance_analysis': 'Analisis Ketidakseimbangan',
+            'original_distribution': 'Distribusi Original',
+            'balanced_distribution': 'Distribusi Setelah Penyeimbangan',
+            'method_used': 'Metode yang digunakan',
+            'imbalance_ratio': 'Rasio ketidakseimbangan',
+            'improvement': 'Peningkatan',
+            'minority_class': 'Kelas minoritas',
+            'majority_class': 'Kelas mayoritas',
+            'synthetic_samples': 'Sampel sintetis yang dibuat',
+            'removed_samples': 'Sampel yang dihapus',
+            'recommendations': 'Rekomendasi',
+            'severe_imbalance': 'Ketidakseimbangan parah terdeteksi',
+            'moderate_imbalance': 'Ketidakseimbangan sedang terdeteksi',
+            'slight_imbalance': 'Ketidakseimbangan ringan terdeteksi',
+            'ensemble_recommendation': 'Gunakan ensemble methods',
+            'threshold_recommendation': 'Pertimbangkan threshold tuning',
+            'cost_sensitive_recommendation': 'Gunakan cost-sensitive learning'
+        },
+        'en': {
+            'imbalance_analysis': 'Imbalance Analysis',
+            'original_distribution': 'Original Distribution',
+            'balanced_distribution': 'Distribution After Balancing',
+            'method_used': 'Method used',
+            'imbalance_ratio': 'Imbalance ratio',
+            'improvement': 'Improvement',
+            'minority_class': 'Minority class',
+            'majority_class': 'Majority class',
+            'synthetic_samples': 'Synthetic samples created',
+            'removed_samples': 'Samples removed',
+            'recommendations': 'Recommendations',
+            'severe_imbalance': 'Severe imbalance detected',
+            'moderate_imbalance': 'Moderate imbalance detected',
+            'slight_imbalance': 'Slight imbalance detected',
+            'ensemble_recommendation': 'Use ensemble methods',
+            'threshold_recommendation': 'Consider threshold tuning',
+            'cost_sensitive_recommendation': 'Use cost-sensitive learning'
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    result = {'success': False, 'X_balanced': None, 'y_balanced': None, 'analysis': {}, 'recommendations': []}
+    
+    if X is None or y is None:
+        result['error'] = 'Data tidak valid' if language == 'id' else 'Invalid data'
+        return result
+    
+    # Convert to pandas if needed
+    if not isinstance(X, pd.DataFrame):
+        X = pd.DataFrame(X)
+    
+    # Analyze original distribution
+    original_counts = pd.Series(y).value_counts().sort_index()
+    imbalance_ratio = original_counts.max() / original_counts.min()
+    minority_class = original_counts.idxmin()
+    majority_class = original_counts.idxmax()
+    
+    # Auto method selection
+    if method == 'auto':
+        if imbalance_ratio > 10:
+            method = 'smote'
+        elif imbalance_ratio > 5:
+            method = 'borderline_smote'
+        elif imbalance_ratio > 3:
+            method = 'ros'
+        else:
+            # No balancing needed
+            result['success'] = True
+            result['X_balanced'] = X
+            result['y_balanced'] = y
+            result['analysis'] = {
+                'method_used': 'none',
+                'original_distribution': original_counts.to_dict(),
+                'imbalance_ratio': imbalance_ratio,
+                'reason': 'Rasio ketidakseimbangan terlalu kecil' if language == 'id' else 'Imbalance ratio too small'
+            }
+            return result
+    
+    # Select and configure the resampler
+    resampler = None
+    sampler_config = {}
+    
+    if sampling_strategy == 'auto':
+        # Auto-determine sampling strategy
+        if method in ['ros', 'smote', 'adasyn', 'borderline_smote']:
+            sampling_strategy = 'minority'  # Oversample minority
+        elif method in ['rus']:
+            sampling_strategy = 'majority'  # Undersample majority
+        else:
+            sampling_strategy = 'auto'
+    
+    try:
+        if method == 'ros':
+            resampler = RandomOverSampler(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'rus':
+            resampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'smote':
+            resampler = SMOTE(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'adasyn':
+            resampler = ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'borderline_smote':
+            resampler = BorderlineSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'smoteenn':
+            resampler = SMOTEENN(sampling_strategy=sampling_strategy, random_state=random_state)
+        elif method == 'smotetomek':
+            resampler = SMOTETomek(sampling_strategy=sampling_strategy, random_state=random_state)
+        else:
+            result['error'] = f'Metode {method} tidak didukung' if language == 'id' else f'Method {method} not supported'
+            return result
+        
+        # Apply resampling
+        X_balanced, y_balanced = resampler.fit_resample(X, y)
+        
+        # Analyze results
+        balanced_counts = pd.Series(y_balanced).value_counts().sort_index()
+        new_imbalance_ratio = balanced_counts.max() / balanced_counts.min()
+        
+        # Calculate improvements
+        samples_created = len(y_balanced) - len(y)
+        samples_removed = len(y) - len(y_balanced) if len(y_balanced) < len(y) else 0
+        
+        result['success'] = True
+        result['X_balanced'] = X_balanced
+        result['y_balanced'] = y_balanced
+        result['analysis'] = {
+            'method_used': method,
+            'original_distribution': original_counts.to_dict(),
+            'balanced_distribution': balanced_counts.to_dict(),
+            'imbalance_ratio_original': imbalance_ratio,
+            'imbalance_ratio_balanced': new_imbalance_ratio,
+            'improvement': imbalance_ratio - new_imbalance_ratio,
+            'samples_change': samples_created if samples_created > 0 else -samples_removed
+        }
+        
+        # Generate recommendations based on results
+        if new_imbalance_ratio > 5:
+            recommendations = [msg['severe_imbalance'], msg['ensemble_recommendation'], msg['cost_sensitive_recommendation']]
+        elif new_imbalance_ratio > 3:
+            recommendations = [msg['moderate_imbalance'], msg['threshold_recommendation']]
+        else:
+            recommendations = [msg['slight_imbalance']]
+        
+        result['recommendations'] = recommendations
+        
+    except Exception as e:
+        result['error'] = f'Error dalam penyeimbangan: {str(e)}' if language == 'id' else f'Error in balancing: {str(e)}'
+        return result
+    
+    return result
 
 def create_shap_forecasting_dashboard(results):
     """
@@ -862,6 +1753,691 @@ def create_features_from_date(df, date_column):
 
     return df_new
 
+def advanced_data_scaling(data, method='auto', target_column=None, language='id', use_streamlit=True):
+    """
+    Melakukan scaling dan transformasi data dengan metode canggih
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Data yang akan discaling dan ditransformasi
+    method : str
+        Metode scaling yang digunakan ('auto', 'standard', 'minmax', 'robust', 
+        'quantile', 'power', 'log', 'boxcox', 'yeojohnson')
+    target_column : str, optional
+        Nama kolom target untuk transformasi yang mempertimbangkan target
+    language : str
+        Bahasa untuk pesan output ('id' atau 'en')
+    use_streamlit : bool
+        Apakah menggunakan Streamlit untuk output (default: True)
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi data hasil scaling, scaler object, dan informasi transformasi
+    """
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, QuantileTransformer, PowerTransformer
+    from scipy import stats
+    import warnings
+    
+    messages = {
+        'id': {
+            'auto_select': "Memilih metode scaling otomatis berdasarkan karakteristik data...",
+            'standard_selected': "StandardScaler dipilih untuk data dengan distribusi normal",
+            'robust_selected': "RobustScaler dipilih untuk data dengan outlier",
+            'quantile_selected': "QuantileTransformer dipilih untuk data tidak normal",
+            'power_selected': "PowerTransformer dipilih untuk data dengan skewness tinggi",
+            'log_warning': "Transformasi log tidak dapat diterapkan pada data dengan nilai negatif",
+            'boxcox_warning': "Transformasi Box-Cox memerlikan data positif",
+            'yeojohnson_selected': "Yeo-Johnson dipilih untuk transformasi umum",
+            'scaling_completed': "Scaling dan transformasi selesai",
+            'skewness_detected': "Skewness terdeteksi: {:.2f}",
+            'kurtosis_detected': "Kurtosis terdeteksi: {:.2f}",
+            'outlier_detected': "Outlier terdeteksi: {} dari {} sampel",
+            'normal_distribution': "Distribusi mendekati normal",
+            'non_normal_distribution': "Distribusi tidak normal, transformasi diperlukan"
+        },
+        'en': {
+            'auto_select': "Selecting automatic scaling method based on data characteristics...",
+            'standard_selected': "StandardScaler selected for normally distributed data",
+            'robust_selected': "RobustScaler selected for data with outliers",
+            'quantile_selected': "QuantileTransformer selected for non-normal data",
+            'power_selected': "PowerTransformer selected for highly skewed data",
+            'log_warning': "Log transformation cannot be applied to data with negative values",
+            'boxcox_warning': "Box-Cox transformation requires positive data",
+            'yeojohnson_selected': "Yeo-Johnson selected for general transformation",
+            'scaling_completed': "Scaling and transformation completed",
+            'skewness_detected': "Skewness detected: {:.2f}",
+            'kurtosis_detected': "Kurtosis detected: {:.2f}",
+            'outlier_detected': "Outliers detected: {} of {} samples",
+            'normal_distribution': "Distribution approximately normal",
+            'non_normal_distribution': "Distribution not normal, transformation required"
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    
+    try:
+        # Analisis karakteristik data numerik
+        numeric_data = data.select_dtypes(include=[np.number])
+        if numeric_data.empty:
+            return {
+                'success': False,
+                'message': 'Tidak ada data numerik untuk discaling' if language == 'id' else 'No numerical data to scale',
+                'original_data': data
+            }
+        
+        # Analisis distribusi dan outlier
+        skewness = numeric_data.skew().abs().mean()
+        kurtosis = numeric_data.kurtosis().abs().mean()
+        
+        # Deteksi outlier menggunakan IQR
+        outlier_count = 0
+        total_samples = len(numeric_data)
+        for col in numeric_data.columns:
+            Q1 = numeric_data[col].quantile(0.25)
+            Q3 = numeric_data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            outliers = ((numeric_data[col] < (Q1 - 1.5 * IQR)) | (numeric_data[col] > (Q3 + 1.5 * IQR))).sum()
+            outlier_count += outliers
+        
+        # Pilih metode scaling otomatis
+        if method == 'auto':
+            if use_streamlit:
+                st.info(msg['auto_select'])
+            
+            # Logika pemilihan metode
+            if outlier_count > 0.05 * total_samples:  # >5% outlier
+                method = 'robust'
+                if use_streamlit:
+                    st.info(msg['robust_selected'])
+            elif skewness > 1.0:  # High skewness
+                method = 'power'
+                if use_streamlit:
+                    st.info(msg['power_selected'])
+            elif skewness > 0.5:  # Moderate skewness
+                method = 'quantile'
+                if use_streamlit:
+                    st.info(msg['quantile_selected'])
+            else:  # Approximately normal
+                method = 'standard'
+                if use_streamlit:
+                    st.info(msg['standard_selected'])
+        
+        # Informasi analisis data
+        if use_streamlit:
+            st.write(f"**Analisis Data:**")
+            st.write(f"- {msg['skewness_detected'].format(skewness)}")
+            st.write(f"- {msg['kurtosis_detected'].format(kurtosis)}")
+            st.write(f"- {msg['outlier_detected'].format(outlier_count, total_samples)}")
+            
+            if skewness < 0.5 and abs(kurtosis) < 3:
+                st.success(msg['normal_distribution'])
+            else:
+                st.warning(msg['non_normal_distribution'])
+        
+        # Terapkan scaling sesuai metode yang dipilih
+        scaled_data = numeric_data.copy()
+        scaler_info = {}
+        
+        if method == 'standard':
+            scaler = StandardScaler()
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            scaler_info = {'method': 'StandardScaler', 'scaler': scaler}
+            
+        elif method == 'minmax':
+            scaler = MinMaxScaler()
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            scaler_info = {'method': 'MinMaxScaler', 'scaler': scaler}
+            
+        elif method == 'robust':
+            scaler = RobustScaler()
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            scaler_info = {'method': 'RobustScaler', 'scaler': scaler}
+            
+        elif method == 'quantile':
+            scaler = QuantileTransformer(output_distribution='normal')
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            scaler_info = {'method': 'QuantileTransformer', 'scaler': scaler}
+            
+        elif method == 'power':
+            # Gunakan PowerTransformer untuk transformasi umum
+            scaler = PowerTransformer(method='yeo-johnson')
+            
+            # Cek apakah Box-Cox bisa digunakan (semua data positif)
+            if (numeric_data > 0).all().all():
+                try:
+                    scaler = PowerTransformer(method='box-cox')
+                    scaler_info = {'method': 'PowerTransformer (Box-Cox)', 'scaler': scaler}
+                except:
+                    scaler = PowerTransformer(method='yeo-johnson')
+                    scaler_info = {'method': 'PowerTransformer (Yeo-Johnson)', 'scaler': scaler}
+            else:
+                scaler_info = {'method': 'PowerTransformer (Yeo-Johnson)', 'scaler': scaler}
+            
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            
+        elif method == 'log':
+            # Transformasi logaritmik
+            if (numeric_data <= 0).any().any():
+                if use_streamlit:
+                    st.warning(msg['log_warning'])
+                # Gunakan shift untuk membuat semua data positif
+                shift_value = abs(numeric_data.min().min()) + 1
+                log_data = np.log(numeric_data + shift_value)
+                scaled_data[numeric_data.columns] = log_data
+                scaler_info = {'method': 'Log Transformation (shifted)', 'shift_value': shift_value}
+            else:
+                log_data = np.log(numeric_data)
+                scaled_data[numeric_data.columns] = log_data
+                scaler_info = {'method': 'Log Transformation'}
+                
+        elif method == 'boxcox':
+            # Transformasi Box-Cox
+            if (numeric_data <= 0).any().any():
+                if use_streamlit:
+                    st.warning(msg['boxcox_warning'])
+                # Fallback ke Yeo-Johnson
+                scaler = PowerTransformer(method='yeo-johnson')
+                scaled_values = scaler.fit_transform(numeric_data)
+                scaled_data[numeric_data.columns] = scaled_values
+                scaler_info = {'method': 'PowerTransformer (Yeo-Johnson) - Fallback dari Box-Cox', 'scaler': scaler}
+            else:
+                scaler = PowerTransformer(method='box-cox')
+                scaled_values = scaler.fit_transform(numeric_data)
+                scaled_data[numeric_data.columns] = scaled_values
+                scaler_info = {'method': 'PowerTransformer (Box-Cox)', 'scaler': scaler}
+                
+        elif method == 'yeojohnson':
+            scaler = PowerTransformer(method='yeo-johnson')
+            scaled_values = scaler.fit_transform(numeric_data)
+            scaled_data[numeric_data.columns] = scaled_values
+            scaler_info = {'method': 'PowerTransformer (Yeo-Johnson)', 'scaler': scaler}
+        
+        # Gabungkan data non-numerik kembali
+        result_data = data.copy()
+        result_data[numeric_data.columns] = scaled_data
+        
+        # Hitung statistik setelah scaling
+        after_skewness = scaled_data.skew().abs().mean()
+        after_kurtosis = scaled_data.kurtosis().abs().mean()
+        
+        if use_streamlit:
+            st.success(msg['scaling_completed'])
+        
+        return {
+            'success': True,
+            'scaled_data': result_data,
+            'scaler_info': scaler_info,
+            'original_data': data,
+            'method_used': method,
+            'statistics': {
+                'before': {'skewness': float(skewness), 'kurtosis': float(kurtosis)},
+                'after': {'skewness': float(after_skewness), 'kurtosis': float(after_kurtosis)},
+                'improvement': {
+                    'skewness_reduction': float(skewness - after_skewness),
+                    'kurtosis_reduction': float(abs(kurtosis) - abs(after_kurtosis))
+                }
+            },
+            'outlier_info': {
+                'count': int(outlier_count),
+                'percentage': float(outlier_count / total_samples * 100)
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'original_data': data,
+            'message': f'Error dalam scaling data: {str(e)}'
+        }
+
+def advanced_feature_transformation(data, categorical_features=None, numerical_features=None, 
+                                  target_column=None, method='auto', language='id', use_streamlit=True):
+    """
+    Melakukan transformasi fitur canggih untuk preprocessing
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        Data yang akan ditransformasi
+    categorical_features : list
+        Daftar fitur kategorikal
+    numerical_features : list  
+        Daftar fitur numerik
+    target_column : str, optional
+        Nama kolom target
+    method : str
+        Metode transformasi ('auto', 'polynomial', 'interaction', 'binning', 'encoding')
+    language : str
+        Bahasa untuk pesan output ('id' atau 'en')
+    use_streamlit : bool
+        Apakah menggunakan Streamlit untuk output (default: True)
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi data hasil transformasi dan informasi transformasi
+    """
+    from sklearn.preprocessing import PolynomialFeatures
+    
+    messages = {
+        'id': {
+            'auto_select': "Memilih transformasi otomatis berdasarkan tipe fitur...",
+            'polynomial_selected': "Transformasi polynomial dipilih untuk fitur numerik",
+            'interaction_selected': "Transformasi interaksi dipilih untuk fitur kategorikal",
+            'binning_selected': "Binning dipilih untuk fitur numerik dengan banyak nilai unik",
+            'encoding_selected': "Encoding otomatis dipilih untuk fitur kategorikal",
+            'no_categorical': "Tidak ada fitur kategorikal untuk ditransformasi",
+            'no_numerical': "Tidak ada fitur numerik untuk ditransformasi",
+            'transformation_completed': "Transformasi fitur selesai",
+            'features_created': "{} fitur baru dibuat dari {} fitur asli",
+            'polynomial_degree': "Derajat polynomial: {}",
+            'bins_created': "{} bins dibuat untuk fitur {}",
+            'interaction_features': "{} fitur interaksi dibuat"
+        },
+        'en': {
+            'auto_select': "Selecting automatic transformation based on feature types...",
+            'polynomial_selected': "Polynomial transformation selected for numerical features",
+            'interaction_selected': "Interaction transformation selected for categorical features",
+            'binning_selected': "Binning selected for numerical features with many unique values",
+            'encoding_selected': "Automatic encoding selected for categorical features",
+            'no_categorical': "No categorical features to transform",
+            'no_numerical': "No numerical features to transform",
+            'transformation_completed': "Feature transformation completed",
+            'features_created': "{} new features created from {} original features",
+            'polynomial_degree': "Polynomial degree: {}",
+            'bins_created': "{} bins created for feature {}",
+            'interaction_features': "{} interaction features created"
+        }
+    }
+    
+    msg = messages.get(language, messages['id'])
+    
+    try:
+        result_data = data.copy()
+        transformation_info = []
+        
+        # Deteksi fitur otomatis jika tidak ditentukan
+        if categorical_features is None:
+            categorical_features = result_data.select_dtypes(include=['object', 'category']).columns.tolist()
+        if numerical_features is None:
+            numerical_features = result_data.select_dtypes(include=[np.number]).columns.tolist()
+            # Hapus target column dari numerical features jika ada
+            if target_column and target_column in numerical_features:
+                numerical_features.remove(target_column)
+        
+        if use_streamlit:
+            st.info(msg['auto_select'])
+        
+        # Transformasi fitur numerik
+        if numerical_features:
+            if method == 'auto':
+                # Analisis karakteristik fitur numerik
+                for feature in numerical_features:
+                    unique_count = result_data[feature].nunique()
+                    skewness = abs(result_data[feature].skew())
+                    
+                    if unique_count > 20 and skewness > 1.0:
+                        # Binning untuk fitur dengan banyak nilai unik dan skewness tinggi
+                        from sklearn.preprocessing import KBinsDiscretizer
+                        
+                        # Tentukan jumlah bins otomatis
+                        n_bins = min(10, unique_count // 5)
+                        discretizer = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='quantile')
+                        
+                        binned_feature = discretizer.fit_transform(result_data[[feature]])
+                        result_data[f'{feature}_binned'] = binned_feature.flatten()
+                        
+                        transformation_info.append({
+                            'feature': feature,
+                            'method': 'binning',
+                            'n_bins': n_bins,
+                            'strategy': 'quantile'
+                        })
+                        
+                        if use_streamlit:
+                            st.success(msg['bins_created'].format(n_bins, feature))
+                        
+                    elif skewness > 0.5:
+                        # Polynomial features untuk fitur dengan skewness moderat
+                        poly = PolynomialFeatures(degree=2, include_bias=False)
+                        
+                        # Hanya gunakan fitur ini untuk polynomial
+                        poly_features = poly.fit_transform(result_data[[feature]])
+                        
+                        # Ambil fitur polynomial (selain yang pertama - bias)
+                        if poly_features.shape[1] > 1:
+                            for i in range(1, poly_features.shape[1]):
+                                result_data[f'{feature}_poly_{i}'] = poly_features[:, i]
+                            
+                            transformation_info.append({
+                                'feature': feature,
+                                'method': 'polynomial',
+                                'degree': 2
+                            })
+                            
+                            if use_streamlit:
+                                st.success(msg['polynomial_degree'].format(2))
+            
+            elif method == 'polynomial':
+                # Transformasi polynomial untuk semua fitur numerik
+                poly = PolynomialFeatures(degree=2, include_bias=False)
+                poly_data = poly.fit_transform(result_data[numerical_features])
+                
+                # Buat nama fitur polynomial
+                feature_names = poly.get_feature_names_out(numerical_features)
+                
+                # Tambahkan fitur polynomial ke dataframe
+                for i, name in enumerate(feature_names[len(numerical_features):]):  # Skip original features
+                    result_data[f'poly_{name}'] = poly_data[:, len(numerical_features) + i]
+                
+                transformation_info.append({
+                    'method': 'polynomial',
+                    'original_features': numerical_features,
+                    'new_features': feature_names[len(numerical_features):].tolist(),
+                    'degree': 2
+                })
+                
+                if use_streamlit:
+                    st.success(msg['polynomial_degree'].format(2))
+        
+        # Transformasi fitur kategorikal
+        if categorical_features:
+            if method == 'auto' or method == 'encoding':
+                from sklearn.preprocessing import OneHotEncoder
+                
+                for feature in categorical_features:
+                    unique_count = result_data[feature].nunique()
+                    
+                    if unique_count <= 10:  # One-hot encoding untuk kategori dengan sedikit nilai unik
+                        encoder = OneHotEncoder(sparse_output=False, drop='first')
+                        encoded_features = encoder.fit_transform(result_data[[feature]])
+                        
+                        # Buat nama fitur baru
+                        categories = encoder.categories_[0][1:]  # Skip first category (reference)
+                        for i, category in enumerate(categories):
+                            result_data[f'{feature}_{category}'] = encoded_features[:, i]
+                        
+                        transformation_info.append({
+                            'feature': feature,
+                            'method': 'onehot_encoding',
+                            'n_categories': unique_count,
+                            'n_new_features': len(categories)
+                        })
+                        
+                    else:  # Frequency encoding untuk kategori dengan banyak nilai unik
+                        freq_encoding = result_data[feature].value_counts()
+                        result_data[f'{feature}_freq'] = result_data[feature].map(freq_encoding)
+                        
+                        transformation_info.append({
+                            'feature': feature,
+                            'method': 'frequency_encoding',
+                            'n_categories': unique_count
+                        })
+                
+                if use_streamlit:
+                    st.success(msg['encoding_selected'])
+        
+        # Hitung statistik transformasi
+        original_feature_count = len(data.columns)
+        new_feature_count = len(result_data.columns)
+        features_created = new_feature_count - original_feature_count
+        
+        if use_streamlit:
+            st.success(msg['transformation_completed'])
+            st.info(msg['features_created'].format(features_created, original_feature_count))
+        
+        return {
+            'success': True,
+            'transformed_data': result_data,
+            'transformation_info': transformation_info,
+            'original_data': data,
+            'method_used': method,
+            'statistics': {
+                'original_features': original_feature_count,
+                'new_features': new_feature_count,
+                'features_created': features_created
+            },
+            'feature_types': {
+                'categorical': categorical_features,
+                'numerical': numerical_features
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'original_data': data,
+            'message': f'Error dalam transformasi fitur: {str(e)}'
+        }
+
+def interpret_statistical_model(model, model_type='arima', language='id'):
+    """
+    Interpretasi khusus untuk model statistik seperti ARIMA, SARIMA, Exponential Smoothing
+    
+    Parameters:
+    -----------
+    model : object
+        Model statistik yang telah dilatih
+    model_type : str
+        Tipe model ('arima', 'sarima', 'exponential_smoothing', dll.)
+    language : str
+        Bahasa untuk output ('id' atau 'en')
+        
+    Returns:
+    --------
+    dict
+        Dictionary berisi interpretasi model statistik
+    """
+    messages = {
+        'id': {
+            'title': 'Interpretasi Model Statistik',
+            'coefficients': 'Koefisien Model',
+            'ar_terms': 'Koefisien AutoRegresif (AR)',
+            'ma_terms': 'Koefisien Moving Average (MA)', 
+            'seasonal_terms': 'Koefisien Musiman',
+            'trend': 'Komponen Tren',
+            'seasonality': 'Komponen Musiman',
+            'residuals': 'Analisis Residual',
+            'goodness_of_fit': 'Goodness of Fit',
+            'aic': 'AIC (Akaike Information Criterion)',
+            'bic': 'BIC (Bayesian Information Criterion)',
+            'mse': 'Mean Squared Error',
+            'no_coefficients': 'Tidak dapat mengekstrak koefisien dari model',
+            'recommendations': 'Rekomendasi',
+            'check_residuals': 'Periksa plot residual untuk asumsi model',
+            'check_normality': 'Periksa normalitas residual',
+            'check_autocorrelation': 'Periksa autokorelasi residual',
+            'use_decomposition': 'Gunakan dekomposisi deret waktu untuk analisis komponen'
+        },
+        'en': {
+            'title': 'Statistical Model Interpretation',
+            'coefficients': 'Model Coefficients',
+            'ar_terms': 'AutoRegressive (AR) Coefficients',
+            'ma_terms': 'Moving Average (MA) Coefficients',
+            'seasonal_terms': 'Seasonal Coefficients',
+            'trend': 'Trend Component',
+            'seasonality': 'Seasonality Component',
+            'residuals': 'Residual Analysis',
+            'goodness_of_fit': 'Goodness of Fit',
+            'aic': 'AIC (Akaike Information Criterion)',
+            'bic': 'BIC (Bayesian Information Criterion)',
+            'mse': 'Mean Squared Error',
+            'no_coefficients': 'Cannot extract coefficients from model',
+            'recommendations': 'Recommendations',
+            'check_residuals': 'Check residual plots for model assumptions',
+            'check_normality': 'Check residual normality',
+            'check_autocorrelation': 'Check residual autocorrelation',
+            'use_decomposition': 'Use time series decomposition for component analysis'
+        }
+    }
+    
+    lang = messages.get(language, messages['id'])
+    result = {
+        'title': lang['title'],
+        'model_type': model_type,
+        'coefficients': {},
+        'goodness_of_fit': {},
+        'interpretation': {},
+        'recommendations': [],
+        'success': False
+    }
+    
+    try:
+        # Ekstrak koefisien berdasarkan tipe model
+        if hasattr(model, 'params'):
+            result['coefficients']['params'] = model.params
+            
+        if hasattr(model, 'arparams'):
+            result['coefficients']['ar_terms'] = model.arparams
+            
+        if hasattr(model, 'maparams'):
+            result['coefficients']['ma_terms'] = model.maparams
+            
+        if hasattr(model, 'seasonalarparams'):
+            result['coefficients']['seasonal_ar'] = model.seasonalarparams
+            
+        if hasattr(model, 'seasonalmaparams'):
+            result['coefficients']['seasonal_ma'] = model.seasonalmaparams
+            
+        # Ekstrak goodness of fit metrics
+        if hasattr(model, 'aic'):
+            result['goodness_of_fit']['aic'] = model.aic
+            
+        if hasattr(model, 'bic'):
+            result['goodness_of_fit']['bic'] = model.bic
+            
+        if hasattr(model, 'mse'):
+            result['goodness_of_fit']['mse'] = model.mse
+            
+        if hasattr(model, 'mse_resid'):
+            result['goodness_of_fit']['mse'] = model.mse_resid
+            
+        # Interpretasi berdasarkan tipe model
+        if 'arima' in model_type.lower():
+            result['interpretation']['model'] = 'ARIMA (AutoRegressive Integrated Moving Average)'
+            result['interpretation']['ar_component'] = 'Menggambarkan hubungan antara observasi saat ini dengan observasi sebelumnya'
+            result['interpretation']['ma_component'] = 'Menggambarkan hubungan antara kesalahan saat ini dengan kesalahan sebelumnya'
+            
+        elif 'sarima' in model_type.lower():
+            result['interpretation']['model'] = 'SARIMA (Seasonal ARIMA)'
+            result['interpretation']['seasonal_component'] = 'Menangkap pola musiman dalam data'
+            
+        elif 'exponential' in model_type.lower():
+            result['interpretation']['model'] = 'Exponential Smoothing'
+            result['interpretation']['smoothing'] = 'Memberikan bobot yang lebih besar pada observasi terbaru'
+            
+        # Rekomendasi analisis lanjutan
+        result['recommendations'] = [
+            lang['check_residuals'],
+            lang['check_normality'],
+            lang['check_autocorrelation'],
+            lang['use_decomposition']
+        ]
+        
+        result['success'] = True
+        
+    except Exception as e:
+        result['error'] = str(e)
+        result['message'] = lang['no_coefficients']
+        result['success'] = False
+        
+    return result
+
+def _is_statistical_model(model):
+    """
+    Mengecek apakah model adalah model statistik (ARIMA, SARIMA, dll.)
+    
+    Parameters:
+    -----------
+    model : object
+        Model yang akan dicek
+        
+    Returns:
+    --------
+    bool
+        True jika model adalah model statistik
+    """
+    model_type = type(model).__name__.lower()
+    module_name = type(model).__module__.lower()
+    
+    # Check for statistical model indicators
+    statistical_indicators = [
+        'arima', 'sarima', 'exponential', 'holt', 'winters',
+        'statsmodels', 'pmdarima', 'tbats', 'bats'
+    ]
+    
+    # Check model attributes that indicate statistical model
+    statistical_attributes = [
+        'params', 'arparams', 'maparams', 'seasonalarparams',
+        'seasonalmaparams', 'aic', 'bic', 'hqic'
+    ]
+    
+    # Check if any indicator is in model type or module
+    for indicator in statistical_indicators:
+        if indicator in model_type or indicator in module_name:
+            return True
+    
+    # Check if model has statistical attributes
+    for attr in statistical_attributes:
+        if hasattr(model, attr):
+            return True
+    
+    return False
+
+def _is_neural_network_model(model):
+    """
+    Mengecek apakah model adalah neural network
+    
+    Parameters:
+    -----------
+    model : object
+        Model yang akan dicek
+        
+    Returns:
+    --------
+    bool
+        True jika model adalah neural network
+    """
+    model_type = type(model).__name__.lower()
+    module_name = type(model).__module__.lower()
+    
+    # Check for common neural network indicators
+    neural_network_indicators = [
+        'mlp', 'neural', 'keras', 'tensorflow', 'torch', 'skorch',
+        'sequential', 'model', 'network', 'dense', 'conv', 'lstm'
+    ]
+    
+    # Check model attributes that indicate neural network
+    neural_network_attributes = [
+        'layers', 'weights', 'activation', 'optimizer', 'loss',
+        'fit_generator', 'predict_generator', 'forward'
+    ]
+    
+    # Check if any indicator is in model type or module
+    for indicator in neural_network_indicators:
+        if indicator in model_type or indicator in module_name:
+            return True
+    
+    # Check if model has neural network attributes
+    for attr in neural_network_attributes:
+        if hasattr(model, attr):
+            return True
+    
+    # Special check for sklearn MLP models
+    if hasattr(model, 'hidden_layer_sizes') or hasattr(model, 'activation'):
+        return True
+    
+    return False
+
 def check_model_compatibility(model, method='shap', language='id'):
     """
     Mengecek kompatibilitas model dengan metode interpretasi SHAP atau LIME
@@ -892,7 +2468,7 @@ def check_model_compatibility(model, method='shap', language='id'):
             'no_predict': "Model tidak memiliki method 'predict'. Tidak dapat digunakan untuk interpretasi.",
             'clustering': "Model clustering tidak cocok untuk interpretasi prediktif.",
             'dimensionality_reduction': "Model reduksi dimensi tidak cocok untuk interpretasi prediktif.",
-            'neural_network_shap': "Model neural network memerlukan SHAP DeepExplainer. Coba LIME sebagai alternatif.",
+            'neural_network_shap': "Model neural network akan menggunakan SHAP DeepExplainer atau fallback ke KernelExplainer.",
             'complex_ensemble': "Model ensemble kompleks mungkin tidak didukung. Coba model individual.",
             'generally_supported': "Model kemungkinan besar didukung untuk interpretasi {method}.",
             'try_alternative': "Jika gagal, coba metode {alternative} atau model yang lebih sederhana.",
@@ -902,7 +2478,7 @@ def check_model_compatibility(model, method='shap', language='id'):
             'no_predict': "Model does not have 'predict' method. Cannot be used for interpretation.",
             'clustering': "Clustering models are not suitable for predictive interpretation.",
             'dimensionality_reduction': "Dimensionality reduction models are not suitable for predictive interpretation.",
-            'neural_network_shap': "Neural network models require SHAP DeepExplainer. Try LIME as alternative.",
+            'neural_network_shap': "Neural network models will use SHAP DeepExplainer or fallback to KernelExplainer.",
             'complex_ensemble': "Complex ensemble models may not be supported. Try individual models.",
             'generally_supported': "Model is likely supported for {method} interpretation.",
             'try_alternative': "If it fails, try {alternative} method or simpler models.",
@@ -948,18 +2524,18 @@ def check_model_compatibility(model, method='shap', language='id'):
                     'confidence': 'low'
                 }
 
-        # Neural networks (conditional support)
+        # Neural networks (now supported with DeepExplainer)
         neural_indicators = ['mlp', 'neural', 'dense', 'lstm', 'gru', 'cnn', 'rnn']
-        is_neural = any(nn in model_type for nn in neural_indicators) or 'keras' in module_name or 'torch' in module_name
+        is_neural = _is_neural_network_model(model)
 
         if is_neural:
             if method == 'shap':
                 return {
-                    'compatible': False,
+                    'compatible': True,
                     'message': lang['neural_network_shap'],
-                    'suggestion': lang['suggestion_prefix'] + lang['try_alternative'].format(alternative='LIME'),
-                    'error_type': 'neural_network',
-                    'confidence': 'medium'
+                    'suggestion': lang['suggestion_prefix'] + "Model akan menggunakan SHAP DeepExplainer atau fallback ke KernelExplainer.",
+                    'error_type': None,
+                    'confidence': 'high'
                 }
             else:  # LIME
                 return {
@@ -982,6 +2558,27 @@ def check_model_compatibility(model, method='shap', language='id'):
                 'error_type': 'complex_ensemble',
                 'confidence': 'medium'
             }
+
+        # Statistical models (special handling)
+        is_statistical = _is_statistical_model(model)
+        
+        if is_statistical:
+            if method == 'shap':
+                return {
+                    'compatible': False,
+                    'message': "Model statistik tidak mendukung interpretasi SHAP secara langsung. Gunakan interpretasi khusus statistik.",
+                    'suggestion': lang['suggestion_prefix'] + "Gunakan fungsi interpret_statistical_model() atau coba dengan LIME.",
+                    'error_type': 'statistical_model',
+                    'confidence': 'high'
+                }
+            else:  # LIME
+                return {
+                    'compatible': True,
+                    'message': "Model statistik dapat menggunakan LIME dengan pendekatan khusus.",
+                    'suggestion': lang['suggestion_prefix'] + "LIME akan menggunakan mode regresi untuk interpretasi.",
+                    'error_type': None,
+                    'confidence': 'medium'
+                }
 
         # Common supported models (high confidence)
         well_supported = [
@@ -1078,6 +2675,12 @@ def get_model_interpretation_recommendations(model, language='id'):
             'reason': 'Ensemble model dapat diinterpretasi dengan SHAP untuk hasil global yang baik',
             'alternatives': ['Feature Importance', 'Permutation Importance']
         },
+        'statistical': {
+            'primary': 'LIME',
+            'secondary': 'Interpretasi Statistik',
+            'reason': 'Model statistik lebih cocok dengan LIME atau interpretasi khusus statistik',
+            'alternatives': ['Analisis Koefisien', 'Dekomposisi Time Series', 'Analisis Residual']
+        },
         'unsupported': {
             'primary': 'Tidak tersedia',
             'secondary': 'Tidak tersedia',
@@ -1087,7 +2690,9 @@ def get_model_interpretation_recommendations(model, language='id'):
     }
     
     # Kategorikan model
-    if any(tree in model_type for tree in ['randomforest', 'xgb', 'lgbm', 'catboost', 'decisiontree', 'extratree']):
+    if _is_statistical_model(model):
+        category = 'statistical'
+    elif any(tree in model_type for tree in ['randomforest', 'xgb', 'lgbm', 'catboost', 'decisiontree', 'extratree']):
         category = 'tree_based'
     elif any(linear in model_type for linear in ['linear', 'logistic', 'ridge', 'lasso', 'elastic']):
         category = 'linear'
@@ -1182,6 +2787,15 @@ def implement_shap_classification(model, X_sample, X_train=None, language='id', 
             explainer = shap.TreeExplainer(model, data=X_train if X_train is not None else X_sample)
         elif hasattr(model, 'coef_'):  # Linear models
             explainer = shap.LinearExplainer(model, data=X_train if X_train is not None else X_sample)
+        elif _is_neural_network_model(model):  # Neural networks
+            try:
+                # Try DeepExplainer first for neural networks
+                background_data = X_train if X_train is not None else shap.sample(X_sample, min(100, len(X_sample)))
+                explainer = shap.DeepExplainer(model, background_data)
+            except Exception:
+                # Fallback to KernelExplainer if DeepExplainer fails
+                background_data = X_train if X_train is not None else shap.sample(X_sample, min(50, len(X_sample)))
+                explainer = shap.KernelExplainer(model.predict_proba, background_data)
         else:  # General models - use KernelExplainer with better background
             background_data = X_train if X_train is not None else shap.sample(X_sample, min(50, len(X_sample)))
             explainer = shap.KernelExplainer(model.predict_proba, background_data)
