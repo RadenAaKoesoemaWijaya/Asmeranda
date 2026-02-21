@@ -6871,6 +6871,19 @@ with tab4:
                                     model = train_arima_model(train_data, target_column, order=(p, d, q))
                                     st.session_state.model = model
                                     st.success("Model ARIMA berhasil dilatih!" if st.session_state.language == 'id' else "ARIMA model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model ARIMA (.pkl)" if st.session_state.language == 'id' else "📥 Download ARIMA Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"arima_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training ARIMA: {str(e)}")
                         
@@ -6893,6 +6906,19 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model SARIMA berhasil dilatih!" if st.session_state.language == 'id' else "SARIMA model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model SARIMA (.pkl)" if st.session_state.language == 'id' else "📥 Download SARIMA Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"sarima_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training SARIMA: {str(e)}")
                         
@@ -6915,6 +6941,19 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model SARIMAX berhasil dilatih!" if st.session_state.language == 'id' else "SARIMAX model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model SARIMAX (.pkl)" if st.session_state.language == 'id' else "📥 Download SARIMAX Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"sarimax_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training SARIMAX: {str(e)}")
                         
@@ -6934,6 +6973,19 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model Exponential Smoothing berhasil dilatih!" if st.session_state.language == 'id' else "Exponential Smoothing model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model Exponential Smoothing (.pkl)" if st.session_state.language == 'id' else "📥 Download Exponential Smoothing Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"exp_smoothing_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training Exponential Smoothing: {str(e)}")
                         
@@ -6953,6 +7005,19 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model Holt-Winters berhasil dilatih!" if st.session_state.language == 'id' else "Holt-Winters model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model Holt-Winters (.pkl)" if st.session_state.language == 'id' else "📥 Download Holt-Winters Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"holt_winters_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training Holt-Winters: {str(e)}")
                         
@@ -6997,6 +7062,19 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model LSTM berhasil dilatih!" if st.session_state.language == 'id' else "LSTM model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            st.download_button(
+                                                label="📥 Unduh Model LSTM (.pkl)" if st.session_state.language == 'id' else "📥 Download LSTM Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"lstm_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except ImportError as e:
                                     st.error(f"TensorFlow tidak tersedia: {str(e)}")
                                 except Exception as e:
@@ -7050,6 +7128,20 @@ with tab4:
                                     )
                                     st.session_state.model = model_info
                                     st.success(f"Model {model_type} berhasil dilatih!" if st.session_state.language == 'id' else f"{model_type} model trained successfully!")
+                                    
+                                    # Add download button for trained model
+                                    if st.session_state.model is not None:
+                                        try:
+                                            model_bytes = pickle.dumps(st.session_state.model)
+                                            model_type_clean = model_type.lower().replace(" ", "_")
+                                            st.download_button(
+                                                label=f"📥 Unduh Model {model_type} (.pkl)" if st.session_state.language == 'id' else f"📥 Download {model_type} Model (.pkl)",
+                                                data=model_bytes,
+                                                file_name=f"{model_type_clean}_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                                mime="application/octet-stream"
+                                            )
+                                        except Exception as pickle_error:
+                                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
                                     st.error(f"Error training {model_type}: {str(e)}")
                         
@@ -8757,6 +8849,20 @@ with tab4:
                             st.session_state.model = model
                             # Update y_test untuk evaluasi
                             st.session_state.y_test_eval = y_test_clean
+                            
+                            # Add download button for trained model
+                            if st.session_state.model is not None:
+                                try:
+                                    model_bytes = pickle.dumps(st.session_state.model)
+                                    model_type_clean = model_type.lower().replace(" ", "_")
+                                    st.download_button(
+                                        label=f"📥 Unduh Model {model_type} (.pkl)" if st.session_state.language == 'id' else f"📥 Download {model_type} Model (.pkl)",
+                                        data=model_bytes,
+                                        file_name=f"{model_type_clean}_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                        mime="application/octet-stream"
+                                    )
+                                except Exception as pickle_error:
+                                    st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                         
                         # Cross-validation evaluation
                         if cv_params['cv'] is not None:
@@ -9675,6 +9781,19 @@ with tab4:
                                 
                                 st.session_state.model = loaded_model
                                 st.success(f"Model {selected_model_file} berhasil dimuat!" if st.session_state.language == 'id' else f"Model {selected_model_file} loaded successfully!")
+                                
+                                # Add download button for loaded model
+                                if st.session_state.model is not None:
+                                    try:
+                                        model_bytes = pickle.dumps(st.session_state.model)
+                                        st.download_button(
+                                            label=f"📥 Unduh Model {selected_model_file} (.pkl)" if st.session_state.language == 'id' else f"📥 Download {selected_model_file} (.pkl)",
+                                            data=model_bytes,
+                                            file_name=f"loaded_{selected_model_file}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                            mime="application/octet-stream"
+                                        )
+                                    except Exception as pickle_error:
+                                        st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                             except Exception as e:
                                 st.error(f"Error saat memuat model: {str(e)}")
                     else:
