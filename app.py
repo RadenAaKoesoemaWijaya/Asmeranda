@@ -178,12 +178,10 @@ def render_loginizer():
         ### 🌟 Penawaran Membership Premium
         
         Tingkatkan kualitas penelitian Anda dengan bergabung sebagai **Member Premium**!
-        
-        **Biaya Langganan: Rp 1.085.000**
-        
+                
         **Keunggulan Eksklusif:**
-        1.  ✅ **Akses Penuh** ke seluruh fitur aplikasi selama satu tahun penuh.
-        2.  🤝 **Pendampingan Tim Ahli** selama **3 bulan**.
+        1.  ✅ **Akses Penuh** ke seluruh fitur aplikasi dan informasi update terbaru
+        2.  🤝 **Pendampingan penelitian melalui WA group.
         3.  📊 **Konsultasi Desain Penelitian** untuk memastikan metodologi yang tepat.
         4.  🛠️ **Kesempatan mengikuti program affiliasi sebagai member.
         
