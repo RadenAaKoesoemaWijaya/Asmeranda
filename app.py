@@ -151,7 +151,7 @@ def send_otp_email(recipient_email: str, otp_code: str) -> bool:
 
 def render_loginizer():
     """Render login/register with email OTP verification. Returns True if authenticated."""
-    st.title("🔐 Loginizer")
+    st.title("🔐 ASMERANDA")
     st.caption("Masuk atau daftar sebagai pengguna baru dengan verifikasi OTP via email")
     if 'auth_step' not in st.session_state:
         st.session_state.auth_step = 'login'
@@ -187,7 +187,7 @@ def render_loginizer():
         3.  📊 **Konsultasi Desain Penelitian** untuk memastikan metodologi yang tepat.
         4.  🛠️ **Kesempatan mengikuti program affiliasi sebagai member.
         
-        > *Investasi terbaik untuk hasil penelitian yang valid dan reliabel.*
+        > *Investasi terbaik untuk hasil penelitian yang valid dan reliabel hanya dengan Rp 1.185.000,00 saja.*
         
         **Cara Bergabung:**
         Silakan hubungi admin kami untuk pendaftaran member premium dan informasi pembayaran.
