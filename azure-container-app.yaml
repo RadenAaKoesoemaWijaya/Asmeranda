@@ -1,0 +1,68 @@
+# Azure Container Apps Configuration
+apiVersion: 2023-05-01
+location: eastus
+properties:
+  environmentId: /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.App/managedEnvironments/{environment-name}
+  configuration:
+    activeRevisionsMode: Single
+    ingress:
+      external: true
+      targetPort: 8501
+      traffic:
+        - weight: 100
+          latestRevision: true
+    secrets:
+      - name: azure-storage-connection-string
+        keyVaultUrl: https://{keyvault-name}.vault.azure.net/secrets/azure-storage-connection-string
+        identity: /subscriptions/{subscription-id}/resourcegroups/{resource-group}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}
+      - name: super-admin-password
+        keyVaultUrl: https://{keyvault-name}.vault.azure.net/secrets/super-admin-password
+        identity: /subscriptions/{subscription-id}/resourcegroups/{resource-group}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}
+  template:
+    containers:
+      - name: asmeranda-ml-app
+        image: {acr-name}.azurecr.io/asmeranda-ml-app:latest
+        resources:
+          cpu: 2.0
+          memory: 4Gi
+        env:
+          - name: AZURE_STORAGE_CONNECTION_STRING
+            secretRef: azure-storage-connection-string
+          - name: SUPER_ADMIN_PASS
+            secretRef: super-admin-password
+          - name: STREAMLIT_SERVER_PORT
+            value: "8501"
+          - name: STREAMLIT_SERVER_ADDRESS
+            value: "0.0.0.0"
+          - name: AZURE_CONTAINER_APPS_ENVIRONMENT
+            value: "true"
+          - name: PYTHONPATH
+            value: "/app"
+        probes:
+          - type: Liveness
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          - type: Readiness
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+    scale:
+      minReplicas: 1
+      maxReplicas: 5
+      rules:
+        - name: http-rule
+          http:
+            metadata:
+              concurrentRequests: '10'
+tags:
+  environment: production
+  application: ml-analytics

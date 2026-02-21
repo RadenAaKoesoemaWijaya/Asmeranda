@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  asmeranda-app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.azure
+    container_name: asmeranda-ml-app-azure
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persistent storage for models, uploads, and cache
+      - ./models:/app/models
+      - ./uploads:/app/uploads
+      - ./interpretation_cache:/app/interpretation_cache
+      - ./logs:/app/logs
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - PYTHONPATH=/app
+      - AZURE_CONTAINER_APPS_ENVIRONMENT=true
+      - PORT=8501
+      # Azure Storage settings (configure as needed)
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING:-}
+      - AZURE_STORAGE_CONTAINER_NAME=${AZURE_STORAGE_CONTAINER_NAME:-models}
+      # Application settings
+      - SUPER_ADMIN_USER=${SUPER_ADMIN_USER:-superadmin}
+      - SUPER_ADMIN_PASS=${SUPER_ADMIN_PASS:-Admin@12345}
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@local}
+      # SMTP settings (optional)
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - asmeranda-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # Azure Database for PostgreSQL (optional)
+  postgres:
+    image: postgres:13
+    container_name: asmeranda-postgres
+    environment:
+      - POSTGRES_DB=asmeranda_db
+      - POSTGRES_USER=asmeranda_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-your_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - asmeranda-network
+    profiles:
+      - with-db
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: asmeranda-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - asmeranda-network
+    profiles:
+      - with-cache
+
+networks:
+  asmeranda-network:
+    driver: bridge
+
+volumes:
+  models:
+    driver: local
+  uploads:
+    driver: local
+  interpretation_cache:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
