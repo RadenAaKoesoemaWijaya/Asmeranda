@@ -302,6 +302,33 @@ def render_loginizer():
     # If authenticated, return True
     return st.session_state.get('authenticated', False)
 
+def logout_user():
+    """Logout function to clear session and record activity"""
+    current_user = st.session_state.get('current_username')
+    if current_user:
+        try:
+            auth_db.record_activity(current_user, 'logout')
+        except Exception:
+            pass
+    
+    # Clear all authentication-related session state
+    keys_to_clear = ['authenticated', 'current_username', 'session_token', 'trial_ends_at']
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    # Show success message
+    if st.session_state.language == 'id':
+        st.success("Anda telah berhasil logout. Sampai jumpa!")
+    else:
+        st.success("You have been successfully logged out. Goodbye!")
+    
+    # Rerun to show login page
+    safe_rerun()
+
+# Ensure super admin exists before authentication
+auth_db.ensure_super_admin_exists()
+
 # Gate app content behind authentication
 if not st.session_state.get('authenticated', False):
     auth_ok = render_loginizer()
@@ -467,8 +494,13 @@ if current_user and auth_db.is_super_admin(current_user):
                     auth_db.record_activity(current_user, 'delete_user', metadata=del_user)
                     st.success(f"Pengguna {del_user} telah dihapus.")
 with col2:
+    # Language toggle button
     if st.button('ID' if st.session_state.language == 'en' else 'EN'):
         st.session_state.language = 'id' if st.session_state.language == 'en' else 'en'
+    
+    # Logout button
+    if st.button("🚪" + (" Keluar" if st.session_state.language == 'id' else " Logout")):
+        logout_user()
 
 # App title and description
 st.title(f"📊 {TRANSLATIONS[st.session_state.language]['app_title']}")

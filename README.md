@@ -15,6 +15,9 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Session Management**: Pengelolaan sesi pengguna yang aman
 - **Super Admin Dashboard**: Tab khusus untuk super admin memantau traffic dan penggunaan fitur
 - **Multi-bahasa**: Dukungan Bahasa Indonesia dan English
+- **Model Download Security**: Tombol download model terlatih dalam format `.pkl` dengan timestamp
+- **Secure Logout**: Tombol logout dengan pencatatan aktivitas dan session cleanup
+- **Activity Tracking**: Audit trail untuk semua aktivitas pengguna
 
 ### 2. 📤 Unggah Data
 - **Multi-format Support**: Unggah file CSV, Excel (XLSX), dan ZIP (dataset gabungan)
@@ -42,18 +45,18 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Scaling Options**: StandardScaler, MinMaxScaler, RobustScaler, Normalizer
 - **Advanced Missing Value Handling**: 
   - Mean, median, mode, forward/backward fill, interpolation
-  - **NEW**: Time-weighted interpolation untuk data time series
-  - **NEW**: Multiple imputation strategies (auto, drop, impute)
-  - **NEW**: Robust handling untuk missing data >30%
-  - **NEW**: Smart detection dan handling untuk short time series
+  - Time-weighted interpolation untuk data time series
+  - Multiple imputation strategies (auto, drop, impute)
+  - Robust handling untuk missing data >30%
+  - Smart detection dan handling untuk short time series
 - **Outlier Detection**: IQR, Z-score, Isolation Forest untuk deteksi outlier
 - **Data Normalization for Unsupervised ML**: 
-  - **NEW**: Opsi normalisasi data sebelum algoritma unsupervised ML (K-Means, Hierarchical, DBSCAN, Spectral, K-Prototypes)
-  - **NEW**: Multiple normalization methods: StandardScaler (Z-score), MinMaxScaler (0-1), RobustScaler (IQR), atau No Normalization
-  - **NEW**: Bilingual UI support (Bahasa Indonesia/English) untuk pemilihan normalisasi
-  - **NEW**: Data comparison visualization untuk membandingkan data asli vs normalized
-  - **NEW**: Automatic scaling info display untuk setiap metode clustering
-  - **NEW**: Consistent preprocessing pipeline untuk semua algoritma unsupervised
+  - Opsi normalisasi data sebelum algoritma unsupervised ML (K-Means, Hierarchical, DBSCAN, Spectral, K-Prototypes)
+  - Multiple normalization methods: StandardScaler (Z-score), MinMaxScaler (0-1), RobustScaler (IQR), atau No Normalization
+  - Bilingual UI support (Bahasa Indonesia/English) untuk pemilihan normalisasi
+  - Data comparison visualization untuk membandingkan data asli vs normalized
+  - Automatic scaling info display untuk setiap metode clustering
+  - Consistent preprocessing pipeline untuk semua algoritma unsupervised
 
 ### 6. 🛠️ Feature Engineering & Pelatihan Model
 - **Advanced Feature Engineering**: Polynomial features, interaction terms, binning
@@ -88,13 +91,13 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
   - **Decomposition Analysis**: Analisis tren, musiman, dan komponen siklis
   - **ACF/PACF Analysis**: Plot autokorelasi untuk identifikasi order
   - **Seasonal Detection**: Deteksi otomatis pola musiman
-  - **NEW**: VAR Models untuk multivariate time series
+  - **VAR Models**: Model vector autoregressive untuk multivariate time series
 
 - **Enhanced Missing Data Handling**:
-  - **NEW**: Time-weighted interpolation untuk time series dengan missing values
-  - **NEW**: Smart handling untuk short time series (< 10 data points)
-  - **NEW**: Multiple imputation strategies dengan validasi otomatis
-  - **NEW**: Robust processing untuk high percentage missing data (>30%)
+  - Time-weighted interpolation untuk time series dengan missing values
+  - Smart handling untuk short time series (< 10 data points)
+  - Multiple imputation strategies dengan validasi otomatis
+  - Robust processing untuk high percentage missing data (>30%)
 
 - **Forecasting Evaluation**: MAE, MSE, RMSE, MAPE, R² dengan confidence intervals
 - **Multi-horizon Forecasting**: Prediksi multi-step ke depan
@@ -109,10 +112,10 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
   - **Prophet-based Detection**: **NEW**: Anomali detection menggunakan Prophet decomposition
   - **Ensemble Methods**: Kombinasi multiple algorithms untuk hasil optimal
 - **Enhanced Missing Data Support**:
-  - **NEW**: Semua algoritma mendukung data dengan missing values
-  - **NEW**: Flexible fill methods (auto, drop, impute, interpolation)
-  - **NEW**: Time-aware interpolation untuk time series data
-  - **NEW**: Robust handling untuk high missing data percentages
+  - Semua algoritma mendukung data dengan missing values
+  - Flexible fill methods (auto, drop, impute, interpolation)
+  - Time-aware interpolation untuk time series data
+  - Robust handling untuk high missing data percentages
 - **Real-time Detection**: Deteksi anomali real-time pada data streaming
 - **Configurable Parameters**: Threshold adjustment dan parameter kontrol
 - **Comparative Analysis**: Perbandingan performa antar metode deteksi
@@ -156,17 +159,6 @@ Aplikasi ini menyediakan beberapa fitur utama yang dibagi dalam beberapa tab:
 - **Akses**:
   - Tab “🛡️ Super Admin Dashboard” hanya muncul jika yang login adalah akun super admin
   - Tidak dapat menghapus diri sendiri atau satu-satunya super admin
-
-## Akun Super Admin (Default)
-- **Default (dapat diubah via environment variables)**:
-  - Username: `superadmin`
-  - Password: `Admin@12345`
-  - Email: `admin@local`
-- **Override melalui environment**:
-  - SUPER_ADMIN_USER, SUPER_ADMIN_PASS, SUPER_ADMIN_EMAIL
-- **Catatan Keamanan**:
-  - Untuk produksi, ganti kredensial default dan aktifkan SMTP agar OTP terkirim ke email
-  - Gunakan password kuat dan rotasi berkala
 
 ## Model yang Didukung
 ### Klasifikasi
@@ -314,12 +306,33 @@ streamlit run app.py
 
 3. Aplikasi akan terbuka di browser web Anda secara otomatis (biasanya di http://localhost:8501 )
 
+### 📥 Download Model Terlatih
+Setelah melatih model, tombol download akan muncul secara otomatis:
+1. Latih model menggunakan tab "Cross Validation and Model Training"
+2. Setelah training selesai, tombol "📥 Unduh Model (.pkl)" akan muncul
+3. Klik tombol untuk download model dalam format `.pkl` dengan timestamp
+4. Model dapat di-load kembali menggunakan fitur upload model
+
+### 🚪 Logout Aman
+- Klik tombol "🚪 Keluar" (Bahasa Indonesia) atau "🚪 Logout" (English) di pojok kanan atas
+- Sistem akan mencatat aktivitas logout dan membersihkan session
+- Anda akan diarahkan kembali ke halaman login
+
+### 📧 Konfigurasi SMTP (Opsional)
+Untuk mengirim OTP via email (bukan mode demo):
+1. Login sebagai superadmin
+2. Buka tab "🛡️ Super Admin Dashboard"
+3. Isi konfigurasi SMTP di bagian "Konfigurasi SMTP"
+4. Klik "Simpan Konfigurasi SMTP"
+
 ## Struktur File
 ```
 ├── app.py                 # File utama aplikasi Streamlit (5000+ baris)
 ├── requirements.txt       # Daftar dependensi Python
 ├── README.md              # File dokumentasi ini
 ├── test_normalization.py  # **NEW**: Test script untuk validasi normalisasi data unsupervised ML
+├── create_superadmin.py   # **NEW**: Utility untuk membuat akun superadmin
+├── test_logout.py         # **NEW**: Test script untuk validasi fungsi logout
 ├── utils.py               # **UPDATED**: Fungsi utilitas dengan enhanced missing data handling
 ├── forecasting_utils.py   # **UPDATED**: Forecasting dengan robust missing data support
 ├── anomaly_detection_utils.py  # **UPDATED**: Anomaly detection dengan missing data handling
@@ -358,6 +371,22 @@ streamlit run app.py
 - **Cross-Algorithm Consistency**: Missing data handling konsisten di semua metode ML dan forecasting
 - **Smart Validation System**: `validate_data_for_ml()` untuk quality assurance data
 - **Enhanced Error Handling**: Validasi parameter dan error handling yang lebih robust
+
+### 🔐 Enhanced Authentication & Security Features (Update Terbaru)
+- **Model Download Security**: Tombol download model terlatih dalam format `.pkl` dengan timestamp dan nama kolom target
+- **Bilingual Support**: Interface download model dalam Bahasa Indonesia dan English
+- **Error Handling**: Penanganan error saat serialisasi model dengan pesan yang informatif
+- **Comprehensive Model Support**: Download untuk semua jenis model (ARIMA, SARIMA, SARIMAX, Exponential Smoothing, Holt-Winters, LSTM, Random Forest, Gradient Boosting, Linear Regression)
+- **Cross-Validation Model Download**: Support download model hasil cross-validation
+- **Loaded Model Export**: Kemampuan mendownload model yang telah di-load sebelumnya
+
+### 🚪 User Logout Functionality (Update Terbaru)
+- **Secure Logout Button**: Tombol logout dengan ikon pintu (🚪) yang mudah diakses
+- **Activity Tracking**: Pencatatan aktivitas logout untuk audit keamanan
+- **Session Cleanup**: Pembersihan lengkap variabel session authentication
+- **Bilingual Interface**: Tombol logout dalam Bahasa Indonesia ("Keluar") dan English ("Logout")
+- **Automatic Redirection**: Redirect otomatis ke halaman login setelah logout
+- **Safety Confirmation**: Pesan konfirmasi logout dalam bahasa pilihan user
 
 ### � Data Normalization for Unsupervised Machine Learning (Update Terbaru)
 - **Pre-Clustering Normalization**: Opsi normalisasi data sebelum eksekusi algoritma unsupervised ML
