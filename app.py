@@ -185,7 +185,7 @@ def render_loginizer():
         1.  ✅ **Akses Penuh** ke seluruh fitur aplikasi selama satu tahun penuh.
         2.  🤝 **Pendampingan Tim Ahli** selama **3 bulan**.
         3.  📊 **Konsultasi Desain Penelitian** untuk memastikan metodologi yang tepat.
-        4.  🛠️ **Kesempatan mengikuti program affiliasi.
+        4.  🛠️ **Kesempatan mengikuti program affiliasi sebagai member.
         
         > *Investasi terbaik untuk hasil penelitian yang valid dan reliabel.*
         
@@ -194,7 +194,7 @@ def render_loginizer():
         """)
         
         if st.button("Hubungi Admin via WhatsApp", type="primary"):
-            st.markdown("[Klik di sini untuk chat dengan Admin](https://wa.me/6281234567890)") # Ganti dengan nomor yang sesuai
+            st.markdown("[Klik di sini untuk chat dengan Admin](https://wa.me/6281238742321)") # Ganti dengan nomor yang sesuai
     
     # Login Tab
     with tabs[1]:
