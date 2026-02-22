@@ -66,6 +66,31 @@ from priority3_functions import (InterpretationCache, optimized_shap_for_large_d
                                get_interpretation_performance_stats, interpretation_cache)
 from param_presets import get_available_presets, get_preset_params, get_all_presets, save_custom_preset, load_custom_presets, export_preset_to_json, import_preset_from_json, create_preset_summary
 
+# Import modular support files for enhanced workflow management
+try:
+    from session_manager import SessionManager
+    SESSION_MANAGER_AVAILABLE = True
+except ImportError:
+    SESSION_MANAGER_AVAILABLE = False
+
+try:
+    from data_type_detector import DataTypeDetector
+    DATA_TYPE_DETECTOR_AVAILABLE = True
+except ImportError:
+    DATA_TYPE_DETECTOR_AVAILABLE = False
+
+try:
+    from workflow_validator import WorkflowValidator
+    WORKFLOW_VALIDATOR_AVAILABLE = True
+except ImportError:
+    WORKFLOW_VALIDATOR_AVAILABLE = False
+
+try:
+    from error_handler import ErrorHandler
+    ERROR_HANDLER_AVAILABLE = True
+except ImportError:
+    ERROR_HANDLER_AVAILABLE = False
+
 try:
     import lime
     from lime import lime_tabular
@@ -107,6 +132,19 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+# Initialize modular support components
+if SESSION_MANAGER_AVAILABLE:
+    session_manager = SessionManager()
+    
+if DATA_TYPE_DETECTOR_AVAILABLE:
+    data_type_detector = DataTypeDetector()
+    
+if WORKFLOW_VALIDATOR_AVAILABLE:
+    workflow_validator = WorkflowValidator()
+    
+if ERROR_HANDLER_AVAILABLE:
+    error_handler = ErrorHandler(language='id')  # Default to Indonesian
 
 # Language toggle button
 if 'language' not in st.session_state:
@@ -2573,6 +2611,50 @@ with tab1:
                         st.subheader("Preview Dataset Gabungan" if st.session_state.language == 'id' else "Combined Dataset Preview")
                         st.dataframe(combined_data.head())
                         
+                        # Integrate modular data type detection for ZIP data
+                        if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
+                            try:
+                                # Detect data types for each column in combined data
+                                data_types_info = {}
+                                for column in combined_data.columns:
+                                    analysis = data_type_detector.analyze_series(combined_data[column], column)
+                                    data_types_info[column] = analysis
+                                
+                                # Store data type information in session state
+                                st.session_state.data_types_info = data_types_info
+                                
+                                # Display data type detection results
+                                with st.expander("🔍 Deteksi Tipe Data Otomatis (ZIP)" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection (ZIP)"):
+                                    st.info("Hasil deteksi tipe data otomatis untuk dataset gabungan:" if st.session_state.language == 'id' else "Automatic data type detection results for combined dataset:")
+                                    
+                                    detection_df = pd.DataFrame({
+                                        'Kolom': [col for col in data_types_info.keys()],
+                                        'Tipe Terdeteksi': [info.get('detected_type', 'Unknown') for info in data_types_info.values()],
+                                        'Confidence': [f"{info.get('confidence', 0):.2f}" for info in data_types_info.values()],
+                                        'Nilai Unik': [info.get('unique_count', 0) for info in data_types_info.values()],
+                                        'Nilai Hilang': [info.get('null_count', 0) for info in data_types_info.values()]
+                                    })
+                                    st.dataframe(detection_df)
+                                    
+                            except Exception as e:
+                                if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                    error_result = error_handler.handle_error(e, "Data Type Detection (ZIP)")
+                                    st.warning(f"⚠️ {error_result['message']}")
+                                else:
+                                    st.warning(f"⚠️ Gagal melakukan deteksi tipe data untuk ZIP: {str(e)}")
+                        
+                        # Initialize session manager for ZIP data tracking
+                        if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                            try:
+                                session_manager.initialize_data_session(combined_data)
+                                st.session_state.data_session_initialized = True
+                            except Exception as e:
+                                if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                    error_result = error_handler.handle_error(e, "Session Management (ZIP)")
+                                    st.warning(f"⚠️ {error_result['message']}")
+                                else:
+                                    st.warning(f"⚠️ Gagal menginisialisasi session manager untuk ZIP: {str(e)}")
+                        
                         # Tampilkan informasi dataset terpisah
                         col1, col2 = st.columns(2)
                         with col1:
@@ -2595,6 +2677,50 @@ with tab1:
                         st.session_state.test_data = None
                         st.success(f"Dataset berhasil dimuat dengan {data.shape[0]} baris dan {data.shape[1]} kolom." if st.session_state.language == 'id' else f"Dataset loaded successfully with {data.shape[0]} rows and {data.shape[1]} columns.")
                         st.dataframe(data.head())
+                        
+                        # Integrate modular data type detection for single ZIP file
+                        if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
+                            try:
+                                # Detect data types for each column
+                                data_types_info = {}
+                                for column in data.columns:
+                                    analysis = data_type_detector.analyze_series(data[column], column)
+                                    data_types_info[column] = analysis
+                                
+                                # Store data type information in session state
+                                st.session_state.data_types_info = data_types_info
+                                
+                                # Display data type detection results
+                                with st.expander("🔍 Deteksi Tipe Data Otomatis (ZIP Single)" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection (ZIP Single)"):
+                                    st.info("Hasil deteksi tipe data otomatis:" if st.session_state.language == 'id' else "Automatic data type detection results:")
+                                    
+                                    detection_df = pd.DataFrame({
+                                        'Kolom': [col for col in data_types_info.keys()],
+                                        'Tipe Terdeteksi': [info.get('detected_type', 'Unknown') for info in data_types_info.values()],
+                                        'Confidence': [f"{info.get('confidence', 0):.2f}" for info in data_types_info.values()],
+                                        'Nilai Unik': [info.get('unique_count', 0) for info in data_types_info.values()],
+                                        'Nilai Hilang': [info.get('null_count', 0) for info in data_types_info.values()]
+                                    })
+                                    st.dataframe(detection_df)
+                                    
+                            except Exception as e:
+                                if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                    error_result = error_handler.handle_error(e, "Data Type Detection (ZIP Single)")
+                                    st.warning(f"⚠️ {error_result['message']}")
+                                else:
+                                    st.warning(f"⚠️ Gagal melakukan deteksi tipe data untuk ZIP single: {str(e)}")
+                        
+                        # Initialize session manager for single ZIP data tracking
+                        if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                            try:
+                                session_manager.initialize_data_session(data)
+                                st.session_state.data_session_initialized = True
+                            except Exception as e:
+                                if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                    error_result = error_handler.handle_error(e, "Session Management (ZIP Single)")
+                                    st.warning(f"⚠️ {error_result['message']}")
+                                else:
+                                    st.warning(f"⚠️ Gagal menginisialisasi session manager untuk ZIP single: {str(e)}")
                     except Exception as e:
                         st.error(f"Error saat membaca file CSV: {e}" if st.session_state.language == 'id' else f"Error reading CSV files: {e}")
                 else:
@@ -2609,6 +2735,50 @@ with tab1:
                 st.session_state.test_data = None
                 st.success(f"Dataset berhasil dimuat dengan {data.shape[0]} baris dan {data.shape[1]} kolom." if st.session_state.language == 'id' else f"Dataset loaded successfully with {data.shape[0]} rows and {data.shape[1]} columns.")
                 st.dataframe(data.head())
+                
+                # Integrate modular data type detection
+                if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
+                    try:
+                        # Detect data types for each column
+                        data_types_info = {}
+                        for column in data.columns:
+                            analysis = data_type_detector.analyze_series(data[column], column)
+                            data_types_info[column] = analysis
+                        
+                        # Store data type information in session state
+                        st.session_state.data_types_info = data_types_info
+                        
+                        # Display data type detection results
+                        with st.expander("🔍 Deteksi Tipe Data Otomatis" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection"):
+                            st.info("Hasil deteksi tipe data otomatis:" if st.session_state.language == 'id' else "Automatic data type detection results:")
+                            
+                            detection_df = pd.DataFrame({
+                                'Kolom': [col for col in data_types_info.keys()],
+                                'Tipe Terdeteksi': [info.get('detected_type', 'Unknown') for info in data_types_info.values()],
+                                'Confidence': [f"{info.get('confidence', 0):.2f}" for info in data_types_info.values()],
+                                'Nilai Unik': [info.get('unique_count', 0) for info in data_types_info.values()],
+                                'Nilai Hilang': [info.get('null_count', 0) for info in data_types_info.values()]
+                            })
+                            st.dataframe(detection_df)
+                            
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Data Type Detection")
+                            st.warning(f"⚠️ {error_result['message']}")
+                        else:
+                            st.warning(f"⚠️ Gagal melakukan deteksi tipe data: {str(e)}")
+                
+                # Initialize session manager for data tracking
+                if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                    try:
+                        session_manager.initialize_data_session(data)
+                        st.session_state.data_session_initialized = True
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Session Management")
+                            st.warning(f"⚠️ {error_result['message']}")
+                        else:
+                            st.warning(f"⚠️ Gagal menginisialisasi session manager: {str(e)}")
             except Exception as e:
                 st.error(f"Error: {e}")
             
@@ -2728,6 +2898,50 @@ with tab1:
             
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
+            
+            # Integrate workflow validation for data readiness
+            if WORKFLOW_VALIDATOR_AVAILABLE and workflow_validator is not None:
+                try:
+                    # Validate data readiness for different ML workflows
+                    validation_results = workflow_validator.validate_data_readiness(data, numerical_cols, categorical_cols)
+                    
+                    with st.expander("✅ Validasi Kesiapan Data" if st.session_state.language == 'id' else "✅ Data Readiness Validation"):
+                        st.info("Hasil validasi kesiapan data untuk machine learning:" if st.session_state.language == 'id' else "Data readiness validation results for machine learning:")
+                        
+                        # Display validation results
+                        for result in validation_results:
+                            if result['status'] == 'success':
+                                st.success(f"✅ {result['message']}")
+                            elif result['status'] == 'warning':
+                                st.warning(f"⚠️ {result['message']}")
+                            elif result['status'] == 'error':
+                                st.error(f"❌ {result['message']}")
+                        
+                        # Store validation results in session state
+                        st.session_state.data_validation_results = validation_results
+                        
+                        # Check if data is ready for ML workflows
+                        ml_readiness = workflow_validator.check_ml_readiness(validation_results)
+                        st.session_state.ml_readiness = ml_readiness
+                        
+                        if ml_readiness['ready']:
+                            st.success(f"🎯 {ml_readiness['message']}")
+                            st.write("**Workflow yang tersedia:**" if st.session_state.language == 'id' else "**Available workflows:**")
+                            for workflow in ml_readiness['available_workflows']:
+                                st.write(f"• {workflow}")
+                        else:
+                            st.warning(f"⚠️ {ml_readiness['message']}")
+                            if 'recommendations' in ml_readiness:
+                                st.write("**Rekomendasi:**" if st.session_state.language == 'id' else "**Recommendations:**")
+                                for rec in ml_readiness['recommendations']:
+                                    st.write(f"• {rec}")
+                                    
+                except Exception as e:
+                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                        error_result = error_handler.handle_error(e, "Workflow Validation")
+                        st.warning(f"⚠️ {error_result['message']}")
+                    else:
+                        st.warning(f"⚠️ Gagal melakukan validasi workflow: {str(e)}")
             
             # Rekomendasi Metode Penelitian
             st.subheader("🎯 Rekomendasi Metode Penelitian" if st.session_state.language == 'id' else "🎯 Research Method Recommendations")
@@ -2854,6 +3068,50 @@ with tab1:
             st.write(f"Kolom numerik: {', '.join(numerical_cols)}" if st.session_state.language == 'id' else f"Numerical columns: {', '.join(numerical_cols)}")
             st.write(f"Kolom kategorikal: {', '.join(categorical_cols)}" if st.session_state.language == 'id' else f"Categorical columns: {', '.join(categorical_cols)}")
             
+            # Integrate workflow validation for ZIP dataset
+            if WORKFLOW_VALIDATOR_AVAILABLE and workflow_validator is not None:
+                try:
+                    # Validate data readiness for different ML workflows
+                    validation_results = workflow_validator.validate_data_readiness(data, numerical_cols, categorical_cols)
+                    
+                    with st.expander("✅ Validasi Kesiapan Data (ZIP)" if st.session_state.language == 'id' else "✅ Data Readiness Validation (ZIP)"):
+                        st.info("Hasil validasi kesiapan data untuk machine learning:" if st.session_state.language == 'id' else "Data readiness validation results for machine learning:")
+                        
+                        # Display validation results
+                        for result in validation_results:
+                            if result['status'] == 'success':
+                                st.success(f"✅ {result['message']}")
+                            elif result['status'] == 'warning':
+                                st.warning(f"⚠️ {result['message']}")
+                            elif result['status'] == 'error':
+                                st.error(f"❌ {result['message']}")
+                        
+                        # Store validation results in session state
+                        st.session_state.data_validation_results = validation_results
+                        
+                        # Check if data is ready for ML workflows
+                        ml_readiness = workflow_validator.check_ml_readiness(validation_results)
+                        st.session_state.ml_readiness = ml_readiness
+                        
+                        if ml_readiness['ready']:
+                            st.success(f"🎯 {ml_readiness['message']}")
+                            st.write("**Workflow yang tersedia:**" if st.session_state.language == 'id' else "**Available workflows:**")
+                            for workflow in ml_readiness['available_workflows']:
+                                st.write(f"• {workflow}")
+                        else:
+                            st.warning(f"⚠️ {ml_readiness['message']}")
+                            if 'recommendations' in ml_readiness:
+                                st.write("**Rekomendasi:**" if st.session_state.language == 'id' else "**Recommendations:**")
+                                for rec in ml_readiness['recommendations']:
+                                    st.write(f"• {rec}")
+                                    
+                except Exception as e:
+                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                        error_result = error_handler.handle_error(e, "Workflow Validation (ZIP)")
+                        st.warning(f"⚠️ {error_result['message']}")
+                    else:
+                        st.warning(f"⚠️ Gagal melakukan validasi workflow untuk ZIP: {str(e)}")
+            
             # Rekomendasi Metode Penelitian untuk dataset gabungan
             st.subheader("🎯 Rekomendasi Metode Penelitian" if st.session_state.language == 'id' else "🎯 Research Method Recommendations")
             recommendations = recommend_research_methods(data)
@@ -2900,6 +3158,50 @@ with tab2:
             st.pyplot(fig)
         else:
             st.info("Tidak ditemukan nilai yang hilang dalam dataset." if st.session_state.language == 'id' else "No missing values found in the dataset.")
+        
+        # Integrate workflow validation for EDA to ML transition
+        if WORKFLOW_VALIDATOR_AVAILABLE and workflow_validator is not None:
+            try:
+                # Validate EDA completeness and readiness for ML workflows
+                eda_validation = workflow_validator.validate_eda_completeness(data, st.session_state.numerical_columns, st.session_state.categorical_columns)
+                
+                with st.expander("🔍 Validasi EDA untuk ML" if st.session_state.language == 'id' else "🔍 EDA Validation for ML"):
+                    st.info("Validasi kesiapan analisis eksplorasi data untuk transisi ke machine learning:" if st.session_state.language == 'id' else "Validation of exploratory data analysis readiness for machine learning transition:")
+                    
+                    # Display EDA validation results
+                    for result in eda_validation:
+                        if result['status'] == 'success':
+                            st.success(f"✅ {result['message']}")
+                        elif result['status'] == 'warning':
+                            st.warning(f"⚠️ {result['message']}")
+                        elif result['status'] == 'error':
+                            st.error(f"❌ {result['message']}")
+                    
+                    # Store EDA validation results in session state
+                    st.session_state.eda_validation_results = eda_validation
+                    
+                    # Check if EDA is ready for ML transition
+                    eda_readiness = workflow_validator.check_eda_readiness(eda_validation)
+                    st.session_state.eda_readiness = eda_readiness
+                    
+                    if eda_readiness['ready']:
+                        st.success(f"🎯 {eda_readiness['message']}")
+                        st.write("**Transisi ML yang dapat dilakukan:**" if st.session_state.language == 'id' else "**Possible ML transitions:**")
+                        for transition in eda_readiness['available_transitions']:
+                            st.write(f"• {transition}")
+                    else:
+                        st.warning(f"⚠️ {eda_readiness['message']}")
+                        if 'recommendations' in eda_readiness:
+                            st.write("**Rekomendasi EDA:**" if st.session_state.language == 'id' else "**EDA Recommendations:**")
+                            for rec in eda_readiness['recommendations']:
+                                st.write(f"• {rec}")
+                                
+            except Exception as e:
+                if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                    error_result = error_handler.handle_error(e, "EDA Workflow Validation")
+                    st.warning(f"⚠️ {error_result['message']}")
+                else:
+                    st.warning(f"⚠️ Gagal melakukan validasi workflow EDA: {str(e)}")
         
         # Correlation analysis for numerical columns
         if len(st.session_state.numerical_columns) > 1:
@@ -3289,6 +3591,36 @@ with tab2:
                     
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
+                    
+                    # Store clustering results in session state for model training integration
+                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                        try:
+                            clustering_results = {
+                                'algorithm': clustering_method,
+                                'n_clusters': len(set(clusters)) - (1 if -1 in clusters else 0),
+                                'silhouette_score': clustering_metrics.get('silhouette_score', 0),
+                                'calinski_harabasz_score': clustering_metrics.get('calinski_harabasz_score', 0),
+                                'cluster_labels': clusters,
+                                'feature_names': selected_features,
+                                'clustering_data': clustering_data.copy()
+                            }
+                            session_manager.update_tab_state('clustering', clustering_results)
+                            st.success("✅ Hasil clustering disimpan untuk integrasi dengan tab pelatihan model" if st.session_state.language == 'id' else "✅ Clustering results saved for integration with model training tab")
+                        except Exception as e:
+                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                error_result = error_handler.handle_error(e, "Clustering Session Storage")
+                                st.warning(f"⚠️ {error_result['message']}")
+                    else:
+                        # Fallback to direct session state storage
+                        st.session_state.clustering_results = {
+                            'algorithm': clustering_method,
+                            'n_clusters': len(set(clusters)) - (1 if -1 in clusters else 0),
+                            'silhouette_score': clustering_metrics.get('silhouette_score', 0),
+                            'calinski_harabasz_score': clustering_metrics.get('calinski_harabasz_score', 0),
+                            'cluster_labels': clusters,
+                            'feature_names': selected_features,
+                            'clustering_data': clustering_data.copy()
+                        }
 
                     # Show data comparison before/after normalization
                     if st.checkbox("Tampilkan perbandingan data sebelum/sesudah normalisasi" if st.session_state.language == 'id' else "Show data comparison before/after normalization", key="dbscan_comparison"):
@@ -4266,6 +4598,36 @@ with tab3:
             # Auto imputation option
             st.markdown("### ⚙️ Imputasi Otomatis" if st.session_state.language == 'id' else "### ⚙️ Automatic Imputation")
             auto_impute = st.checkbox("Gunakan imputasi otomatis canggih" if st.session_state.language == 'id' else "Use advanced automatic imputation", key="auto_impute_advanced")
+            
+            # Integrate session state management for preprocessing
+            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                try:
+                    # Initialize preprocessing session state
+                    session_manager.initialize_tab_state('preprocessing')
+                    
+                    # Store current preprocessing settings
+                    preprocessing_settings = {
+                        'auto_impute': auto_impute,
+                        'target_column': target_column,
+                        'problem_type': problem_type
+                    }
+                    session_manager.update_tab_state('preprocessing', preprocessing_settings)
+                    
+                    # Display preprocessing progress
+                    with st.expander("📊 Status Preprocessing" if st.session_state.language == 'id' else "📊 Preprocessing Status"):
+                        tab_state = session_manager.get_tab_state('preprocessing')
+                        if tab_state:
+                            st.write("**Status:**" if st.session_state.language == 'id' else "**Status:**")
+                            st.write(f"- Auto imputasi: {'Aktif' if tab_state.get('auto_impute') else 'Non-aktif'}")
+                            st.write(f"- Kolom target: {tab_state.get('target_column', 'Belum dipilih')}")
+                            st.write(f"- Tipe masalah: {tab_state.get('problem_type', 'Belum ditentukan')}")
+                            
+                except Exception as e:
+                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                        error_result = error_handler.handle_error(e, "Session Management (Preprocessing)")
+                        st.warning(f"⚠️ {error_result['message']}")
+                    else:
+                        st.warning(f"⚠️ Gagal mengelola sesi preprocessing: {str(e)}")
             
             if auto_impute:
                 imputation_strategy = st.selectbox(
@@ -6898,11 +7260,37 @@ with tab4:
                             d = st.slider("Parameter d (differencing):", 0, 2, 1)
                             q = st.slider("Parameter q (MA):", 0, 5, 1)
                             
+                            # Session management for ARIMA parameters
+                            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                try:
+                                    session_manager.initialize_tab_state('time_series')
+                                    arima_params = {
+                                        'model_type': 'ARIMA',
+                                        'p': p,
+                                        'd': d,
+                                        'q': q,
+                                        'target_column': target_column
+                                    }
+                                    session_manager.update_tab_state('time_series', arima_params)
+                                except Exception as e:
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Session Management (ARIMA)")
+                                        st.warning(f"⚠️ {error_result['message']}")
+                            
                             with st.spinner("Melatih model ARIMA..." if st.session_state.language == 'id' else "Training ARIMA model..."):
                                 try:
                                     model = train_arima_model(train_data, target_column, order=(p, d, q))
                                     st.session_state.model = model
                                     st.success("Model ARIMA berhasil dilatih!" if st.session_state.language == 'id' else "ARIMA model trained successfully!")
+                                    
+                                    # Update session state with training success
+                                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                        try:
+                                            session_manager.update_tab_state('time_series', {'training_success': True, 'model_trained': 'ARIMA'})
+                                        except Exception as e:
+                                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                                error_result = error_handler.handle_error(e, "Session Update (ARIMA Success)")
+                                                st.warning(f"⚠️ {error_result['message']}")
                                     
                                     # Add download button for trained model
                                     if st.session_state.model is not None:
@@ -6917,7 +7305,19 @@ with tab4:
                                         except Exception as pickle_error:
                                             st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
-                                    st.error(f"Error training ARIMA: {str(e)}")
+                                    # Enhanced error handling for ARIMA training
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "ARIMA Model Training")
+                                        st.error(f"❌ {error_result['message']}")
+                                        if 'details' in error_result:
+                                            with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                                st.write(error_result['details'])
+                                        if 'recommendations' in error_result:
+                                            with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                                for rec in error_result['recommendations']:
+                                                    st.write(f"• {rec}")
+                                    else:
+                                        st.error(f"Error training ARIMA: {str(e)}")
                         
                         elif model_type == "SARIMA" and STATSMODELS_AVAILABLE:
                             p = st.slider("Parameter p (AR):", 0, 5, 1)
@@ -6927,6 +7327,27 @@ with tab4:
                             D = st.slider("Parameter D (Seasonal differencing):", 0, 2, 1)
                             Q = st.slider("Parameter Q (Seasonal MA):", 0, 2, 1)
                             s = st.slider("Periode musiman (s):", 1, 52, 12)
+                            
+                            # Session management for SARIMA parameters
+                            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                try:
+                                    session_manager.initialize_tab_state('time_series')
+                                    sarima_params = {
+                                        'model_type': 'SARIMA',
+                                        'p': p,
+                                        'd': d,
+                                        'q': q,
+                                        'P': P,
+                                        'D': D,
+                                        'Q': Q,
+                                        's': s,
+                                        'target_column': target_column
+                                    }
+                                    session_manager.update_tab_state('time_series', sarima_params)
+                                except Exception as e:
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Session Management (SARIMA)")
+                                        st.warning(f"⚠️ {error_result['message']}")
                             
                             with st.spinner("Melatih model SARIMA..." if st.session_state.language == 'id' else "Training SARIMA model..."):
                                 try:
@@ -6938,6 +7359,15 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model SARIMA berhasil dilatih!" if st.session_state.language == 'id' else "SARIMA model trained successfully!")
+                                    
+                                    # Update session state with training success
+                                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                        try:
+                                            session_manager.update_tab_state('time_series', {'training_success': True, 'model_trained': 'SARIMA'})
+                                        except Exception as e:
+                                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                                error_result = error_handler.handle_error(e, "Session Update (SARIMA Success)")
+                                                st.warning(f"⚠️ {error_result['message']}")
                                     
                                     # Add download button for trained model
                                     if st.session_state.model is not None:
@@ -6952,7 +7382,19 @@ with tab4:
                                         except Exception as pickle_error:
                                             st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
-                                    st.error(f"Error training SARIMA: {str(e)}")
+                                    # Enhanced error handling for SARIMA training
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "SARIMA Model Training")
+                                        st.error(f"❌ {error_result['message']}")
+                                        if 'details' in error_result:
+                                            with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                                st.write(error_result['details'])
+                                        if 'recommendations' in error_result:
+                                            with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                                for rec in error_result['recommendations']:
+                                                    st.write(f"• {rec}")
+                                    else:
+                                        st.error(f"Error training SARIMA: {str(e)}")
                         
                         elif model_type == "SARIMAX" and STATSMODELS_AVAILABLE:
                             p = st.slider("Parameter p (AR):", 0, 5, 1)
@@ -6962,6 +7404,27 @@ with tab4:
                             D = st.slider("Parameter D (Seasonal differencing):", 0, 2, 1)
                             Q = st.slider("Parameter Q (Seasonal MA):", 0, 2, 1)
                             s = st.slider("Periode musiman (s):", 1, 52, 12)
+                            
+                            # Session management for SARIMAX parameters
+                            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                try:
+                                    session_manager.initialize_tab_state('time_series')
+                                    sarimax_params = {
+                                        'model_type': 'SARIMAX',
+                                        'p': p,
+                                        'd': d,
+                                        'q': q,
+                                        'P': P,
+                                        'D': D,
+                                        'Q': Q,
+                                        's': s,
+                                        'target_column': target_column
+                                    }
+                                    session_manager.update_tab_state('time_series', sarimax_params)
+                                except Exception as e:
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Session Management (SARIMAX)")
+                                        st.warning(f"⚠️ {error_result['message']}")
                             
                             with st.spinner("Melatih model SARIMAX..." if st.session_state.language == 'id' else "Training SARIMAX model..."):
                                 try:
@@ -6973,6 +7436,15 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model SARIMAX berhasil dilatih!" if st.session_state.language == 'id' else "SARIMAX model trained successfully!")
+                                    
+                                    # Update session state with training success
+                                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                        try:
+                                            session_manager.update_tab_state('time_series', {'training_success': True, 'model_trained': 'SARIMAX'})
+                                        except Exception as e:
+                                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                                error_result = error_handler.handle_error(e, "Session Update (SARIMAX Success)")
+                                                st.warning(f"⚠️ {error_result['message']}")
                                     
                                     # Add download button for trained model
                                     if st.session_state.model is not None:
@@ -6987,12 +7459,41 @@ with tab4:
                                         except Exception as pickle_error:
                                             st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
-                                    st.error(f"Error training SARIMAX: {str(e)}")
+                                    # Enhanced error handling for SARIMAX training
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "SARIMAX Model Training")
+                                        st.error(f"❌ {error_result['message']}")
+                                        if 'details' in error_result:
+                                            with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                                st.write(error_result['details'])
+                                        if 'recommendations' in error_result:
+                                            with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                                for rec in error_result['recommendations']:
+                                                    st.write(f"• {rec}")
+                                    else:
+                                        st.error(f"Error training SARIMAX: {str(e)}")
                         
                         elif model_type == "Exponential Smoothing" and STATSMODELS_AVAILABLE:
                             trend = st.selectbox("Tipe trend:", ["add", "mul", None])
                             seasonal = st.selectbox("Tipe seasonal:", ["add", "mul", None])
                             seasonal_periods = st.slider("Periode seasonal:", 0, 52, 12)
+                            
+                            # Session management for Exponential Smoothing parameters
+                            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                try:
+                                    session_manager.initialize_tab_state('time_series')
+                                    exp_smooth_params = {
+                                        'model_type': 'Exponential Smoothing',
+                                        'trend': trend,
+                                        'seasonal': seasonal,
+                                        'seasonal_periods': seasonal_periods,
+                                        'target_column': target_column
+                                    }
+                                    session_manager.update_tab_state('time_series', exp_smooth_params)
+                                except Exception as e:
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Session Management (Exponential Smoothing)")
+                                        st.warning(f"⚠️ {error_result['message']}")
                             
                             with st.spinner("Melatih model Exponential Smoothing..." if st.session_state.language == 'id' else "Training Exponential Smoothing model..."):
                                 try:
@@ -7005,6 +7506,15 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model Exponential Smoothing berhasil dilatih!" if st.session_state.language == 'id' else "Exponential Smoothing model trained successfully!")
+                                    
+                                    # Update session state with training success
+                                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                        try:
+                                            session_manager.update_tab_state('time_series', {'training_success': True, 'model_trained': 'Exponential Smoothing'})
+                                        except Exception as e:
+                                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                                error_result = error_handler.handle_error(e, "Session Update (Exponential Smoothing Success)")
+                                                st.warning(f"⚠️ {error_result['message']}")
                                     
                                     # Add download button for trained model
                                     if st.session_state.model is not None:
@@ -7019,12 +7529,41 @@ with tab4:
                                         except Exception as pickle_error:
                                             st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
-                                    st.error(f"Error training Exponential Smoothing: {str(e)}")
+                                    # Enhanced error handling for Exponential Smoothing training
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Exponential Smoothing Model Training")
+                                        st.error(f"❌ {error_result['message']}")
+                                        if 'details' in error_result:
+                                            with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                                st.write(error_result['details'])
+                                        if 'recommendations' in error_result:
+                                            with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                                for rec in error_result['recommendations']:
+                                                    st.write(f"• {rec}")
+                                    else:
+                                        st.error(f"Error training Exponential Smoothing: {str(e)}")
                         
                         elif model_type == "Holt-Winters" and STATSMODELS_AVAILABLE:
                             trend = st.selectbox("Tipe trend:", ["add", "mul"])
                             seasonal = st.selectbox("Tipe seasonal:", ["add", "mul"])
                             seasonal_periods = st.slider("Periode seasonal:", 1, 52, 12)
+                            
+                            # Session management for Holt-Winters parameters
+                            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                try:
+                                    session_manager.initialize_tab_state('time_series')
+                                    holt_winters_params = {
+                                        'model_type': 'Holt-Winters',
+                                        'trend': trend,
+                                        'seasonal': seasonal,
+                                        'seasonal_periods': seasonal_periods,
+                                        'target_column': target_column
+                                    }
+                                    session_manager.update_tab_state('time_series', holt_winters_params)
+                                except Exception as e:
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Session Management (Holt-Winters)")
+                                        st.warning(f"⚠️ {error_result['message']}")
                             
                             with st.spinner("Melatih model Holt-Winters..." if st.session_state.language == 'id' else "Training Holt-Winters model..."):
                                 try:
@@ -7037,6 +7576,15 @@ with tab4:
                                     )
                                     st.session_state.model = model
                                     st.success("Model Holt-Winters berhasil dilatih!" if st.session_state.language == 'id' else "Holt-Winters model trained successfully!")
+                                    
+                                    # Update session state with training success
+                                    if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                                        try:
+                                            session_manager.update_tab_state('time_series', {'training_success': True, 'model_trained': 'Holt-Winters'})
+                                        except Exception as e:
+                                            if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                                error_result = error_handler.handle_error(e, "Session Update (Holt-Winters Success)")
+                                                st.warning(f"⚠️ {error_result['message']}")
                                     
                                     # Add download button for trained model
                                     if st.session_state.model is not None:
@@ -7051,7 +7599,19 @@ with tab4:
                                         except Exception as pickle_error:
                                             st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                                 except Exception as e:
-                                    st.error(f"Error training Holt-Winters: {str(e)}")
+                                    # Enhanced error handling for Holt-Winters training
+                                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                                        error_result = error_handler.handle_error(e, "Holt-Winters Model Training")
+                                        st.error(f"❌ {error_result['message']}")
+                                        if 'details' in error_result:
+                                            with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                                st.write(error_result['details'])
+                                        if 'recommendations' in error_result:
+                                            with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                                for rec in error_result['recommendations']:
+                                                    st.write(f"• {rec}")
+                                    else:
+                                        st.error(f"Error training Holt-Winters: {str(e)}")
                         
                         elif model_type == "Prophet" and PROPHET_AVAILABLE:
                             yearly_seasonality = st.selectbox("Seasonality tahunan:" if st.session_state.language == 'id' else "Yearly seasonality:", ["auto", True, False])
@@ -7569,6 +8129,47 @@ with tab4:
             
             st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
+            # Clustering insights integration
+            clustering_insights_available = False
+            clustering_results = None
+            
+            if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                try:
+                    clustering_results = session_manager.get_tab_state('clustering')
+                    if clustering_results and 'algorithm' in clustering_results:
+                        clustering_insights_available = True
+                except Exception as e:
+                    if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                        error_result = error_handler.handle_error(e, "Clustering Insights Retrieval")
+                        st.warning(f"⚠️ {error_result['message']}")
+            else:
+                # Fallback to direct session state
+                clustering_results = st.session_state.get('clustering_results', {})
+                if clustering_results and 'algorithm' in clustering_results:
+                    clustering_insights_available = True
+            
+            if clustering_insights_available and clustering_results:
+                with st.expander("🔍 Wawasan Clustering dari Tab EDA" if st.session_state.language == 'id' else "🔍 Clustering Insights from EDA Tab"):
+                    st.write(f"**Algoritma Clustering:** {clustering_results['algorithm']}")
+                    st.write(f"**Jumlah Cluster:** {clustering_results['n_clusters']}")
+                    
+                    if clustering_results.get('silhouette_score', 0) > 0:
+                        st.write(f"**Silhouette Score:** {clustering_results['silhouette_score']:.3f}")
+                    
+                    if clustering_results.get('calinski_harabasz_score', 0) > 0:
+                        st.write(f"**Calinski-Harabasz Score:** {clustering_results['calinski_harabasz_score']:.1f}")
+                    
+                    # Recommendations based on clustering results
+                    if clustering_results['n_clusters'] <= 3:
+                        st.info("💡 **Rekomendasi:** Jumlah cluster yang sedikit menunjukkan data yang relatif homogen. Model seperti Random Forest atau Gradient Boosting cocok untuk data ini." if st.session_state.language == 'id' else "💡 **Recommendation:** Few clusters indicate relatively homogeneous data. Models like Random Forest or Gradient Boosting are suitable for this data.")
+                    elif clustering_results['n_clusters'] >= 5:
+                        st.info("💡 **Rekomendasi:** Banyak cluster menunjukkan data yang heterogen. Pertimbangkan ensemble methods atau neural networks untuk menangani kompleksitas." if st.session_state.language == 'id' else "💡 **Recommendation:** Many clusters indicate heterogeneous data. Consider ensemble methods or neural networks to handle complexity.")
+                    
+                    if clustering_results.get('silhouette_score', 0) > 0.5:
+                        st.success("✅ Clustering yang baik (Silhouette > 0.5) menunjukkan struktur data yang jelas. Model supervised learning akan berkinerja baik." if st.session_state.language == 'id' else "✅ Good clustering (Silhouette > 0.5) indicates clear data structure. Supervised learning models will perform well.")
+                    elif clustering_results.get('silhouette_score', 0) < 0.2:
+                        st.warning("⚠️ Clustering yang buruk (Silhouette < 0.2) menunjukkan struktur data yang tidak jelas. Pertimbangkan feature engineering tambahan atau model ensemble." if st.session_state.language == 'id' else "⚠️ Poor clustering (Silhouette < 0.2) indicates unclear data structure. Consider additional feature engineering or ensemble models.")
+            
             # Opsi untuk hyperparameter optimization
             optimization_method = st.selectbox(
                 "Metode Hyperparameter Optimization:" if st.session_state.language == 'id' else "Hyperparameter Optimization Method:",
@@ -7598,6 +8199,43 @@ with tab4:
                                    
                 model_type = st.selectbox("Select a classification model:" if st.session_state.language == 'id' else "Pilih model klasifikasi:", classification_models)
                 st.session_state.model_type = model_type
+                
+                # Data type detection integration for supervised ML
+                if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
+                    try:
+                        with st.expander("🔍 Deteksi Tipe Data Otomatis" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection"):
+                            detection_results = data_type_detector.detect_data_types(st.session_state.X_train)
+                            st.write("**Tipe Data yang Terdeteksi:**" if st.session_state.language == 'id' else "**Detected Data Types:**")
+                            
+                            numeric_features = []
+                            categorical_features = []
+                            datetime_features = []
+                            
+                            for result in detection_results:
+                                feature_name = result['feature_name']
+                                detected_type = result['detected_type']
+                                confidence = result['confidence']
+                                
+                                if detected_type == 'numeric':
+                                    numeric_features.append(feature_name)
+                                elif detected_type == 'categorical':
+                                    categorical_features.append(feature_name)
+                                elif detected_type == 'datetime':
+                                    datetime_features.append(feature_name)
+                                
+                                st.write(f"- {feature_name}: {detected_type} (confidence: {confidence:.2f})")
+                            
+                            # Model recommendations based on data types
+                            if len(categorical_features) > len(numeric_features):
+                                st.info("💡 **Rekomendasi Model:** Random Forest, Gradient Boosting, atau XGBoost cocok untuk data dengan banyak fitur kategorikal" if st.session_state.language == 'id' else "💡 **Model Recommendation:** Random Forest, Gradient Boosting, or XGBoost are suitable for data with many categorical features")
+                            elif len(numeric_features) > len(categorical_features):
+                                st.info("💡 **Rekomendasi Model:** SVM, Logistic Regression, atau Neural Network cocok untuk data dengan banyak fitur numerik" if st.session_state.language == 'id' else "💡 **Model Recommendation:** SVM, Logistic Regression, or Neural Network are suitable for data with many numeric features")
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Data Type Detection (Classification)")
+                            st.warning(f"⚠️ {error_result['message']}")
+                        else:
+                            st.warning(f"⚠️ Gagal mendeteksi tipe data: {str(e)}")
                 
                 if model_type == "Random Forest":
                     # Dapatkan rentang parameter kustom jika diaktifkan
@@ -8286,6 +8924,88 @@ with tab4:
                 model_type = st.selectbox("Pilih model regresi:" if st.session_state.language == 'id' else "Select a regression model:", 
                                          ["Random Forest", "Linear Regression", "Gradient Boosting", "SVR", "Bagging Regressor", "Voting Regressor", "Stacking Regressor", "KNN Regressor", "MLP Regressor"])
                 
+                # Clustering insights integration for regression
+                clustering_insights_available = False
+                clustering_results = None
+                
+                if SESSION_MANAGER_AVAILABLE and session_manager is not None:
+                    try:
+                        clustering_results = session_manager.get_tab_state('clustering')
+                        if clustering_results and 'algorithm' in clustering_results:
+                            clustering_insights_available = True
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Clustering Insights Retrieval (Regression)")
+                            st.warning(f"⚠️ {error_result['message']}")
+                else:
+                    # Fallback to direct session state
+                    clustering_results = st.session_state.get('clustering_results', {})
+                    if clustering_results and 'algorithm' in clustering_results:
+                        clustering_insights_available = True
+                
+                if clustering_insights_available and clustering_results:
+                    with st.expander("🔍 Wawasan Clustering dari Tab EDA (Regresi)" if st.session_state.language == 'id' else "🔍 Clustering Insights from EDA Tab (Regression)"):
+                        st.write(f"**Algoritma Clustering:** {clustering_results['algorithm']}")
+                        st.write(f"**Jumlah Cluster:** {clustering_results['n_clusters']}")
+                        
+                        if clustering_results.get('silhouette_score', 0) > 0:
+                            st.write(f"**Silhouette Score:** {clustering_results['silhouette_score']:.3f}")
+                        
+                        if clustering_results.get('calinski_harabasz_score', 0) > 0:
+                            st.write(f"**Calinski-Harabasz Score:** {clustering_results['calinski_harabasz_score']:.1f}")
+                        
+                        # Recommendations for regression based on clustering results
+                        if clustering_results['n_clusters'] <= 3:
+                            st.info("💡 **Rekomendasi (Regresi):** Jumlah cluster yang sedikit menunjukkan hubungan linear yang kuat. Linear Regression atau Random Forest cocok untuk data ini." if st.session_state.language == 'id' else "💡 **Recommendation (Regression):** Few clusters indicate strong linear relationships. Linear Regression or Random Forest are suitable for this data.")
+                        elif clustering_results['n_clusters'] >= 5:
+                            st.info("💡 **Rekomendasi (Regresi):** Banyak cluster menunjukkan hubungan non-linear yang kompleks. Pertimbangkan Gradient Boosting, SVR, atau MLP Regressor." if st.session_state.language == 'id' else "💡 **Recommendation (Regression):** Many clusters indicate complex non-linear relationships. Consider Gradient Boosting, SVR, or MLP Regressor.")
+                        
+                        if clustering_results.get('silhouette_score', 0) > 0.5:
+                            st.success("✅ Clustering yang baik (Silhouette > 0.5) menunjukkan struktur data yang jelas. Model regresi akan berkinerja baik." if st.session_state.language == 'id' else "✅ Good clustering (Silhouette > 0.5) indicates clear data structure. Regression models will perform well.")
+                        elif clustering_results.get('silhouette_score', 0) < 0.2:
+                            st.warning("⚠️ Clustering yang buruk (Silhouette < 0.2) menunjukkan struktur data yang tidak jelas. Pertimbangkan feature engineering tambahan atau ensemble methods." if st.session_state.language == 'id' else "⚠️ Poor clustering (Silhouette < 0.2) indicates unclear data structure. Consider additional feature engineering or ensemble methods.")
+                
+                # Data type detection integration for regression
+                if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
+                    try:
+                        with st.expander("🔍 Deteksi Tipe Data Otomatis (Regresi)" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection (Regression)"):
+                            detection_results = data_type_detector.detect_data_types(st.session_state.X_train)
+                            st.write("**Tipe Data yang Terdeteksi:**" if st.session_state.language == 'id' else "**Detected Data Types:**")
+                            
+                            numeric_features = []
+                            categorical_features = []
+                            datetime_features = []
+                            
+                            for result in detection_results:
+                                feature_name = result['feature_name']
+                                detected_type = result['detected_type']
+                                confidence = result['confidence']
+                                
+                                if detected_type == 'numeric':
+                                    numeric_features.append(feature_name)
+                                elif detected_type == 'categorical':
+                                    categorical_features.append(feature_name)
+                                elif detected_type == 'datetime':
+                                    datetime_features.append(feature_name)
+                                
+                                st.write(f"- {feature_name}: {detected_type} (confidence: {confidence:.2f})")
+                            
+                            # Model recommendations based on data types for regression
+                            if len(categorical_features) > len(numeric_features):
+                                st.info("💡 **Rekomendasi Model:** Random Forest, Gradient Boosting, atau Bagging Regressor cocok untuk data dengan banyak fitur kategorikal" if st.session_state.language == 'id' else "💡 **Model Recommendation:** Random Forest, Gradient Boosting, or Bagging Regressor are suitable for data with many categorical features")
+                            elif len(numeric_features) > len(categorical_features):
+                                st.info("💡 **Rekomendasi Model:** Linear Regression, SVR, atau Neural Network cocok untuk data dengan banyak fitur numerik" if st.session_state.language == 'id' else "💡 **Model Recommendation:** Linear Regression, SVR, or Neural Network are suitable for data with many numeric features")
+                            
+                            # Check for multicollinearity issues
+                            if len(numeric_features) > 10:
+                                st.warning("⚠️ **Perhatian:** Banyak fitur numerik dapat menyebabkan multikolinearitas. Pertimbangkan untuk menggunakan Regularized Regression (Ridge/Lasso) atau Random Forest" if st.session_state.language == 'id' else "⚠️ **Warning:** Many numeric features can cause multicollinearity. Consider using Regularized Regression (Ridge/Lasso) or Random Forest")
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Data Type Detection (Regression)")
+                            st.warning(f"⚠️ {error_result['message']}")
+                        else:
+                            st.warning(f"⚠️ Gagal mendeteksi tipe data: {str(e)}")
+                
                 if model_type == "Random Forest":
                     # Dapatkan rentang parameter kustom jika diaktifkan
                     custom_param_ranges = get_custom_param_inputs(model_type, use_custom_ranges, st.session_state)
@@ -8830,6 +9550,46 @@ with tab4:
                     log_feature('train_model')
                 except Exception:
                     pass
+                
+                # Integrate workflow validation before training
+                if WORKFLOW_VALIDATOR_AVAILABLE and workflow_validator is not None:
+                    try:
+                        # Validate model training readiness
+                        ml_readiness = workflow_validator.validate_ml_training_readiness(
+                            st.session_state.X_train, 
+                            st.session_state.y_train, 
+                            st.session_state.problem_type,
+                            model_type
+                        )
+                        
+                        with st.expander("✅ Validasi Kesiapan Training Model" if st.session_state.language == 'id' else "✅ Model Training Readiness Validation"):
+                            st.info("Validasi kesiapan data dan parameter untuk training model:" if st.session_state.language == 'id' else "Validation of data and parameter readiness for model training:")
+                            
+                            # Display validation results
+                            for result in ml_readiness:
+                                if result['status'] == 'success':
+                                    st.success(f"✅ {result['message']}")
+                                elif result['status'] == 'warning':
+                                    st.warning(f"⚠️ {result['message']}")
+                                elif result['status'] == 'error':
+                                    st.error(f"❌ {result['message']}")
+                            
+                            # Store validation results in session state
+                            st.session_state.ml_training_readiness = ml_readiness
+                            
+                            # Check if ready for training
+                            training_ready = all(result['status'] != 'error' for result in ml_readiness)
+                            if not training_ready:
+                                st.error("❌ Training model dibatalkan: Masalah kritis terdeteksi" if st.session_state.language == 'id' else "❌ Model training cancelled: Critical issues detected")
+                                st.stop()
+                                
+                    except Exception as e:
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "ML Training Readiness Validation")
+                            st.warning(f"⚠️ {error_result['message']}")
+                        else:
+                            st.warning(f"⚠️ Gagal melakukan validasi kesiapan training: {str(e)}")
+                
                 with st.spinner(f"Melatih model {model_type}..." if st.session_state.language == 'id' else f"Training {model_type} model..."):
                     try:
                         # Preprocessing: Remove NaN values from training data
@@ -9155,7 +9915,22 @@ with tab4:
                             st.pyplot(fig)
                             
                     except Exception as e:
-                        st.error(f"Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"Error during model training: {str(e)}")
+                        if ERROR_HANDLER_AVAILABLE and error_handler is not None:
+                            error_result = error_handler.handle_error(e, "Model Training and Evaluation")
+                            st.error(f"❌ {error_result['message']}")
+                            
+                            # Display additional error details if available
+                            if 'details' in error_result:
+                                with st.expander("🔍 Detail Error" if st.session_state.language == 'id' else "🔍 Error Details"):
+                                    st.write(error_result['details'])
+                            
+                            # Display recommendations if available
+                            if 'recommendations' in error_result:
+                                with st.expander("💡 Rekomendasi" if st.session_state.language == 'id' else "💡 Recommendations"):
+                                    for rec in error_result['recommendations']:
+                                        st.write(f"• {rec}")
+                        else:
+                            st.error(f"❌ Error saat evaluasi model: {str(e)}" if st.session_state.language == 'id' else f"❌ Error during model training: {str(e)}")
                     
                     # Simpan hasil evaluasi untuk perbandingan
                     if 'model_results' not in st.session_state:

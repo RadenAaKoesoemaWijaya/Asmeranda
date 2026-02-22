@@ -1,0 +1,21 @@
+2026-02-22 13:14:22,738 - error_handler - ERROR - Error in test_context: Out of memory
+2026-02-22 13:14:22,739 - error_handler - ERROR - NoneType: None
+
+2026-02-22 13:14:51,985 - error_handler - ERROR - Error in test_context: Out of memory
+2026-02-22 13:14:51,993 - error_handler - ERROR - NoneType: None
+
+2026-02-22 13:16:12,124 - error_handler - ERROR - Error in Test Context: Test error
+2026-02-22 13:16:12,127 - error_handler - ERROR - NoneType: None
+
+2026-02-22 13:16:58,479 - error_handler - ERROR - Error in Test Context: Test error
+2026-02-22 13:16:58,480 - error_handler - ERROR - NoneType: None
+
+2026-02-22 13:43:16,033 - error_handler - ERROR - Error in Test Context: Test error
+2026-02-22 13:43:16,044 - error_handler - ERROR - NoneType: None
+
+2026-02-22 13:50:03,602 - error_handler - ERROR - Error in Test Context: Test error
+2026-02-22 13:50:03,606 - error_handler - ERROR - NoneType: None
+
+2026-02-22 14:00:13,586 - error_handler - ERROR - Error in Test Context: Test error
+2026-02-22 14:00:13,595 - error_handler - ERROR - NoneType: None
+
