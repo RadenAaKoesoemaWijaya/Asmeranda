@@ -5327,7 +5327,7 @@ with tab3:
                         X_for_analysis = data.drop(columns=[target_column])
                         y_for_analysis = data[target_column]
                         
-                        analysis_result = advanced_imbalanced_data_handling(X_for_analysis, y_for_analysis, strategy='analyze', language=st.session_state.language)
+                        analysis_result = advanced_imbalanced_data_handling(X_for_analysis, y_for_analysis, method='analyze', language=st.session_state.language)
                         
                         if analysis_result['success']:
                             st.success("Analisis dataset imbalanced selesai" if st.session_state.language == 'id' else "Imbalanced dataset analysis completed")
@@ -5367,18 +5367,18 @@ with tab3:
                             X_for_balance = data.drop(columns=[target_column])
                             y_for_balance = data[target_column]
                             
-                            balance_result = advanced_imbalanced_data_handling(X_for_balance, y_for_balance, strategy=balance_strategy, language=st.session_state.language)
+                            balance_result = advanced_imbalanced_data_handling(X_for_balance, y_for_balance, method=balance_strategy, language=st.session_state.language)
                             
                             if balance_result['success']:
-                                st.success(f"Penyeimbangan berhasil menggunakan strategi: {balance_result['strategy_used']}")
+                                st.success(f"Penyeimbangan berhasil menggunakan strategi: {balance_result['analysis']['method_used']}")
                                 st.write("**Informasi penyeimbangan:**")
-                                st.write(f"- Metode yang digunakan: {balance_result['method_used']}")
-                                st.write(f"- Rasio sebelum: {balance_result['before_ratio']}")
-                                st.write(f"- Rasio sesudah: {balance_result['after_ratio']}")
+                                st.write(f"- Metode yang digunakan: {balance_result['analysis']['method_used']}")
+                                st.write(f"- Rasio sebelum: {balance_result['analysis']['imbalance_ratio_original']:.2f}")
+                                st.write(f"- Rasio sesudah: {balance_result['analysis']['imbalance_ratio_balanced']:.2f}")
                                 
                                 # Update data
-                                data = balance_result['data'].copy()
-                                data[target_column] = balance_result['target']
+                                data = balance_result['X_balanced'].copy()
+                                data[target_column] = balance_result['y_balanced']
                                 st.session_state.data = data.copy()
                                 st.rerun()
                             else:

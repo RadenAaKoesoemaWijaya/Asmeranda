@@ -1173,11 +1173,57 @@ def advanced_imbalanced_data_handling(X, y, method='auto', sampling_strategy='au
     
     # Analyze original distribution
     original_counts = pd.Series(y).value_counts().sort_index()
-    imbalance_ratio = original_counts.max() / original_counts.min()
+    imbalance_ratio = original_counts.max() / original_counts.min() if original_counts.min() > 0 else float('inf')
     minority_class = original_counts.idxmin()
     majority_class = original_counts.idxmax()
     
-    # Auto method selection
+    # Analyze mode (no balancing, just analysis)
+    if method == 'analyze':
+        # Calculate Gini coefficient for class distribution
+        proportions = original_counts.values / len(y)
+        gini = 1 - np.sum(proportions**2)
+        
+        # Determine imbalance level
+        if imbalance_ratio > 10:
+            level = msg['severe_imbalance']
+        elif imbalance_ratio > 3:
+            level = msg['moderate_imbalance']
+        else:
+            level = msg['slight_imbalance']
+            
+        # Count minority/majority classes (simple heuristic)
+        avg_count = len(y) / len(original_counts)
+        minority_classes_count = len(original_counts[original_counts < avg_count])
+        majority_classes_count = len(original_counts[original_counts >= avg_count])
+        
+        result['success'] = True
+        result['analysis'] = {
+            'imbalance_level': level,
+            'minority_classes': minority_classes_count,
+            'majority_classes': majority_classes_count,
+            'gini_coefficient': gini,
+            'original_distribution': original_counts.to_dict(),
+            'imbalance_ratio': imbalance_ratio
+        }
+        
+        # Recommendations
+        if imbalance_ratio > 3:
+            result['recommendations'] = [msg['ensemble_recommendation'], msg['threshold_recommendation']]
+        if len(original_counts) > 2:
+            result['recommendations'].append("Consider multiclass-specific strategies" if language == 'en' else "Pertimbangkan strategi khusus multiclass")
+            
+        return result
+
+    # Auto method selection and mapping generic terms
+    if method == 'over':
+        method = 'smote'
+    elif method == 'under':
+        method = 'rus'
+    elif method == 'combine':
+        method = 'smoteenn'
+    elif method == 'hybrid':
+        method = 'smotetomek'
+        
     if method == 'auto':
         if imbalance_ratio > 10:
             method = 'smote'
@@ -1193,7 +1239,8 @@ def advanced_imbalanced_data_handling(X, y, method='auto', sampling_strategy='au
             result['analysis'] = {
                 'method_used': 'none',
                 'original_distribution': original_counts.to_dict(),
-                'imbalance_ratio': imbalance_ratio,
+                'imbalance_ratio_original': imbalance_ratio,
+                'imbalance_ratio_balanced': imbalance_ratio,
                 'reason': 'Rasio ketidakseimbangan terlalu kecil' if language == 'id' else 'Imbalance ratio too small'
             }
             return result
