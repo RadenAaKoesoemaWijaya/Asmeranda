@@ -12,10 +12,14 @@ Asmeranda adalah platform berbasis web (Streamlit) untuk analisis data mendalam 
 1. **Sistem Keamanan & Autentikasi**: Login dengan verifikasi OTP Email, Captcha, dan Dashboard Super Admin untuk manajemen pengguna.
 2. **Eksplorasi Data (EDA) & Validasi**: Visualisasi otomatis dan sistem **Workflow Validator** yang memastikan data siap sebelum lanjut ke tahap ML.
 3. **Preprocessing & Deteksi Tipe Data**: Penanganan nilai hilang, outlier, dan **Deteksi Tipe Data Otomatis** untuk rekomendasi model yang lebih akurat.
-4. **Pelatihan Model ML**: Mendukung 15+ algoritma Klasifikasi dan Regresi dengan optimasi hyperparameter (GridSearch, Optuna).
-5. **Best Practice Imbalanced Handling**: Penanganan data tidak seimbang (SMOTE, dll) dilakukan **setelah Train-Test Split** untuk mencegah *Data Leakage*.
-6. **Interpretasi Model (XAI)**: Penjelasan keputusan model secara global dan lokal menggunakan **SHAP** dan **LIME**.
-7. **Time Series & AI Analysis**: Forecasting (ARIMA, LSTM, Prophet) dan rekomendasi metode penelitian berbasis AI.
+4. **Unsupervised Learning & Reduksi Dimensi**:
+   - Analisis Clustering (K-Means, DBSCAN, dll).
+   - **Modul Reduksi Dimensi**: PCA, t-SNE, LDA, TruncatedSVD, KernelPCA, dan Isomap.
+   - **Visualisasi 3D Interaktif**: Proyeksi data dalam ruang 3D untuk analisis struktur data yang mendalam.
+5. **Pelatihan Model ML (Supervised)**: Mendukung 15+ algoritma Klasifikasi dan Regresi dengan optimasi hyperparameter (GridSearch, Optuna).
+6. **Best Practice Imbalanced Handling**: Penanganan data tidak seimbang (SMOTE, dll) dilakukan **setelah Train-Test Split** untuk mencegah *Data Leakage*.
+7. **Interpretasi Model (XAI)**: Penjelasan keputusan model secara global dan lokal menggunakan **SHAP** dan **LIME** dengan optimasi dataset besar.
+8. **Time Series & AI Analysis**: Forecasting (ARIMA, LSTM, Prophet) dan deteksi anomali deret waktu berbasis statistik dan ML.
 
 ---
 
@@ -44,6 +48,7 @@ Asmeranda adalah platform berbasis web (Streamlit) untuk analisis data mendalam 
 ### 2. Alur Kerja (Workflow)
 - Pastikan data telah divalidasi di tab **Data Upload** sebelum berpindah ke **EDA**.
 - Penanganan dataset *imbalanced* kini tersedia di tab **Supervised ML** setelah pembagian data (split) untuk menjamin validitas pengujian.
+- Gunakan tab **Unsupervised ML** untuk melihat struktur data melalui **Visualisasi 3D** sebelum melatih model.
 
 ### 3. Dashboard Admin & Ekspor
 - **Super Admin**: Akses penuh untuk manajemen pengguna dan konfigurasi sistem (SMTP, Logs).

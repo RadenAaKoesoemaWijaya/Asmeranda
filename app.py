@@ -4625,6 +4625,184 @@ with tab2:
         else:
             st.warning("Pilih minimal satu fitur untuk analisis clustering." if st.session_state.language == 'id' else "Select at least one feature for clustering analysis.")
 
+        # --- Dimensionality Reduction Section ---
+        st.markdown("---")
+        st.subheader("Reduksi Dimensi & Visualisasi 3D" if st.session_state.language == 'id' else "Dimensionality Reduction & 3D Visualization")
+        
+        # Select features for DR
+        dr_features = st.multiselect(
+            "Pilih fitur untuk reduksi dimensi:" if st.session_state.language == 'id' else "Select features for dimensionality reduction:",
+            options=all_columns,
+            default=all_columns[:min(10, len(all_columns))],
+            key="dr_features_multiselect"
+        )
+        
+        if dr_features:
+            # Prepare data
+            dr_data = data[dr_features].dropna()
+            
+            if len(dr_data) > 5:
+                # Scale data
+                from sklearn.preprocessing import StandardScaler
+                scaler = StandardScaler()
+                dr_scaled = scaler.fit_transform(dr_data)
+                
+                # Select DR method
+                dr_method = st.selectbox(
+                    "Pilih metode reduksi dimensi:" if st.session_state.language == 'id' else "Select dimensionality reduction method:",
+                    ["PCA", "t-SNE", "LDA", "TruncatedSVD", "KernelPCA", "Isomap"],
+                    key="dr_method_selectbox"
+                )
+                
+                # Parameters based on method
+                dr_params = {}
+                
+                if dr_method == "t-SNE":
+                    dr_params['perplexity'] = st.slider("Perplexity:", 5, 50, 30, key="tsne_perp")
+                    dr_params['learning_rate'] = st.slider("Learning rate:", 10, 1000, 200, key="tsne_lr")
+                    dr_params['n_iter'] = st.slider("Iterations:", 250, 2000, 1000, key="tsne_iter")
+                elif dr_method == "LDA":
+                    # Check for target column
+                    target_col = st.selectbox(
+                        "Pilih kolom target (Label):" if st.session_state.language == 'id' else "Select target column (Label):",
+                        options=[col for col in data.columns if col not in dr_features],
+                        key="lda_target_select"
+                    )
+                    if target_col:
+                        y_dr = data.loc[dr_data.index, target_col]
+                    else:
+                        st.warning("LDA memerlukan kolom target/label." if st.session_state.language == 'id' else "LDA requires a target/label column.")
+                        st.stop()
+                elif dr_method == "KernelPCA":
+                    dr_params['kernel'] = st.selectbox("Kernel:", ["linear", "poly", "rbf", "sigmoid", "cosine"], key="kpca_kernel")
+                elif dr_method == "Isomap":
+                    dr_params['n_neighbors'] = st.slider("Neighbors:", 2, 50, 5, key="isomap_neighbors")
+
+                if st.button("Jalankan Reduksi Dimensi" if st.session_state.language == 'id' else "Run Dimensionality Reduction", key="run_dr_button"):
+                    with st.spinner("Memproses reduksi dimensi..." if st.session_state.language == 'id' else "Processing dimensionality reduction..."):
+                        try:
+                            import numpy as np
+                            from sklearn.decomposition import PCA, TruncatedSVD, KernelPCA
+                            from sklearn.manifold import TSNE, Isomap
+                            from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+                            import plotly.express as px
+                            import plotly.graph_objects as go
+                            
+                            X_3d = None
+                            
+                            if dr_method == "PCA":
+                                model = PCA(n_components=3)
+                                X_3d = model.fit_transform(dr_scaled)
+                                explained_var = model.explained_variance_ratio_
+                                st.write("**Explained Variance Ratio:**")
+                                for i, var in enumerate(explained_var):
+                                    st.write(f"- PC{i+1}: {var:.2%}")
+                                st.write(f"- **Total:** {sum(explained_var):.2%}")
+                                
+                            elif dr_method == "t-SNE":
+                                model = TSNE(
+                                    n_components=3,
+                                    perplexity=min(dr_params['perplexity'], len(dr_scaled) - 1),
+                                    learning_rate=dr_params['learning_rate'],
+                                    n_iter=dr_params['n_iter'],
+                                    random_state=42
+                                )
+                                X_3d = model.fit_transform(dr_scaled)
+                                
+                            elif dr_method == "LDA":
+                                n_classes = len(np.unique(y_dr))
+                                model = LDA(n_components=min(3, n_classes - 1))
+                                X_3d = model.fit_transform(dr_scaled, y_dr)
+                                # LDA might return fewer than 3 components
+                                if X_3d.shape[1] < 3:
+                                    st.warning(f"LDA hanya menghasilkan {X_3d.shape[1]} komponen karena jumlah kelas terbatas. Visualisasi 3D akan disesuaikan.")
+                                    # Pad with zeros for 3D visualization if needed
+                                    padding = np.zeros((X_3d.shape[0], 3 - X_3d.shape[1]))
+                                    X_3d = np.hstack((X_3d, padding))
+                                    
+                            elif dr_method == "TruncatedSVD":
+                                model = TruncatedSVD(n_components=3, random_state=42)
+                                X_3d = model.fit_transform(dr_scaled)
+                                
+                            elif dr_method == "KernelPCA":
+                                model = KernelPCA(n_components=3, kernel=dr_params['kernel'])
+                                X_3d = model.fit_transform(dr_scaled)
+                                
+                            elif dr_method == "Isomap":
+                                model = Isomap(n_neighbors=dr_params['n_neighbors'], n_components=3)
+                                X_3d = model.fit_transform(dr_scaled)
+                            
+                            if X_3d is not None:
+                                # Create results dataframe
+                                res_df = pd.DataFrame(X_3d, columns=['Dim 1', 'Dim 2', 'Dim 3'], index=dr_data.index)
+                                
+                                # Add color labels if available
+                                color_col = st.selectbox(
+                                    "Pilih kolom untuk pewarnaan:" if st.session_state.language == 'id' else "Select column for coloring:",
+                                    options=[None] + list(data.columns),
+                                    key="dr_color_select"
+                                )
+                                
+                                # Create plot
+                                fig = go.Figure()
+                                
+                                if color_col:
+                                    # Use the selected color column
+                                    color_data = data.loc[dr_data.index, color_col]
+                                    is_numeric = pd.api.types.is_numeric_dtype(color_data)
+                                    
+                                    if is_numeric:
+                                        fig.add_trace(go.Scatter3d(
+                                            x=res_df['Dim 1'], y=res_df['Dim 2'], z=res_df['Dim 3'],
+                                            mode='markers',
+                                            marker=dict(size=4, color=color_data, colorscale='Viridis', showscale=True, opacity=0.7),
+                                            hovertemplate=f"<b>{dr_method}</b><br>D1: %{{x}}<br>D2: %{{y}}<br>D3: %{{z}}<br>{color_col}: %{{marker.color}}<extra></extra>"
+                                        ))
+                                    else:
+                                        # Categorical coloring
+                                        unique_vals = color_data.unique()
+                                        for val in unique_vals:
+                                            mask = color_data == val
+                                            fig.add_trace(go.Scatter3d(
+                                                x=res_df.loc[mask, 'Dim 1'], y=res_df.loc[mask, 'Dim 2'], z=res_df.loc[mask, 'Dim 3'],
+                                                mode='markers',
+                                                name=str(val),
+                                                marker=dict(size=4, opacity=0.7),
+                                                hovertemplate=f"<b>{dr_method}</b><br>D1: %{{x}}<br>D2: %{{y}}<br>D3: %{{z}}<br>Value: {val}<extra></extra>"
+                                            ))
+                                else:
+                                    # Simple coloring
+                                    fig.add_trace(go.Scatter3d(
+                                        x=res_df['Dim 1'], y=res_df['Dim 2'], z=res_df['Dim 3'],
+                                        mode='markers',
+                                        marker=dict(size=4, color='skyblue', opacity=0.7),
+                                        hovertemplate=f"<b>{dr_method}</b><br>D1: %{{x}}<br>D2: %{{y}}<br>D3: %{{z}}<extra></extra>"
+                                    ))
+                                
+                                fig.update_layout(
+                                    title=f"3D {dr_method} Projection",
+                                    scene=dict(xaxis_title="Dim 1", yaxis_title="Dim 2", zaxis_title="Dim 3"),
+                                    width=800, height=600, margin=dict(l=0, r=0, b=0, t=40)
+                                )
+                                
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                                # Download results
+                                csv = res_df.to_csv(index=False)
+                                st.download_button(
+                                    label="Unduh Hasil Reduksi Dimensi (CSV)" if st.session_state.language == 'id' else "Download DR Results (CSV)",
+                                    data=csv,
+                                    file_name=f"dr_results_{dr_method.lower()}.csv",
+                                    mime="text/csv"
+                                )
+                                
+                        except Exception as e:
+                            st.error(f"Error dalam reduksi dimensi: {str(e)}")
+            else:
+                st.warning("Data tidak cukup untuk reduksi dimensi." if st.session_state.language == 'id' else "Not enough data for dimensionality reduction.")
+        else:
+            st.info("Pilih minimal satu fitur untuk memulai reduksi dimensi." if st.session_state.language == 'id' else "Select at least one feature to start dimensionality reduction.")
+
 # Tab 3: Preprocessing
 with tab3:
     st.header("Pemrosesan Data Awal" if st.session_state.language == 'id' else "Data Preprocessing")
@@ -7885,272 +8063,13 @@ with tab4:
 
         else:
             # Non-time series data - Classification or Regression
-            # 3D Visualization Section
-            st.subheader("Visualisasi 3D Data" if st.session_state.language == 'id' else "3D Data Visualization")
+            st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
-            # Add checkbox for 3D visualization
-            show_3d_viz = st.checkbox("Tampilkan visualisasi 3D PCA/t-SNE" if st.session_state.language == 'id' else "Show 3D PCA/t-SNE visualization", value=False)
-            
-            if show_3d_viz:
-                try:
-                    from sklearn.decomposition import PCA
-                    from sklearn.manifold import TSNE
-                    import plotly.express as px
-                    import plotly.graph_objects as go
+            st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
                     
-                    # Prepare data for visualization
-                    X_train_viz = st.session_state.X_train.copy()
-                    X_test_viz = st.session_state.X_test.copy()
-                    y_train_viz = st.session_state.y_train
-                    y_test_viz = st.session_state.y_test
-                    
-                    # Combine train and test data for consistent visualization
-                    X_combined = pd.concat([X_train_viz, X_test_viz])
-                    y_combined = pd.concat([y_train_viz, y_test_viz])
-                    
-                    # Create dataset labels
-                    dataset_labels = ['Train'] * len(X_train_viz) + ['Test'] * len(X_test_viz)
-                    
-                    # Select visualization method
-                    viz_method = st.selectbox(
-                        "Pilih metode visualisasi:" if st.session_state.language == 'id' else "Select visualization method:",
-                        ["PCA", "t-SNE"]
-                    )
-                    
-                    # Parameters for t-SNE
-                    if viz_method == "t-SNE":
-                        perplexity = st.slider(
-                            "Perplexity:" if st.session_state.language == 'id' else "Perplexity:",
-                            5, 50, 30
-                        )
-                        learning_rate = st.slider(
-                            "Learning rate:" if st.session_state.language == 'id' else "Learning rate:",
-                            10, 1000, 200
-                        )
-                        n_iter = st.slider(
-                            "Number of iterations:" if st.session_state.language == 'id' else "Number of iterations:",
-                            250, 2000, 1000
-                        )
-                    
-                    if st.button("Generate 3D Visualization" if st.session_state.language == 'id' else "Generate 3D Visualization"):
-                        with st.spinner("Membuat visualisasi 3D..." if st.session_state.language == 'id' else "Creating 3D visualization..."):
+                    # Create DataFrame for visualization
                             
-                            if viz_method == "PCA":
-                                # Apply PCA
-                                pca = PCA(n_components=3)
-                                X_3d = pca.fit_transform(X_combined)
-                                
-                                # Calculate explained variance
-                                explained_var = pca.explained_variance_ratio_
-                                
-                                st.write(f"**PCA Explained Variance:**")
-                                st.write(f"PC1: {explained_var[0]:.2%}")
-                                st.write(f"PC2: {explained_var[1]:.2%}")
-                                st.write(f"PC3: {explained_var[2]:.2%}")
-                                st.write(f"Total: {sum(explained_var):.2%}")
-                                
-                            else:  # t-SNE
-                                # Apply t-SNE
-                                tsne = TSNE(
-                                    n_components=3,
-                                    perplexity=min(perplexity, len(X_combined) - 1),
-                                    learning_rate=learning_rate,
-                                    n_iter=n_iter,
-                                    random_state=42
-                                )
-                                X_3d = tsne.fit_transform(X_combined)
-                                
-                                st.write(f"**t-SNE Parameters:**")
-                                st.write(f"Perplexity: {perplexity}")
-                                st.write(f"Learning rate: {learning_rate}")
-                                st.write(f"Iterations: {n_iter}")
-                            
-                            # Create DataFrame for visualization
-                            viz_df = pd.DataFrame({
-                                'X': X_3d[:, 0],
-                                'Y': X_3d[:, 1],
-                                'Z': X_3d[:, 2],
-                                'Target': y_combined.values if hasattr(y_combined, 'values') else y_combined,
-                                'Dataset': dataset_labels
-                            })
-                            
-                            # Create color mapping for categorical data
-                            if problem_type == "Classification":
-                                # Create color mapping for categorical targets
-                                from sklearn.preprocessing import LabelEncoder
-                                le = LabelEncoder()
-                                viz_df['Target_Numeric'] = le.fit_transform(viz_df['Target'])
-                                
-                                # Get unique classes and create color mapping
-                                unique_classes = le.classes_
-                                n_classes = len(unique_classes)
-                                
-                                # Create color palette based on number of classes
-                                if n_classes <= 10:
-                                    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-                                else:
-                                    # Use a continuous colorscale for many classes
-                                    colors = None
-                                    
-                                # Filter data for train and test
-                                train_data = viz_df[viz_df['Dataset'] == 'Train']
-                                test_data = viz_df[viz_df['Dataset'] == 'Test']
-                            
-                            # Create 3D scatter plot
-                            fig = go.Figure()
-                            
-                            if problem_type == "Classification":
-                                # Color mapping for classification
-                                if colors and n_classes <= 10:
-                                    # Use discrete colors for small number of classes
-                                    for i, class_name in enumerate(unique_classes):
-                                        class_train = train_data[train_data['Target'] == class_name]
-                                        if len(class_train) > 0:
-                                            fig.add_trace(go.Scatter3d(
-                                                x=class_train['X'],
-                                                y=class_train['Y'],
-                                                z=class_train['Z'],
-                                                mode='markers',
-                                                name=f'Train - {class_name}',
-                                                marker=dict(
-                                                    size=4,
-                                                    color=colors[i % len(colors)],
-                                                    opacity=0.7
-                                                ),
-                                                text=[f"Train - {class_name}"] * len(class_train),
-                                                hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Class: %{text}<extra></extra>'
-                                            ))
-                                        
-                                        class_test = test_data[test_data['Target'] == class_name]
-                                        if len(class_test) > 0:
-                                            fig.add_trace(go.Scatter3d(
-                                                x=class_test['X'],
-                                                y=class_test['Y'],
-                                                z=class_test['Z'],
-                                                mode='markers',
-                                                name=f'Test - {class_name}',
-                                                marker=dict(
-                                                    size=4,
-                                                    color=colors[i % len(colors)],
-                                                    opacity=0.8,
-                                                    symbol='diamond'
-                                                ),
-                                                text=[f"Test - {class_name}"] * len(class_test),
-                                                hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Class: %{text}<extra></extra>'
-                                            ))
-                                else:
-                                    # Use continuous colorscale for many classes
-                                    fig.add_trace(go.Scatter3d(
-                                        x=train_data['X'],
-                                        y=train_data['Y'],
-                                        z=train_data['Z'],
-                                        mode='markers',
-                                        name='Training Data',
-                                        marker=dict(
-                                            size=4,
-                                            color=train_data['Target_Numeric'],
-                                            colorscale='Viridis',
-                                            opacity=0.7
-                                        ),
-                                        text=[f"Train - {t}" for t in train_data['Target']],
-                                        hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
-                                    ))
-                                    
-                                    fig.add_trace(go.Scatter3d(
-                                        x=test_data['X'],
-                                        y=test_data['Y'],
-                                        z=test_data['Z'],
-                                        mode='markers',
-                                        name='Testing Data',
-                                        marker=dict(
-                                            size=4,
-                                            color=test_data['Target_Numeric'],
-                                            colorscale='Plasma',
-                                            opacity=0.8,
-                                            symbol='diamond'
-                                        ),
-                                        text=[f"Test - {t}" for t in test_data['Target']],
-                                        hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
-                                    ))
-                            else:
-                                # For regression, use the original approach
-                                # Add train data
-                                train_data = viz_df[viz_df['Dataset'] == 'Train']
-                                fig.add_trace(go.Scatter3d(
-                                    x=train_data['X'],
-                                    y=train_data['Y'],
-                                    z=train_data['Z'],
-                                    mode='markers',
-                                    name='Training Data',
-                                    marker=dict(
-                                        size=4,
-                                        color=train_data['Z'],
-                                        colorscale='Blues',
-                                        opacity=0.7
-                                    ),
-                                    text=[f"Train - Target: {t}" for t in train_data['Target']],
-                                    hovertemplate='<b>Train Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
-                                ))
-                                
-                                # Add test data
-                                test_data = viz_df[viz_df['Dataset'] == 'Test']
-                                fig.add_trace(go.Scatter3d(
-                                    x=test_data['X'],
-                                    y=test_data['Y'],
-                                    z=test_data['Z'],
-                                    mode='markers',
-                                    name='Testing Data',
-                                    marker=dict(
-                                        size=4,
-                                        color=test_data['Z'],
-                                        colorscale='Reds',
-                                        opacity=0.8,
-                                        symbol='diamond'
-                                    ),
-                                    text=[f"Test - Target: {t}" for t in test_data['Target']],
-                                    hovertemplate='<b>Test Data</b><br>X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Target: %{text}<extra></extra>'
-                                ))
-                            
-                            # Update layout
-                            fig.update_layout(
-                                title=f"3D {viz_method} Visualization - {problem_type} Data" if st.session_state.language == 'id' else f"Visualisasi 3D {viz_method} - Data {problem_type}",
-                                scene=dict(
-                                    xaxis_title=f"{viz_method} 1",
-                                    yaxis_title=f"{viz_method} 2",
-                                    zaxis_title=f"{viz_method} 3"
-                                ),
-                                width=800,
-                                height=600,
-                                margin=dict(l=0, r=0, b=0, t=40)
-                            )
-                            
-                            # Display the plot
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Add summary statistics
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write("**Training Data:**")
-                                st.write(f"Samples: {len(X_train_viz)}")
-                                st.write(f"Features: {X_train_viz.shape[1]}")
-                            with col2:
-                                st.write("**Testing Data:**")
-                                st.write(f"Samples: {len(X_test_viz)}")
-                                st.write(f"Features: {X_test_viz.shape[1]}")
-                            
-                            # Add download option
-                            csv = viz_df.to_csv(index=False)
-                            st.download_button(
-                                label="Download 3D Coordinates CSV" if st.session_state.language == 'id' else "Download 3D Coordinates CSV",
-                                data=csv,
-                                file_name=f"3d_{viz_method.lower()}_coordinates.csv",
-                                mime="text/csv"
-                            )
-                            
-                except ImportError as e:
-                    st.error(f"Library yang diperlukan tidak tersedia: {str(e)}. Silakan instal dengan: pip install scikit-learn plotly" if st.session_state.language == 'id' else f"Required library not available: {str(e)}. Please install with: pip install scikit-learn plotly")
-                except Exception as e:
-                    st.error(f"Error saat membuat visualisasi: {str(e)}" if st.session_state.language == 'id' else f"Error creating visualization: {str(e)}")
+                            # Clustering insights integration
             
             st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
