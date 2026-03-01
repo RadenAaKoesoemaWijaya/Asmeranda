@@ -10728,7 +10728,9 @@ with tab5:
             # Jumlah sampel untuk analisis SHAP
             sample_size = st.slider(
                 "Jumlah sampel untuk analisis SHAP:" if st.session_state.language == 'id' else "Number of samples for SHAP analysis:",
-                min_value=10, max_value=min(100, len(st.session_state.X_test)), value=50
+                min_value=1, 
+                max_value=max(2, len(st.session_state.X_test)), 
+                value=max(1, min(50, len(st.session_state.X_test)))
             )
             
             # Priority 3: Optimization Options
@@ -10741,13 +10743,16 @@ with tab5:
                 if use_optimization:
                     max_samples_opt = st.slider(
                         "Maksimal sampel (optimasi):" if st.session_state.language == 'id' else "Max samples (optimization):",
-                        min_value=100, max_value=min(2000, len(st.session_state.X_test)), 
-                        value=min(1000, len(st.session_state.X_test))
+                        min_value=1, 
+                        max_value=max(2, len(st.session_state.X_test)), 
+                        value=max(1, min(1000, len(st.session_state.X_test)))
                     )
                     
                     background_samples_opt = st.slider(
                         "Background samples:" if st.session_state.language == 'id' else "Background samples:",
-                        min_value=50, max_value=500, value=100
+                        min_value=1, 
+                        max_value=max(2, len(st.session_state.X_train)), 
+                        value=max(1, min(100, len(st.session_state.X_train)))
                     )
                     
                     use_cache = st.checkbox(
