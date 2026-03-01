@@ -125,6 +125,77 @@ class AuthDatabase:
         """Hash password using SHA-256"""
         return hashlib.sha256(password.encode()).hexdigest()
     
+    def check_password_strength(self, password):
+        """
+        Check password strength and return score (0-4) and feedback message.
+        """
+        if not password:
+            return 0, "Password kosong"
+            
+        score = 0
+        feedback = []
+        
+        # Length check
+        if len(password) >= 8:
+            score += 1
+        else:
+            feedback.append("Minimal 8 karakter")
+            
+        # Uppercase check
+        if any(c.isupper() for c in password):
+            score += 1
+        else:
+            feedback.append("Gunakan huruf kapital (A-Z)")
+            
+        # Lowercase check
+        if any(c.islower() for c in password):
+            score += 1
+        else:
+            feedback.append("Gunakan huruf kecil (a-z)")
+            
+        # Digit and Special char check
+        has_digit = any(c.isdigit() for c in password)
+        has_special = any(c in string.punctuation for c in password)
+        
+        if has_digit and has_special:
+            score += 1
+        elif has_digit:
+            feedback.append("Tambahkan simbol/karakter khusus")
+            score += 0.5
+        elif has_special:
+            feedback.append("Tambahkan angka (0-9)")
+            score += 0.5
+        else:
+            feedback.append("Gunakan angka dan simbol")
+
+        # Map score to labels
+        if score < 2:
+            label = "Sangat Lemah" if score == 0 else "Lemah"
+        elif score < 3:
+            label = "Sedang"
+        elif score < 4:
+            label = "Kuat"
+        else:
+            label = "Sangat Kuat"
+            
+        return score, label, feedback
+
+    def generate_strong_password(self, length=14):
+        """Generate a random strong password"""
+        alphabet = string.ascii_letters + string.digits + string.punctuation
+        # Ensure at least one of each required type
+        password = [
+            secrets.choice(string.ascii_uppercase),
+            secrets.choice(string.ascii_lowercase),
+            secrets.choice(string.digits),
+            secrets.choice(string.punctuation)
+        ]
+        # Fill the rest
+        password += [secrets.choice(alphabet) for _ in range(length - 4)]
+        # Shuffle to randomize positions
+        secrets.SystemRandom().shuffle(password)
+        return "".join(password)
+
     def create_user(self, username, password, email=None):
         """Create a new user"""
         try:

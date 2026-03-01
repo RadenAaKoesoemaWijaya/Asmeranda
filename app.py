@@ -281,14 +281,60 @@ def render_loginizer():
         st.subheader("Daftar Pengguna Baru")
         reg_username = st.text_input("Username Baru", key="reg_username")
         reg_email = st.text_input("Email", key="reg_email")
-        reg_password = st.text_input("Password", type="password", key="reg_password")
+        
+        # Password generator logic
+        if 'generated_password' not in st.session_state:
+            st.session_state.generated_password = ""
+            
+        col_pass, col_gen = st.columns([0.7, 0.3])
+        with col_gen:
+            if st.button("🔑 Buat Sandi Kuat"):
+                st.session_state.generated_password = auth_db.generate_strong_password()
+                st.info(f"Sandi dibuat: `{st.session_state.generated_password}`")
+        
+        with col_pass:
+            reg_password = st.text_input(
+                "Password", 
+                type="password", 
+                key="reg_password", 
+                value=st.session_state.generated_password if st.session_state.generated_password else "",
+                help="Sandi harus mengandung huruf besar, huruf kecil, angka, dan simbol."
+            )
+            
+        # Password strength meter
+        if reg_password:
+            score, label, feedback = auth_db.check_password_strength(reg_password)
+            
+            # Display strength meter
+            strength_colors = {
+                "Sangat Lemah": "🔴", "Lemah": "🟠", "Sedang": "🟡", "Kuat": "🟢", "Sangat Kuat": "✅"
+            }
+            color_hex = {
+                "Sangat Lemah": "#FF4B4B", "Lemah": "#FFAA00", "Sedang": "#FFD700", "Kuat": "#00CC00", "Sangat Kuat": "#008000"
+            }
+            
+            st.markdown(f"Kekuatan Sandi: **{strength_colors.get(label, '')} {label}**")
+            st.progress(min(score / 4.0, 1.0))
+            
+            if feedback:
+                with st.expander("Saran Perbaikan Sandi"):
+                    for msg in feedback:
+                        st.write(f"- {msg}")
+        
         reg_password2 = st.text_input("Konfirmasi Password", type="password", key="reg_password2")
+        
         img_b64, _ = captcha_gen.get_captcha_base64(st.session_state.captcha_text)
         st.markdown(f"![captcha]({img_b64})")
         captcha_input = st.text_input("Masukkan teks captcha", key="captcha_input")
+        
         if st.button("Daftar", type="primary", key="btn_register"):
+            # Re-check strength on submit
+            score, label, _ = auth_db.check_password_strength(reg_password)
+            
             if reg_password != reg_password2:
                 st.error("Password dan konfirmasi tidak cocok.")
+            elif score < 3:
+                st.error(f"Sandi terlalu lemah ({label}). Harap gunakan sandi yang lebih kuat (minimal 'Kuat').")
             elif not verify_captcha(captcha_input, st.session_state.captcha_text, case_sensitive=True):
                 st.error("Captcha salah. Silakan coba lagi.")
                 # regenerate captcha
@@ -477,13 +523,41 @@ if current_user and auth_db.is_super_admin(current_user):
         
         st.markdown("### 🔒 Ganti Kata Sandi Super Admin")
         old_pw = st.text_input("Kata sandi saat ini", type="password")
-        new_pw = st.text_input("Kata sandi baru", type="password")
+        
+        # Admin password generator logic
+        if 'admin_gen_password' not in st.session_state:
+            st.session_state.admin_gen_password = ""
+            
+        col_admin_pass, col_admin_gen = st.columns([0.7, 0.3])
+        with col_admin_gen:
+            if st.button("🔑 Buat Sandi Kuat", key="btn_gen_admin_pw"):
+                st.session_state.admin_gen_password = auth_db.generate_strong_password()
+                st.info(f"Sandi dibuat: `{st.session_state.admin_gen_password}`")
+        
+        with col_admin_pass:
+            new_pw = st.text_input(
+                "Kata sandi baru", 
+                type="password", 
+                value=st.session_state.admin_gen_password if st.session_state.admin_gen_password else ""
+            )
+            
+        # Admin password strength meter
+        if new_pw:
+            score, label, feedback = auth_db.check_password_strength(new_pw)
+            st.markdown(f"Kekuatan Sandi: **{label}**")
+            st.progress(min(score / 4.0, 1.0))
+            if feedback:
+                with st.expander("Saran Perbaikan Sandi"):
+                    for msg in feedback:
+                        st.write(f"- {msg}")
+        
         new_pw2 = st.text_input("Konfirmasi kata sandi baru", type="password")
         if st.button("Ganti Kata Sandi", key="admin_change_pw"):
+            score, _, _ = auth_db.check_password_strength(new_pw)
             if new_pw != new_pw2:
                 st.error("Konfirmasi kata sandi tidak cocok.")
-            elif len(new_pw) < 8:
-                st.error("Kata sandi baru minimal 8 karakter.")
+            elif score < 3:
+                st.error("Sandi terlalu lemah. Gunakan sandi yang lebih kuat.")
             else:
                 if auth_db.change_password(current_user, old_pw, new_pw):
                     auth_db.record_activity(current_user, 'change_password')
@@ -495,12 +569,39 @@ if current_user and auth_db.is_super_admin(current_user):
         st.markdown("#### Tambah Pengguna")
         add_user_username = st.text_input("Username pengguna baru", key="add_user_username")
         add_user_email = st.text_input("Email pengguna baru", key="add_user_email")
-        add_user_password = st.text_input("Kata sandi pengguna baru", type="password", key="add_user_password")
+        
+        # Add user password generator logic
+        if 'adduser_gen_password' not in st.session_state:
+            st.session_state.adduser_gen_password = ""
+            
+        col_adduser_pass, col_adduser_gen = st.columns([0.7, 0.3])
+        with col_adduser_gen:
+            if st.button("🔑 Buat Sandi Kuat", key="btn_gen_adduser_pw"):
+                st.session_state.adduser_gen_password = auth_db.generate_strong_password()
+                st.info(f"Sandi dibuat: `{st.session_state.adduser_gen_password}`")
+        
+        with col_adduser_pass:
+            add_user_password = st.text_input(
+                "Kata sandi pengguna baru", 
+                type="password", 
+                key="add_user_password",
+                value=st.session_state.adduser_gen_password if st.session_state.adduser_gen_password else ""
+            )
+            
+        # Add user password strength meter
+        if add_user_password:
+            score, label, _ = auth_db.check_password_strength(add_user_password)
+            st.markdown(f"Kekuatan Sandi: **{label}**")
+            st.progress(min(score / 4.0, 1.0))
+            
         add_user_is_active = st.checkbox("Aktif", value=True, key="add_user_active")
         add_user_is_admin = st.checkbox("Jadikan Super Admin", value=False, key="add_user_is_admin")
         if st.button("Tambah Pengguna", key="btn_add_user"):
+            score, _, _ = auth_db.check_password_strength(add_user_password)
             if not add_user_username or not add_user_email or not add_user_password:
                 st.error("Mohon isi username, email, dan kata sandi.")
+            elif score < 3:
+                st.error("Sandi pengguna baru terlalu lemah.")
             else:
                 created = auth_db.create_user(add_user_username, add_user_password, add_user_email)
                 if created:
