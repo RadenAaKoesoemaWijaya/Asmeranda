@@ -174,7 +174,9 @@ class ErrorHandler:
                     st.write(f"• {suggestion}")
         
         # Technical details (collapsible)
-        if st.checkbox("Tampilkan detail teknis" if self.language == 'id' else "Show technical details"):
+        # Add a unique key to the checkbox to avoid StreamlitDuplicateElementId
+        checkbox_key = f"tech_details_{error_info['context']}_{hash(error_info['technical_details'])}"
+        if st.checkbox("Tampilkan detail teknis" if self.language == 'id' else "Show technical details", key=checkbox_key):
             st.code(error_info['technical_details'])
             st.caption(f"Context: {error_info['context']}")
             st.caption(f"Time: {error_info['timestamp']}")

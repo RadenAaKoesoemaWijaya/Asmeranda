@@ -358,3 +358,160 @@ class WorkflowValidator:
             'warnings': warnings,
             'recommendations': ['Train interpretable models for better SHAP/LIME analysis']
         }
+
+    def validate_data_readiness(self, data: pd.DataFrame, numerical_cols: List[str], categorical_cols: List[str]) -> List[Dict]:
+        """Validate data readiness for machine learning workflows"""
+        results = []
+        
+        # 1. Dataset size check
+        if len(data) >= 100:
+            results.append({'status': 'success', 'message': f"Dataset has sufficient rows ({len(data)}) for training."})
+        elif len(data) >= 20:
+            results.append({'status': 'warning', 'message': f"Dataset is relatively small ({len(data)} rows). Consider cross-validation."})
+        else:
+            results.append({'status': 'error', 'message': f"Dataset is very small ({len(data)} rows). Machine learning might not be effective."})
+            
+        # 2. Column count check
+        if len(data.columns) >= 3:
+            results.append({'status': 'success', 'message': f"Dataset has {len(data.columns)} columns, sufficient for feature engineering."})
+        else:
+            results.append({'status': 'warning', 'message': "Dataset has very few columns. Limit feature engineering potential."})
+            
+        # 3. Missing values check
+        missing_pct = data.isnull().sum().sum() / (data.shape[0] * data.shape[1])
+        if missing_pct == 0:
+            results.append({'status': 'success', 'message': "No missing values detected in the dataset."})
+        elif missing_pct < 0.1:
+            results.append({'status': 'success', 'message': f"Low percentage of missing values ({missing_pct:.1%}). Easy to handle."})
+        elif missing_pct < 0.3:
+            results.append({'status': 'warning', 'message': f"Moderate percentage of missing values ({missing_pct:.1%}). Imputation recommended."})
+        else:
+            results.append({'status': 'error', 'message': f"High percentage of missing values ({missing_pct:.1%}). Data cleaning is critical."})
+            
+        # 4. Target column potential check
+        if len(numerical_cols) > 0:
+            results.append({'status': 'success', 'message': "Numeric columns detected, suitable for regression or time series."})
+        
+        if len(categorical_cols) > 0:
+            results.append({'status': 'success', 'message': "Categorical columns detected, suitable for classification."})
+            
+        return results
+
+    def check_ml_readiness(self, validation_results: List[Dict]) -> Dict:
+        """Check if data is ready for ML workflows based on validation results"""
+        errors = [r for r in validation_results if r['status'] == 'error']
+        warnings = [r for r in validation_results if r['status'] == 'warning']
+        
+        available_workflows = ["Exploratory Data Analysis"]
+        
+        if not errors:
+            available_workflows.extend(["Preprocessing", "Model Training", "Model Interpretation"])
+            
+        ready = len(errors) == 0
+        
+        if ready:
+            if not warnings:
+                message = "Dataset is highly optimal for machine learning."
+            else:
+                message = "Dataset is ready for machine learning with some considerations."
+        else:
+            message = "Dataset requires significant cleaning before machine learning."
+            
+        recommendations = []
+        for r in errors + warnings:
+            if 'imputation' in r['message'].lower() or 'missing' in r['message'].lower():
+                recommendations.append("Apply missing value imputation in Preprocessing tab.")
+            if 'small' in r['message'].lower():
+                recommendations.append("Use robust models like Random Forest or Cross-Validation.")
+            if 'cleaning' in r['message'].lower():
+                recommendations.append("Review data quality in EDA tab.")
+                
+        return {
+            'ready': ready,
+            'message': message,
+            'available_workflows': available_workflows,
+            'recommendations': recommendations
+        }
+
+    def validate_eda_completeness(self, data: pd.DataFrame, numerical_cols: List[str], categorical_cols: List[str]) -> List[Dict]:
+        """Validate EDA completeness for transition to ML"""
+        results = []
+        
+        # 1. Missing values check
+        missing_count = data.isnull().sum().sum()
+        if missing_count == 0:
+            results.append({'status': 'success', 'message': "Dataset is clean (no missing values)."})
+        else:
+            results.append({'status': 'warning', 'message': f"Dataset has {missing_count} missing values. Preprocessing recommended."})
+            
+        # 2. Correlation check
+        if len(numerical_cols) > 1:
+            results.append({'status': 'success', 'message': f"Correlation analysis possible for {len(numerical_cols)} numerical features."})
+        else:
+            results.append({'status': 'warning', 'message': "Too few numerical features for correlation analysis."})
+            
+        # 3. Distribution check
+        if len(numerical_cols) > 0:
+            results.append({'status': 'success', 'message': "Distribution analysis available for numerical features."})
+            
+        # 4. Outlier potential
+        if len(numerical_cols) > 0:
+            results.append({'status': 'info', 'message': "Consider checking for outliers in numerical features before training."})
+            
+        return results
+
+    def check_eda_readiness(self, eda_validation: List[Dict]) -> Dict:
+        """Check if EDA is ready for ML transition"""
+        warnings = [r for r in eda_validation if r['status'] == 'warning']
+        
+        ready = True
+        message = "Exploratory Data Analysis is sufficient for basic ML transition."
+        available_transitions = ["Preprocessing", "Feature Engineering"]
+        
+        recommendations = []
+        for r in warnings:
+            if 'missing' in r['message'].lower():
+                recommendations.append("Handle missing values in the Preprocessing tab.")
+            if 'correlation' in r['message'].lower():
+                recommendations.append("Add more numerical features if possible for better insight.")
+                
+        return {
+            'ready': ready,
+            'message': message,
+            'available_transitions': available_transitions,
+            'recommendations': recommendations
+        }
+
+    def validate_ml_training_readiness(self, X_train: pd.DataFrame, y_train: pd.Series, problem_type: str, model_type: str) -> List[Dict]:
+        """Validate ML training readiness for a specific model"""
+        results = []
+        
+        # 1. Data existence check
+        if X_train is None or y_train is None:
+            results.append({'status': 'error', 'message': "Training data (X or y) is missing."})
+            return results
+            
+        # 2. Row count check
+        if len(X_train) < 10:
+            results.append({'status': 'error', 'message': f"Insufficient data for training ({len(X_train)} samples)."})
+        elif len(X_train) < 50:
+            results.append({'status': 'warning', 'message': f"Small dataset ({len(X_train)} samples). Results might be unstable."})
+        else:
+            results.append({'status': 'success', 'message': f"Training data has {len(X_train)} samples."})
+            
+        # 3. Target type check
+        if problem_type == 'Classification':
+            unique_targets = len(np.unique(y_train.dropna()))
+            if unique_targets < 2:
+                results.append({'status': 'error', 'message': "Classification requires at least 2 unique target classes."})
+            else:
+                results.append({'status': 'success', 'message': f"Found {unique_targets} classes for classification."})
+        
+        # 4. Model-specific checks
+        if 'Linear' in model_type or 'Logistic' in model_type:
+            results.append({'status': 'info', 'message': f"{model_type} assumes feature scaling. Check if scaling was applied."})
+            
+        if 'Gradient' in model_type and X_train.isnull().sum().sum() > 0:
+            results.append({'status': 'warning', 'message': f"{model_type} might be sensitive to missing values."})
+            
+        return results
