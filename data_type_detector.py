@@ -14,30 +14,35 @@ class DataTypeDetector:
         results = {}
         
         for column in df.columns:
-            column_data = df[column]
-            
-            # Basic type detection
-            basic_type = self._get_basic_type(column_data)
-            
-            # Advanced analysis
-            advanced_analysis = self._analyze_column_characteristics(column_data)
-            
-            # Confidence scoring
-            confidence = self._calculate_confidence_score(column_data, basic_type, advanced_analysis)
-            
-            # Recommendations
-            recommendations = self._generate_recommendations(column_data, basic_type, advanced_analysis)
-            
-            results[column] = {
-                'detected_type': basic_type,
-                'confidence': confidence,
-                'analysis': advanced_analysis,
-                'recommendations': recommendations,
-                'sample_values': column_data.dropna().head(10).tolist(),
-                'null_percentage': column_data.isnull().sum() / len(column_data)
-            }
+            results[column] = self.analyze_series(df[column], column)
         
         return results
+
+    def analyze_series(self, series: pd.Series, column_name: str = None) -> Dict:
+        """Analyze a single series and return results"""
+        # Basic type detection
+        basic_type = self._get_basic_type(series)
+        
+        # Advanced analysis
+        advanced_analysis = self._analyze_column_characteristics(series)
+        
+        # Confidence scoring
+        confidence = self._calculate_confidence_score(series, basic_type, advanced_analysis)
+        
+        # Recommendations
+        recommendations = self._generate_recommendations(series, basic_type, advanced_analysis)
+        
+        return {
+            'detected_type': basic_type,
+            'confidence': confidence,
+            'analysis': advanced_analysis,
+            'recommendations': recommendations,
+            'sample_values': series.dropna().head(10).tolist(),
+            'null_percentage': advanced_analysis.get('null_percentage', 0),
+            'unique_count': advanced_analysis.get('unique_count', 0),
+            'null_count': advanced_analysis.get('null_count', 0),
+            'column_name': column_name
+        }
     
     def _get_basic_type(self, series: pd.Series) -> str:
         """Get basic pandas dtype"""
