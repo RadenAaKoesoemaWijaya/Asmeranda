@@ -58,7 +58,8 @@ from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_
                    implement_lime_classification, detect_model_type,
                    prepare_forecasting_data_for_interpretation,
                    interpret_forecasting_model, create_forecasting_interpretation_dashboard,
-                   check_model_compatibility, create_shap_visualization)
+                   check_model_compatibility, create_shap_visualization,
+                   get_clustering_recommendations, validate_clustering_parameters)
 from priority2_functions import improved_data_preprocessing_for_interpretation, create_interpretation_report
 from priority3_functions import (InterpretationCache, optimized_shap_for_large_dataset, 
                                optimized_lime_for_large_dataset, batch_interpretation,
