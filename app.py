@@ -5368,6 +5368,9 @@ with tab3:
         # Prepare data for modeling dengan semua fitur awal
         X = data[all_columns]
         y = data[target_column]
+        
+        # Ensure np is defined globally
+        import numpy as np
 
         # Validasi jumlah sampel sebelum train test split
         if len(X) == 0:
@@ -7047,6 +7050,9 @@ with tab3:
 # Tab 4: Feature Engineering and Model Training
 with tab4:
     st.header("Pelatihan dan Evaluasi Model" if st.session_state.language == 'id' else "Model Training and Evaluation")
+    
+    # Ensure np is defined globally for this scope
+    import numpy as np
     
     if (st.session_state.X_train is not None and 
         st.session_state.y_train is not None and 
@@ -12136,6 +12142,9 @@ with tab6:
 # Tab 7: Time Series Anomaly Detection
 with tab7:
     st.header("Deteksi Anomali Time Series" if st.session_state.language == 'id' else "Time Series Anomaly Detection")
+    
+    # Ensure np is defined
+    import numpy as np
     
     st.info("""
     🔍 **Fitur Deteksi Anomali Time Series**
