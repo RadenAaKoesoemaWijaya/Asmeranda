@@ -3549,6 +3549,10 @@ with tab2:
                             st.write(recommendations.get('data_info', ''))
                             st.write(recommendations.get('k_recommendation', ''))
                     
+                    # Initialize variables to avoid NameError
+                    use_gap = False
+                    kmeans_metrics = {}
+                    
                     if auto_optimize:
                         # Add Gap Statistic option
                         use_gap = st.checkbox(
