@@ -3691,6 +3691,19 @@ with tab2:
                     # Add cluster labels to data
                     clustering_data['Cluster'] = clusters
                     
+                    # Add download button for clustering model
+                    if kmeans is not None:
+                        try:
+                            model_bytes = pickle.dumps(kmeans)
+                            st.download_button(
+                                label="📥 Unduh Model K-Means (.pkl)" if st.session_state.language == 'id' else "📥 Download K-Means Model (.pkl)",
+                                data=model_bytes,
+                                file_name=f"kmeans_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                mime="application/octet-stream"
+                            )
+                        except Exception as pickle_error:
+                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
+                    
                     # Store clustering results in session state for model training integration
                     if SESSION_MANAGER_AVAILABLE and session_manager is not None:
                         try:
@@ -3904,6 +3917,19 @@ with tab2:
                     # Initialize and fit K-Prototypes
                     kproto = KPrototypes(n_clusters=k_value, init='Huang', random_state=42, gamma=gamma_value)
                     clusters = kproto.fit_predict(kproto_data.values, categorical_idx)
+                    
+                    # Add download button for k-prototypes model
+                    if kproto is not None:
+                        try:
+                            model_bytes = pickle.dumps(kproto)
+                            st.download_button(
+                                label="📥 Unduh Model K-Prototypes (.pkl)" if st.session_state.language == 'id' else "📥 Download K-Prototypes Model (.pkl)",
+                                data=model_bytes,
+                                file_name=f"kprototypes_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                mime="application/octet-stream"
+                            )
+                        except Exception as pickle_error:
+                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                     
                     # Calculate K-Prototypes specific metrics
                     kproto_metrics = calculate_kprototypes_metrics(kproto_data.values, categorical_idx, clusters, kproto)
@@ -4128,6 +4154,19 @@ with tab2:
                     )
                     clusters = hierarchical.fit_predict(scaled_data)
                     
+                    # Add download button for hierarchical model
+                    if hierarchical is not None:
+                        try:
+                            model_bytes = pickle.dumps(hierarchical)
+                            st.download_button(
+                                label="📥 Unduh Model Hierarchical (.pkl)" if st.session_state.language == 'id' else "📥 Download Hierarchical Model (.pkl)",
+                                data=model_bytes,
+                                file_name=f"hierarchical_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                mime="application/octet-stream"
+                            )
+                        except Exception as pickle_error:
+                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
+                    
                     # Store normalization info for reporting
                     if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
                         normalization_info = f"Menggunakan {normalization_method}"
@@ -4280,6 +4319,19 @@ with tab2:
                     
                     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
                     clusters = dbscan.fit_predict(scaled_data)
+                    
+                    # Add download button for DBSCAN model
+                    if dbscan is not None:
+                        try:
+                            model_bytes = pickle.dumps(dbscan)
+                            st.download_button(
+                                label="📥 Unduh Model DBSCAN (.pkl)" if st.session_state.language == 'id' else "📥 Download DBSCAN Model (.pkl)",
+                                data=model_bytes,
+                                file_name=f"dbscan_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                mime="application/octet-stream"
+                            )
+                        except Exception as pickle_error:
+                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                     
                     # Store normalization info for reporting
                     if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
@@ -4471,6 +4523,19 @@ with tab2:
                         affinity='nearest_neighbors'
                     )
                     clusters = spectral.fit_predict(scaled_data)
+                    
+                    # Add download button for spectral model
+                    if spectral is not None:
+                        try:
+                            model_bytes = pickle.dumps(spectral)
+                            st.download_button(
+                                label="📥 Unduh Model Spectral (.pkl)" if st.session_state.language == 'id' else "📥 Download Spectral Model (.pkl)",
+                                data=model_bytes,
+                                file_name=f"spectral_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                mime="application/octet-stream"
+                            )
+                        except Exception as pickle_error:
+                            st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                     
                     # Store normalization info for reporting
                     if normalization_method != "Tidak ada normalisasi" if st.session_state.language == 'id' else "No normalization":
@@ -8065,14 +8130,6 @@ with tab4:
             # Non-time series data - Classification or Regression
             st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
             
-            st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
-                    
-                    # Create DataFrame for visualization
-                            
-                            # Clustering insights integration
-            
-            st.subheader(f"Melatih Model {problem_type}" if st.session_state.language == 'id' else f"Training a {problem_type} Model")
-            
             # Clustering insights integration
             clustering_insights_available = False
             clustering_results = None
@@ -9579,20 +9636,20 @@ with tab4:
                             st.session_state.model = model
                             # Update y_test untuk evaluasi
                             st.session_state.y_test_eval = y_test_clean
-                            
-                            # Add download button for trained model
-                            if st.session_state.model is not None:
-                                try:
-                                    model_bytes = pickle.dumps(st.session_state.model)
-                                    model_type_clean = model_type.lower().replace(" ", "_")
-                                    st.download_button(
-                                        label=f"📥 Unduh Model {model_type} (.pkl)" if st.session_state.language == 'id' else f"📥 Download {model_type} Model (.pkl)",
-                                        data=model_bytes,
-                                        file_name=f"{model_type_clean}_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
-                                        mime="application/octet-stream"
-                                    )
-                                except Exception as pickle_error:
-                                    st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
+                        
+                        # Add download button for trained model (always show after training)
+                        if st.session_state.model is not None:
+                            try:
+                                model_bytes = pickle.dumps(st.session_state.model)
+                                model_type_clean = model_type.lower().replace(" ", "_")
+                                st.download_button(
+                                    label=f"📥 Unduh Model {model_type} (.pkl)" if st.session_state.language == 'id' else f"📥 Download {model_type} Model (.pkl)",
+                                    data=model_bytes,
+                                    file_name=f"{model_type_clean}_model_{target_column}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                                    mime="application/octet-stream"
+                                )
+                            except Exception as pickle_error:
+                                st.warning(f"⚠️ Tidak dapat membuat download model: {str(pickle_error)}" if st.session_state.language == 'id' else f"⚠️ Cannot create model download: {str(pickle_error)}")
                         
                         # Cross-validation evaluation
                         if cv_params['cv'] is not None:
