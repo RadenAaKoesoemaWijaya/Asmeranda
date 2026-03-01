@@ -7,15 +7,15 @@ Asmeranda adalah platform berbasis web (Streamlit) untuk analisis data mendalam 
 
 ---
 
-## 🚀 Fitur Utama
+## 🚀 Fitur Utama & Metodologi
 
 1. **Sistem Keamanan & Autentikasi**: Login dengan verifikasi OTP Email, Captcha, dan Dashboard Super Admin untuk manajemen pengguna.
-2. **Eksplorasi Data (EDA)**: Visualisasi otomatis distribusi, korelasi, dan deteksi pola data (termasuk Time Series).
-3. **Preprocessing Canggih**: Penanganan nilai hilang (*Missing Values*), deteksi *outlier*, seleksi fitur, hingga normalisasi data otomatis.
-4. **Pelatihan Model ML**: Mendukung 15+ algoritma Klasifikasi dan Regresi (Random Forest, XGBoost, LightGBM, dll) dengan optimasi hyperparameter (GridSearch, Optuna).
-5. **Interpretasi Model (XAI)**: Penjelasan keputusan model secara global dan lokal menggunakan **SHAP** dan **LIME**.
-6. **Time Series Analysis**: Forecasting (ARIMA, LSTM, Prophet) dan deteksi anomali pada data berbasis waktu.
-7. **AI-Powered Analysis**: Rekomendasi metode penelitian otomatis berbasis karakteristik dataset.
+2. **Eksplorasi Data (EDA) & Validasi**: Visualisasi otomatis dan sistem **Workflow Validator** yang memastikan data siap sebelum lanjut ke tahap ML.
+3. **Preprocessing & Deteksi Tipe Data**: Penanganan nilai hilang, outlier, dan **Deteksi Tipe Data Otomatis** untuk rekomendasi model yang lebih akurat.
+4. **Pelatihan Model ML**: Mendukung 15+ algoritma Klasifikasi dan Regresi dengan optimasi hyperparameter (GridSearch, Optuna).
+5. **Best Practice Imbalanced Handling**: Penanganan data tidak seimbang (SMOTE, dll) dilakukan **setelah Train-Test Split** untuk mencegah *Data Leakage*.
+6. **Interpretasi Model (XAI)**: Penjelasan keputusan model secara global dan lokal menggunakan **SHAP** dan **LIME**.
+7. **Time Series & AI Analysis**: Forecasting (ARIMA, LSTM, Prophet) dan rekomendasi metode penelitian berbasis AI.
 
 ---
 
@@ -35,27 +35,28 @@ Asmeranda adalah platform berbasis web (Streamlit) untuk analisis data mendalam 
 
 ---
 
-## 🔐 Panduan Singkat
+## 🔐 Panduan Singkat Penggunaan
 
-### Login & OTP
+### 1. Login & Verifikasi OTP
 - Daftar akun baru -> Login -> Cek email untuk kode OTP -> Masukkan kode di tab Verifikasi.
-- **Mode Demo**: Jika SMTP belum disetel, kode OTP akan muncul sementara di antarmuka aplikasi.
+- **Mode Demo**: Jika SMTP belum disetel, kode OTP akan muncul di terminal/antarmuka aplikasi.
 
-### Dashboard Super Admin
-- Hanya dapat diakses oleh akun dengan status Super Admin.
-- Digunakan untuk konfigurasi SMTP, memantau aktivitas pengguna, dan manajemen akun.
+### 2. Alur Kerja (Workflow)
+- Pastikan data telah divalidasi di tab **Data Upload** sebelum berpindah ke **EDA**.
+- Penanganan dataset *imbalanced* kini tersedia di tab **Supervised ML** setelah pembagian data (split) untuk menjamin validitas pengujian.
 
-### Unduh Model
-- Setelah pelatihan model selesai, tombol **"Unduh Model (.pkl)"** akan muncul secara otomatis untuk menyimpan model hasil latih.
+### 3. Dashboard Admin & Ekspor
+- **Super Admin**: Akses penuh untuk manajemen pengguna dan konfigurasi sistem (SMTP, Logs).
+- **Unduh Model**: Model hasil latih dapat diunduh dalam format `.pkl` untuk digunakan di lingkungan produksi.
 
 ---
 
-## 📂 Struktur Proyek Singkat
-- `app.py`: File utama aplikasi.
-- `utils.py`: Fungsi utilitas untuk pemrosesan data.
-- `auth_db.py`: Manajemen database pengguna dan autentikasi.
-- `requirements.txt`: Daftar pustaka Python yang diperlukan.
-- `database/`: Penyimpanan database SQLite untuk pengguna.
+## 📂 Struktur Proyek Inti
+- `app.py`: Logika antarmuka dan alur kerja utama.
+- `utils.py`: Mesin pemrosesan data, clustering, dan forecasting.
+- `workflow_validator.py`: Sistem validasi kesiapan data antar tahap.
+- `data_type_detector.py`: Modul deteksi otomatis karakteristik kolom data.
+- `auth_db.py` & `database/`: Sistem manajemen keamanan dan basis data pengguna.
 
 ---
 **PT. ASMER SAHABAT SUKSES**

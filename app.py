@@ -59,7 +59,7 @@ from utils import (prepare_timeseries_data, check_stationarity, plot_timeseries_
                    prepare_forecasting_data_for_interpretation,
                    interpret_forecasting_model, create_forecasting_interpretation_dashboard,
                    check_model_compatibility, create_shap_visualization,
-                   get_clustering_recommendations, validate_clustering_parameters)
+                   validate_clustering_parameters)
 from priority2_functions import improved_data_preprocessing_for_interpretation, create_interpretation_report
 from priority3_functions import (InterpretationCache, optimized_shap_for_large_dataset, 
                                optimized_lime_for_large_dataset, batch_interpretation,
@@ -3542,13 +3542,6 @@ with tab2:
                 if clustering_method == "K-Means":
                     # K-Means Clustering
                     
-                    # Get recommendations
-                    recommendations = get_clustering_recommendations(scaled_data, method='kmeans', language=st.session_state.language)
-                    if recommendations:
-                        with st.expander("ℹ️ Rekomendasi Parameter" if st.session_state.language == 'id' else "ℹ️ Parameter Recommendations"):
-                            st.write(recommendations.get('data_info', ''))
-                            st.write(recommendations.get('k_recommendation', ''))
-                    
                     # Initialize variables to avoid NameError
                     use_gap = False
                     kmeans_metrics = {}
@@ -5387,6 +5380,92 @@ with tab3:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state
         )
+
+        # Penanganan imbalanced dataset untuk klasifikasi SETELAH train-test split
+        if problem_type == "Classification":
+            st.subheader("Penanganan Imbalanced Dataset" if st.session_state.language == 'id' else "Imbalanced Dataset Handling")
+            
+            # Tampilkan distribusi kelas di Training dan Testing Set
+            st.write("#### Distribusi Kelas Sebelum Penyeimbangan" if st.session_state.language == 'id' else "#### Class Distribution Before Balancing")
+            
+            col_dist1, col_dist2 = st.columns(2)
+            
+            with col_dist1:
+                st.write("**Training Set:**")
+                train_counts = y_train.value_counts()
+                fig_train, ax_train = plt.subplots(figsize=(8, 4))
+                train_counts.plot(kind='bar', ax=ax_train, color='skyblue')
+                plt.title('Distribusi Kelas (Training)' if st.session_state.language == 'id' else 'Class Distribution (Training)')
+                st.pyplot(fig_train)
+                st.info(f"Rasio Imbalance (Train): {train_counts.max()/train_counts.min():.2f}" if len(train_counts) > 1 else "Hanya 1 kelas terdeteksi")
+                
+            with col_dist2:
+                st.write("**Testing Set:**")
+                test_counts = y_test.value_counts()
+                fig_test, ax_test = plt.subplots(figsize=(8, 4))
+                test_counts.plot(kind='bar', ax=ax_test, color='salmon')
+                plt.title('Distribusi Kelas (Testing)' if st.session_state.language == 'id' else 'Class Distribution (Testing)')
+                st.pyplot(fig_test)
+                st.info(f"Rasio Imbalance (Test): {test_counts.max()/test_counts.min():.2f}" if len(test_counts) > 1 else "Hanya 1 kelas terdeteksi")
+
+            # Hitung rasio imbalance untuk training set
+            if len(train_counts) > 1:
+                # Advanced imbalanced dataset analysis (Hanya pada Training Set)
+                st.markdown("### 🔍 Analisis Dataset Imbalanced Canggih (Training Set)" if st.session_state.language == 'id' else "### 🔍 Advanced Imbalanced Dataset Analysis (Training Set)")
+                
+                if st.button("Jalankan Analisis Imbalanced" if st.session_state.language == 'id' else "Run Imbalanced Analysis", key="advanced_imbalanced_analysis"):
+                    try:
+                        from utils import advanced_imbalanced_data_handling
+                        analysis_result = advanced_imbalanced_data_handling(X_train, y_train, method='analyze', language=st.session_state.language)
+                        
+                        if analysis_result['success']:
+                            st.success("Analisis dataset imbalanced selesai" if st.session_state.language == 'id' else "Imbalanced dataset analysis completed")
+                            st.write(f"**Tingkat ketidakseimbangan:** {analysis_result['analysis']['imbalance_level']}")
+                            st.write(f"**Skor Gini:** {analysis_result['analysis']['gini_coefficient']:.3f}")
+                            
+                            if 'recommendations' in analysis_result:
+                                st.write("**Rekomendasi metode penyeimbangan:**" if st.session_state.language == 'id' else "**Recommended balancing methods:**")
+                                for rec in analysis_result['recommendations']:
+                                    st.write(f"- {rec}")
+                        else:
+                            st.error(f"Error dalam analisis: {analysis_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error menjalankan analisis imbalanced: {str(e)}")
+                
+                # Auto balancing option
+                st.markdown("### ⚙️ Penyeimbangan Otomatis" if st.session_state.language == 'id' else "### ⚙️ Automatic Balancing")
+                auto_balance = st.checkbox("Gunakan penyeimbangan otomatis canggih" if st.session_state.language == 'id' else "Use advanced automatic balancing", key="auto_balance_advanced")
+                
+                if auto_balance:
+                    balance_strategy = st.selectbox(
+                        "Strategi penyeimbangan:" if st.session_state.language == 'id' else "Balancing strategy:",
+                        ["auto", "over", "under", "combine", "hybrid"],
+                        key="balance_strategy"
+                    )
+                    
+                    if st.button("Terapkan Penyeimbangan Otomatis" if st.session_state.language == 'id' else "Apply Automatic Balancing", key="apply_auto_balance"):
+                        try:
+                            from utils import advanced_imbalanced_data_handling
+                            balance_result = advanced_imbalanced_data_handling(X_train, y_train, method=balance_strategy, language=st.session_state.language)
+                            
+                            if balance_result['success']:
+                                st.success(f"Penyeimbangan berhasil menggunakan strategi: {balance_result['analysis']['method_used']}")
+                                # Update data training saja
+                                X_train = balance_result['X_balanced'].copy()
+                                y_train = balance_result['y_balanced']
+                                
+                                # Tampilkan hasil setelah penyeimbangan
+                                new_counts = y_train.value_counts()
+                                fig_new, ax_new = plt.subplots(figsize=(8, 4))
+                                new_counts.plot(kind='bar', ax=ax_new, color='lightgreen')
+                                plt.title('Distribusi Kelas Setelah Penyeimbangan' if st.session_state.language == 'id' else 'Class Distribution After Balancing')
+                                st.pyplot(fig_new)
+                                
+                                st.info(f"Jumlah sampel training: {len(y_train)} (Sebelum: {len(X_train)})")
+                            else:
+                                st.error(f"Error dalam penyeimbangan: {balance_result.get('error', 'Unknown error')}")
+                        except Exception as e:
+                            st.error(f"Error dalam penyeimbangan otomatis: {str(e)}")
 
         # Tambahkan normalisasi setelah train test split
         st.subheader("Normalisasi Fitur" if st.session_state.language == 'id' else "Feature Normalization")
@@ -8144,24 +8223,21 @@ with tab4:
                 if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
                     try:
                         with st.expander("🔍 Deteksi Tipe Data Otomatis" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection"):
-                            detection_results = data_type_detector.detect_data_types(st.session_state.X_train)
+                            # Use detect_column_types instead of non-existent detect_data_types
+                            data_info = data_type_detector.detect_column_types(st.session_state.X_train)
                             st.write("**Tipe Data yang Terdeteksi:**" if st.session_state.language == 'id' else "**Detected Data Types:**")
                             
                             numeric_features = []
                             categorical_features = []
-                            datetime_features = []
                             
-                            for result in detection_results:
-                                feature_name = result['feature_name']
-                                detected_type = result['detected_type']
-                                confidence = result['confidence']
+                            for feature_name, analysis in data_info.items():
+                                detected_type = analysis['detected_type']
+                                confidence = analysis['confidence']
                                 
                                 if detected_type == 'numeric':
                                     numeric_features.append(feature_name)
-                                elif detected_type == 'categorical':
+                                elif detected_type == 'object' or detected_type == 'categorical':
                                     categorical_features.append(feature_name)
-                                elif detected_type == 'datetime':
-                                    datetime_features.append(feature_name)
                                 
                                 st.write(f"- {feature_name}: {detected_type} (confidence: {confidence:.2f})")
                             
@@ -8909,24 +8985,21 @@ with tab4:
                 if DATA_TYPE_DETECTOR_AVAILABLE and data_type_detector is not None:
                     try:
                         with st.expander("🔍 Deteksi Tipe Data Otomatis (Regresi)" if st.session_state.language == 'id' else "🔍 Automatic Data Type Detection (Regression)"):
-                            detection_results = data_type_detector.detect_data_types(st.session_state.X_train)
+                            # Use detect_column_types instead of non-existent detect_data_types
+                            data_info = data_type_detector.detect_column_types(st.session_state.X_train)
                             st.write("**Tipe Data yang Terdeteksi:**" if st.session_state.language == 'id' else "**Detected Data Types:**")
                             
                             numeric_features = []
                             categorical_features = []
-                            datetime_features = []
                             
-                            for result in detection_results:
-                                feature_name = result['feature_name']
-                                detected_type = result['detected_type']
-                                confidence = result['confidence']
+                            for feature_name, analysis in data_info.items():
+                                detected_type = analysis['detected_type']
+                                confidence = analysis['confidence']
                                 
                                 if detected_type == 'numeric':
                                     numeric_features.append(feature_name)
-                                elif detected_type == 'categorical':
+                                elif detected_type == 'object' or detected_type == 'categorical':
                                     categorical_features.append(feature_name)
-                                elif detected_type == 'datetime':
-                                    datetime_features.append(feature_name)
                                 
                                 st.write(f"- {feature_name}: {detected_type} (confidence: {confidence:.2f})")
                             
